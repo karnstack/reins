@@ -221,6 +221,9 @@ export default defineConfig({
   format: ["esm"],
   dts: true,
   clean: true,
+  // Emit .js/.d.ts (not .mjs/.d.mts) so exports/bin paths resolve.
+  // Safe because every package is "type":"module".
+  fixedExtension: false,
 });
 ```
 
@@ -361,6 +364,9 @@ export default defineConfig({
   format: ["esm"],
   dts: true,
   clean: true,
+  // Emit .js/.d.ts (not .mjs/.d.mts) so the bin paths (dist/server.js,
+  // dist/cli.js) resolve. Safe because the package is "type":"module".
+  fixedExtension: false,
 });
 ```
 
