@@ -1,0 +1,28 @@
+{
+  "name": "reins-mcp",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "reins-mcp": "./dist/server.js",
+    "reins": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@reins/protocol": "workspace:*",
+    "ws": "8.21.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.1",
+    "@types/ws": "8.18.1",
+    "tsdown": "0.22.3",
+    "typescript": "6.0.3",
+    "vitest": "4.1.9"
+  }
+}
