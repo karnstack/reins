@@ -87,6 +87,19 @@ describe("BridgeHost", () => {
     client.close();
   });
 
+  it("rejects in-flight requests when the paired client disconnects", async () => {
+    host = new BridgeHost({ port: 0, token: TOKEN });
+    await host.start();
+    const client = await connectClient(host.port);
+    // On receiving the request, the client drops instead of replying.
+    client.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request") client.close();
+    });
+    // Long timeout so the rejection comes from the disconnect, not the timer.
+    await expect(host.request("list_tabs", {}, 10_000)).rejects.toThrow(/disconnected/i);
+  });
+
   it("stop() terminates a connected client", async () => {
     host = new BridgeHost({ port: 0, token: TOKEN });
     await host.start();

@@ -76,8 +76,20 @@ export class BridgeHost implements BridgePort {
       }
     });
     ws.on("close", () => {
-      if (this.#client === ws) this.#client = undefined;
+      if (this.#client === ws) {
+        this.#client = undefined;
+        // Spec §7: fail fast — don't leave in-flight requests hanging to timeout.
+        this.#rejectAllPending("extension disconnected");
+      }
     });
+  }
+
+  #rejectAllPending(message: string): void {
+    for (const [, pending] of this.#pending) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error(message));
+    }
+    this.#pending.clear();
   }
 
   #parse(data: RawData): Record<string, unknown> | undefined {
@@ -122,11 +134,7 @@ export class BridgeHost implements BridgePort {
   }
 
   stop(): Promise<void> {
-    for (const [, pending] of this.#pending) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error("bridge stopped"));
-    }
-    this.#pending.clear();
+    this.#rejectAllPending("bridge stopped");
     this.#client = undefined;
     const wss = this.#wss;
     this.#wss = undefined;
