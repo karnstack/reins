@@ -19,7 +19,12 @@ export function createServer(bridge: BridgePort): McpServer {
       if (!bridge.paired) {
         return {
           isError: true,
-          content: [{ type: "text", text: "No browser connected. Run `reins pair` and connect the extension." }],
+          content: [
+            {
+              type: "text",
+              text: "No browser connected. Run `reins pair` and connect the extension.",
+            },
+          ],
         };
       }
       const raw = await bridge.request("list_tabs", {});

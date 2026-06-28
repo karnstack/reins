@@ -8,7 +8,9 @@ describe("bridge frames", () => {
   });
 
   it("rejects a request frame with the wrong type literal", () => {
-    expect(() => RequestFrame.parse({ type: "response", id: "abc", method: "x", params: {} })).toThrow();
+    expect(() =>
+      RequestFrame.parse({ type: "response", id: "abc", method: "x", params: {} }),
+    ).toThrow();
   });
 
   it("accepts an ok response with a result", () => {
@@ -17,7 +19,12 @@ describe("bridge frames", () => {
   });
 
   it("accepts a failed response with an error", () => {
-    const f = ResponseFrame.parse({ type: "response", id: "abc", ok: false, error: { code: "E", message: "boom" } });
+    const f = ResponseFrame.parse({
+      type: "response",
+      id: "abc",
+      ok: false,
+      error: { code: "E", message: "boom" },
+    });
     expect(f.error?.code).toBe("E");
   });
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type AddressInfo } from "node:net";
+import type { AddressInfo } from "node:net";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 
 export interface BridgePort {
@@ -97,7 +97,10 @@ export class BridgeHost implements BridgePort {
     if (msg.ok === true) {
       pending.resolve(msg.result);
     } else {
-      const err = (msg.error ?? { code: "ERR", message: "request failed" }) as { code: string; message: string };
+      const err = (msg.error ?? { code: "ERR", message: "request failed" }) as {
+        code: string;
+        message: string;
+      };
       pending.reject(new Error(`${err.code}: ${err.message}`));
     }
   }

@@ -1,5 +1,5 @@
-import { WebSocket } from "ws";
 import { afterEach, describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
 import { BridgeHost } from "./bridge.js";
 
 const TOKEN = "test-token";
@@ -11,12 +11,17 @@ afterEach(async () => {
 });
 
 /** Connect a stand-in extension client and resolve once it is welcomed. */
-function connectClient(port: number, opts: { token?: string; origin?: string } = {}): Promise<WebSocket> {
+function connectClient(
+  port: number,
+  opts: { token?: string; origin?: string } = {},
+): Promise<WebSocket> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
     headers: { origin: opts.origin ?? "chrome-extension://abcdef" },
   });
   return new Promise((resolve, reject) => {
-    ws.on("open", () => ws.send(JSON.stringify({ type: "hello", token: opts.token ?? TOKEN, browser: "test" })));
+    ws.on("open", () =>
+      ws.send(JSON.stringify({ type: "hello", token: opts.token ?? TOKEN, browser: "test" })),
+    );
     ws.on("message", (data) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === "welcome") resolve(ws);
@@ -45,7 +50,9 @@ describe("BridgeHost", () => {
   it("closes a client with a disallowed origin (code 4003)", async () => {
     host = new BridgeHost({ port: 0, token: TOKEN });
     await host.start();
-    await expect(connectClient(host.port, { origin: "https://evil.example" })).rejects.toThrow("closed 4003");
+    await expect(connectClient(host.port, { origin: "https://evil.example" })).rejects.toThrow(
+      "closed 4003",
+    );
   });
 
   it("round-trips a request to the paired client", async () => {
@@ -55,7 +62,9 @@ describe("BridgeHost", () => {
     client.on("message", (data) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === "request" && msg.method === "list_tabs") {
-        client.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: [] } }));
+        client.send(
+          JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: [] } }),
+        );
       }
     });
     const result = await host.request("list_tabs", {});
@@ -106,7 +115,9 @@ describe("BridgeHost", () => {
     clientB.on("message", (data) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === "request" && msg.method === "list_tabs") {
-        clientB.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: ["b"] } }));
+        clientB.send(
+          JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: ["b"] } }),
+        );
       }
     });
 

@@ -25,6 +25,7 @@ describe("createServer", () => {
   it("exposes a ping tool that returns pong", async () => {
     const client = await connect(fakeBridge());
     const result = await client.callTool({ name: "ping", arguments: {} });
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item; TS noUncheckedIndexedAccess requires the assertion
     const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
     expect(first.text).toBe("pong");
     await client.close();
@@ -34,6 +35,7 @@ describe("createServer", () => {
     const tabs = [{ tabId: 1, title: "Home", url: "https://x", active: true }];
     const client = await connect(fakeBridge({ request: async () => ({ tabs }) }));
     const result = await client.callTool({ name: "list_tabs", arguments: {} });
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item; TS noUncheckedIndexedAccess requires the assertion
     const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
     expect(JSON.parse(first.text ?? "")).toEqual(tabs);
     await client.close();
