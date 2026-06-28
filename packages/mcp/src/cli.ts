@@ -1,8 +1,26 @@
 #!/usr/bin/env node
-// `reins` CLI — M0 stub. Real commands (pair/status/doctor) arrive in M1.
+import { doctorReport, pairText } from "./cli-commands.js";
+import { loadOrCreateConfig } from "./config.js";
+
 const [command] = process.argv.slice(2);
-if (command) {
-  console.log(`reins: unknown command '${command}' (CLI commands land in M1)`);
-} else {
-  console.log("reins CLI — commands land in M1 (pair, status, doctor)");
+const cfg = loadOrCreateConfig();
+
+switch (command) {
+  case "pair":
+    console.log(pairText(cfg));
+    break;
+  case "doctor": {
+    const report = doctorReport(cfg);
+    for (const c of report.checks) {
+      console.log(`${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`);
+    }
+    console.log(report.ok ? "\nAll checks passed." : "\nSome checks failed.");
+    process.exitCode = report.ok ? 0 : 1;
+    break;
+  }
+  case "status":
+    console.log(`config: ${cfg.dir}\nport: ${cfg.port}\nrun \`reins pair\` to connect a browser`);
+    break;
+  default:
+    console.log("reins — usage: reins <pair|status|doctor>");
 }
