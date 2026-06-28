@@ -50,7 +50,7 @@ export class BridgeHost implements BridgePort {
   }
 
   #onConnection(ws: WebSocket, origin: string | undefined): void {
-    if (!origin || !origin.startsWith(this.#originPrefix)) {
+    if (!origin?.startsWith(this.#originPrefix)) {
       ws.close(4003, "origin not allowed");
       return;
     }
