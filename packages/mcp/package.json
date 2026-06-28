@@ -6,7 +6,9 @@
     "reins-mcp": "./dist/server.js",
     "reins": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",

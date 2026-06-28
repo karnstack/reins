@@ -13,6 +13,7 @@ describe("createServer", () => {
     await client.connect(clientTransport);
 
     const result = await client.callTool({ name: "ping", arguments: {} });
+    // biome-ignore lint/style/noNonNullAssertion: index 0 always exists here; TS noUncheckedIndexedAccess requires the assertion
     const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
     expect(first.text).toBe("pong");
 
