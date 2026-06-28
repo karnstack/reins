@@ -1,0 +1,22 @@
+{
+  "name": "@reins/extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch --mode development",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@reins/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "2.7.0",
+    "@types/chrome": "0.2.0",
+    "typescript": "6.0.3",
+    "vite": "8.1.0",
+    "vitest": "4.1.9"
+  }
+}
