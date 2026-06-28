@@ -77,4 +77,48 @@ describe("BridgeHost", () => {
     await expect(host.request("list_tabs", {}, 100)).rejects.toThrow(/timed out/i);
     client.close();
   });
+
+  it("stop() terminates a connected client", async () => {
+    host = new BridgeHost({ port: 0, token: TOKEN });
+    await host.start();
+    const client = await connectClient(host.port);
+    const closed = new Promise<void>((resolve, reject) => {
+      client.on("close", () => resolve());
+      setTimeout(() => reject(new Error("client did not close within 1000ms")), 1000);
+    });
+    await host.stop();
+    await closed;
+  });
+
+  it("second authenticated client replaces and closes the first (code 4002)", async () => {
+    host = new BridgeHost({ port: 0, token: TOKEN });
+    await host.start();
+
+    // Connect client A
+    const clientA = await connectClient(host.port);
+    const aClosedCode = new Promise<number>((resolve, reject) => {
+      clientA.on("close", (code) => resolve(code));
+      setTimeout(() => reject(new Error("client A did not close within 1000ms")), 1000);
+    });
+
+    // Connect client B and set up a reply handler
+    const clientB = await connectClient(host.port);
+    clientB.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request" && msg.method === "list_tabs") {
+        clientB.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: ["b"] } }));
+      }
+    });
+
+    // A should have been closed with 4002
+    const code = await aClosedCode;
+    expect(code).toBe(4002);
+
+    // B is the active paired client
+    expect(host.paired).toBe(true);
+    const result = await host.request("list_tabs", {});
+    expect(result).toEqual({ tabs: ["b"] });
+
+    clientB.close();
+  });
 });

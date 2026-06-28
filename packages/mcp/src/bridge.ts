@@ -61,6 +61,9 @@ export class BridgeHost implements BridgePort {
       if (!authed) {
         if (msg.type === "hello" && msg.token === this.#token) {
           authed = true;
+          if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
+            this.#client.close(4002, "replaced by a new connection");
+          }
           this.#client = ws;
           ws.send(JSON.stringify({ type: "welcome", server: "reins" }));
         } else {
@@ -125,6 +128,7 @@ export class BridgeHost implements BridgePort {
     const wss = this.#wss;
     this.#wss = undefined;
     if (!wss) return Promise.resolve();
+    for (const ws of wss.clients) ws.terminate();
     return new Promise((resolve) => wss.close(() => resolve()));
   }
 }
