@@ -8,10 +8,16 @@ import { createServer } from "./create-server.js";
 const TOKEN = "integration-token";
 let host: BridgeHost | undefined;
 let extension: WebSocket | undefined;
+let server: ReturnType<typeof createServer> | undefined;
+let client: Client | undefined;
 
 afterEach(async () => {
+  await client?.close();
+  await server?.close();
   extension?.close();
   await host?.stop();
+  client = undefined;
+  server = undefined;
   host = undefined;
   extension = undefined;
 });
@@ -45,16 +51,14 @@ describe("end-to-end bridge", () => {
     extension = await standInExtension(host.port, tabs);
     expect(host.paired).toBe(true);
 
-    const server = createServer(host);
+    server = createServer(host);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
-    const client = new Client({ name: "e2e", version: "0.0.0" });
+    client = new Client({ name: "e2e", version: "0.0.0" });
     await client.connect(clientTransport);
 
     const result = await client.callTool({ name: "list_tabs", arguments: {} });
     const text = (result.content as Array<{ type: string; text?: string }>)[0]?.text ?? "";
     expect(JSON.parse(text)).toEqual(tabs);
-
-    await client.close();
   });
 });
