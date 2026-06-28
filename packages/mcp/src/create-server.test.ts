@@ -18,5 +18,6 @@ describe("createServer", () => {
     expect(first.text).toBe("pong");
 
     await client.close();
+    await server.close();
   });
 });
