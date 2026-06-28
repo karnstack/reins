@@ -33,7 +33,9 @@
 ```toml
 [tools]
 node = "24.18.0"
-pnpm = "11.9.0"
+# pnpm via npm backend — the default aqua backend has an asset-name mismatch
+# for 11.9.0 (expects pnpm-macos-arm64; pnpm ships pnpm-darwin-arm64.tar.gz).
+"npm:pnpm" = "11.9.0"
 ```
 
 - [ ] **Step 2: Create `.npmrc`** (deterministic installs)
