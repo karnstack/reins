@@ -206,11 +206,16 @@ export async function cdpWaitFor(params: WaitForParams): Promise<{ ok: true }> {
   return withDebugger(tabId, async () => {
     const deadline = Date.now() + timeoutMs;
     while (true) {
-      const { result } = await send<{ result: { value: boolean } }>(tabId, "Runtime.evaluate", {
-        expression: checkExpr,
-        returnByValue: true,
-      });
-      if (result.value) return { ok: true };
+      const res = await send<{
+        result: { value: boolean };
+        exceptionDetails?: { exception?: { description?: string }; text?: string };
+      }>(tabId, "Runtime.evaluate", { expression: checkExpr, returnByValue: true });
+      if (res.exceptionDetails) {
+        throw new Error(
+          res.exceptionDetails.exception?.description ?? res.exceptionDetails.text ?? "wait_for check failed",
+        );
+      }
+      if (res.result.value) return { ok: true };
       if (Date.now() >= deadline) {
         throw new Error(`wait_for timed out after ${timeoutMs}ms for ${css} (${state})`);
       }
