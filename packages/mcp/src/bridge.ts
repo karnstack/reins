@@ -34,7 +34,11 @@ export class BridgeHost implements BridgePort {
     return new Promise((resolve, reject) => {
       const wss = new WebSocketServer({ host: "127.0.0.1", port: this.#requestedPort });
       wss.on("listening", () => resolve());
-      wss.on("error", reject);
+      wss.on("error", (err) => {
+        // Don't retain a server that never bound (e.g. EADDRINUSE) — avoids a leak on retry.
+        this.#wss = undefined;
+        reject(err);
+      });
       wss.on("connection", (ws, req) => this.#onConnection(ws, req.headers.origin));
       this.#wss = wss;
     });
