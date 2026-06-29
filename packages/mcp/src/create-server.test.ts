@@ -47,4 +47,49 @@ describe("createServer", () => {
     expect(result.isError).toBe(true);
     await client.close();
   });
+
+  it("navigate returns the resulting url", async () => {
+    const client = await connect(
+      fakeBridge({ request: async () => ({ url: "https://example.com/" }) }),
+    );
+    const result = await client.callTool({
+      name: "navigate",
+      arguments: { to: "https://example.com" },
+    });
+    const first = (result.content as Array<{ type: string; text?: string }>)[0];
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    expect(first!.text).toContain("https://example.com/");
+    await client.close();
+  });
+
+  it("read_snapshot returns content and refs", async () => {
+    const snap = { content: 'button "OK" [e1]', refs: [{ ref: "e1", role: "button", name: "OK" }] };
+    const client = await connect(fakeBridge({ request: async () => snap }));
+    const result = await client.callTool({ name: "read_snapshot", arguments: { mode: "a11y" } });
+    const first = (result.content as Array<{ type: string; text?: string }>)[0];
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    expect(first!.text).toContain("e1");
+    await client.close();
+  });
+
+  it("click returns ok", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ ok: true }) }));
+    const result = await client.callTool({ name: "click", arguments: { ref: "e1" } });
+    expect(result.isError).toBeFalsy();
+    await client.close();
+  });
+
+  it("type returns ok", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ ok: true }) }));
+    const result = await client.callTool({ name: "type", arguments: { ref: "e1", text: "hello" } });
+    expect(result.isError).toBeFalsy();
+    await client.close();
+  });
+
+  it("driving tools error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const result = await client.callTool({ name: "navigate", arguments: { to: "https://x" } });
+    expect(result.isError).toBe(true);
+    await client.close();
+  });
 });
