@@ -1,7 +1,8 @@
 import { dispatchMethod } from "./lib/dispatch.js";
 import { loadPairing } from "./lib/pairing.js";
+import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
-type Status = "idle" | "connecting" | "connected" | "error";
+type Status = WorkerStatus;
 
 let status: Status = "idle";
 
@@ -14,13 +15,23 @@ let status: Status = "idle";
  * would be misleading.
  * See https://developer.chrome.com/docs/extensions/reference/api/offscreen#type-Reason
  */
-async function ensureOffscreen(): Promise<void> {
-  if (await chrome.offscreen.hasDocument()) return;
-  await chrome.offscreen.createDocument({
-    url: "offscreen.html",
-    reasons: [chrome.offscreen.Reason.WORKERS],
-    justification: "Maintain a persistent WebSocket connection to the local reins MCP server.",
-  });
+let offscreenPromise: Promise<void> | undefined;
+function ensureOffscreen(): Promise<void> {
+  if (!offscreenPromise) {
+    offscreenPromise = (async () => {
+      if (!(await chrome.offscreen.hasDocument())) {
+        await chrome.offscreen.createDocument({
+          url: "offscreen.html",
+          reasons: [chrome.offscreen.Reason.WORKERS],
+          justification:
+            "Maintain a persistent WebSocket connection to the local reins MCP server.",
+        });
+      }
+    })().finally(() => {
+      offscreenPromise = undefined;
+    });
+  }
+  return offscreenPromise;
 }
 
 async function autoConnect(): Promise<void> {
@@ -94,7 +105,7 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "reins:status-update": {
-        status = (message.status as Status | undefined) ?? "idle";
+        status = normalizeStatus(message.status);
         return;
       }
 
