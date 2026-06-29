@@ -90,7 +90,7 @@ export async function cdpSnapshot(
 function selectorFor(ref?: string, selector?: string): string {
   if (selector) return selector;
   if (ref) return `[data-reins-ref="${ref}"]`;
-  throw new Error("click/type requires a ref or selector");
+  throw new Error("requires a ref or selector");
 }
 
 export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
