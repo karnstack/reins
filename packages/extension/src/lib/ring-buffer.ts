@@ -4,7 +4,9 @@ export class RingBuffer<T> {
   #items: T[] = [];
 
   constructor(capacity: number) {
-    if (capacity <= 0) throw new Error("capacity must be positive");
+    if (!Number.isInteger(capacity) || capacity <= 0) {
+      throw new Error("capacity must be a positive integer");
+    }
     this.#capacity = capacity;
   }
 

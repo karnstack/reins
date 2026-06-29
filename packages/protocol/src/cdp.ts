@@ -135,14 +135,14 @@ export const NetworkEntry = z.object({
 export type NetworkEntry = z.infer<typeof NetworkEntry>;
 
 export const ConsoleParams = z.object({
-  tabId: z.number().optional(),
+  tabId,
   sinceMs: z.number().optional(),
   levels: z.array(z.string()).optional(),
 });
 export type ConsoleParams = z.infer<typeof ConsoleParams>;
 
 export const NetworkParams = z.object({
-  tabId: z.number().optional(),
+  tabId,
   sinceMs: z.number().optional(),
   urlPattern: z.string().optional(),
 });

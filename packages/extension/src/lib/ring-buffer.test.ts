@@ -3,11 +3,16 @@ import { RingBuffer } from "./ring-buffer.js";
 
 describe("RingBuffer", () => {
   it("throws when capacity is 0", () => {
-    expect(() => new RingBuffer(0)).toThrow("capacity must be positive");
+    expect(() => new RingBuffer(0)).toThrow("capacity must be a positive integer");
   });
 
   it("throws when capacity is negative", () => {
-    expect(() => new RingBuffer(-1)).toThrow("capacity must be positive");
+    expect(() => new RingBuffer(-1)).toThrow("capacity must be a positive integer");
+  });
+
+  it("throws when capacity is not a positive integer (NaN, fractional)", () => {
+    expect(() => new RingBuffer(Number.NaN)).toThrow("capacity must be a positive integer");
+    expect(() => new RingBuffer(0.5)).toThrow("capacity must be a positive integer");
   });
 
   it("size starts at 0", () => {
