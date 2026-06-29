@@ -1,0 +1,132 @@
+import type { ClickParams, NavigateParams, SnapshotParams, TypeParams } from "@reins/protocol";
+
+const PROTOCOL = "1.3";
+
+async function resolveTabId(tabId?: number): Promise<number> {
+  if (typeof tabId === "number") return tabId;
+  const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (active?.id === undefined) throw new Error("no active tab");
+  return active.id;
+}
+
+async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+  await chrome.debugger.attach({ tabId }, PROTOCOL);
+  try {
+    return await fn();
+  } finally {
+    await chrome.debugger.detach({ tabId }).catch(() => {});
+  }
+}
+
+// chrome.debugger.sendCommand returns Promise<object|undefined> (loosely typed).
+// We go through `unknown` first so TypeScript accepts the narrowing to T.
+function send<T = unknown>(
+  tabId: number,
+  method: string,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  return chrome.debugger.sendCommand({ tabId }, method, params) as unknown as Promise<T>;
+}
+
+export async function cdpNavigate(params: NavigateParams): Promise<{ url: string }> {
+  const tabId = await resolveTabId(params.tabId);
+  return withDebugger(tabId, async () => {
+    if (params.to === "reload") {
+      await send(tabId, "Page.reload", {});
+    } else if (params.to === "back" || params.to === "forward") {
+      await send(tabId, "Runtime.evaluate", { expression: `history.${params.to}()` });
+    } else {
+      await send(tabId, "Page.navigate", { url: params.to });
+    }
+    const { result } = await send<{ result: { value: string } }>(tabId, "Runtime.evaluate", {
+      expression: "location.href",
+      returnByValue: true,
+    });
+    return { url: result.value };
+  });
+}
+
+/** Tag interactive/labelled elements with data-reins-ref and return a compact tree + refs. */
+const SNAPSHOT_EXPR = `(() => {
+  const refs = [];
+  let n = 0;
+  const sel = "a,button,input,textarea,select,[role],h1,h2,h3,[contenteditable=true]";
+  for (const el of document.querySelectorAll(sel)) {
+    if (!(el instanceof HTMLElement) || el.offsetParent === null) continue;
+    const ref = "e" + (++n);
+    el.setAttribute("data-reins-ref", ref);
+    const role = el.getAttribute("role") || el.tagName.toLowerCase();
+    const name = (el.getAttribute("aria-label") || el.textContent || el.getAttribute("placeholder") || "").trim().slice(0, 80);
+    refs.push({ ref, role, name });
+  }
+  const text = refs.map(r => r.ref + ": " + r.role + " " + JSON.stringify(r.name)).join("\\n");
+  return { content: text, refs };
+})()`;
+
+export async function cdpSnapshot(
+  params: SnapshotParams,
+): Promise<{ content: string; refs: Array<{ ref: string; role?: string; name?: string }> }> {
+  const tabId = await resolveTabId(params.tabId);
+  return withDebugger(tabId, async () => {
+    const { result } = await send<{
+      result: {
+        value: { content: string; refs: Array<{ ref: string; role?: string; name?: string }> };
+      };
+    }>(tabId, "Runtime.evaluate", { expression: SNAPSHOT_EXPR, returnByValue: true });
+    const value = result.value;
+    const content = params.maxChars ? value.content.slice(0, params.maxChars) : value.content;
+    return { content, refs: value.refs };
+  });
+}
+
+function selectorFor(ref?: string, selector?: string): string {
+  if (selector) return selector;
+  if (ref) return `[data-reins-ref="${ref}"]`;
+  throw new Error("click/type requires a ref or selector");
+}
+
+export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
+  const tabId = await resolveTabId(params.tabId);
+  const css = selectorFor(params.ref, params.selector);
+  return withDebugger(tabId, async () => {
+    // Resolve element center, then dispatch a trusted click there.
+    const { result } = await send<{ result: { value: { x: number; y: number } | null } }>(
+      tabId,
+      "Runtime.evaluate",
+      {
+        expression: `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return null; const r = el.getBoundingClientRect(); el.scrollIntoView({block:"center"}); const r2 = el.getBoundingClientRect(); return { x: r2.x + r2.width/2, y: r2.y + r2.height/2 }; })()`,
+        returnByValue: true,
+      },
+    );
+    if (!result.value) throw new Error(`element not found: ${css}`);
+    const { x, y } = result.value;
+    const base = { x, y, button: params.button, clickCount: params.clickCount };
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", ...base });
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", ...base });
+    return { ok: true };
+  });
+}
+
+export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
+  const tabId = await resolveTabId(params.tabId);
+  const css = selectorFor(params.ref, params.selector);
+  return withDebugger(tabId, async () => {
+    const { result } = await send<{ result: { value: boolean } }>(tabId, "Runtime.evaluate", {
+      expression: `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return false; el.focus(); return true; })()`,
+      returnByValue: true,
+    });
+    if (!result.value) throw new Error(`element not found: ${css}`);
+    await send(tabId, "Input.insertText", { text: params.text });
+    if (params.submit) {
+      for (const type of ["keyDown", "keyUp"]) {
+        await send(tabId, "Input.dispatchKeyEvent", {
+          type,
+          key: "Enter",
+          code: "Enter",
+          windowsVirtualKeyCode: 13,
+        });
+      }
+    }
+    return { ok: true };
+  });
+}
