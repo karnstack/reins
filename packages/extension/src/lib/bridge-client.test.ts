@@ -37,6 +37,8 @@ function startServer(): Promise<Harness> {
         if (msg.type === "hello" && msg.token === TOKEN) {
           live = ws;
           ws.send(JSON.stringify({ type: "welcome", server: "reins" }));
+        } else if (msg.type === "hello") {
+          ws.close(4001, "bad token");
         }
       });
     });
@@ -60,7 +62,7 @@ function nodeSocketFactory(url: string): SocketLike {
   };
   ws.on("open", () => sock.onopen?.());
   ws.on("message", (d: RawData) => sock.onmessage?.({ data: d.toString() }));
-  ws.on("close", () => sock.onclose?.());
+  ws.on("close", (code) => sock.onclose?.({ code }));
   ws.on("error", (e) => sock.onerror?.(e));
   return sock;
 }
@@ -223,5 +225,89 @@ describe("BridgeClient", () => {
     harness.current()?.close();
     await waitFor(() => connects === 2);
     expect(connects).toBe(2);
+  });
+
+  it("terminal auth failure on 4001: fires onAuthError once and does not reconnect", async () => {
+    harness = await startServer();
+    const statuses: string[] = [];
+    let authErrors = 0;
+    let connectingCount = 0;
+
+    client = new BridgeClient({
+      url: `ws://127.0.0.1:${harness.port}`,
+      token: "WRONG_TOKEN",
+      browser: "test",
+      dispatch: async () => ({}),
+      createSocket: nodeSocketFactory,
+      onStatus: (s) => {
+        statuses.push(s);
+        if (s === "connecting") connectingCount += 1;
+      },
+      onAuthError: () => {
+        authErrors += 1;
+      },
+      // Use a fast schedule to catch any accidental retries quickly.
+      schedule: (fn) => setTimeout(fn, 10),
+    });
+    client.start();
+
+    // Wait for "disconnected" to arrive (client received the 4001 close).
+    await waitFor(() => statuses.includes("disconnected"));
+
+    // Give a bounded window to detect any stale retry (there should be none).
+    await new Promise<void>((res) => setTimeout(res, 60));
+
+    expect(authErrors).toBe(1);
+    expect(statuses.at(-1)).toBe("disconnected");
+    // "connecting" was emitted exactly once (the initial attempt); no retry.
+    expect(connectingCount).toBe(1);
+  });
+
+  it("stop() cancels a pending reconnect — no overlapping sockets", async () => {
+    harness = await startServer();
+
+    // Count every new server-side connection.
+    let serverConnections = 0;
+    harness.server.on("connection", () => {
+      serverConnections += 1;
+    });
+
+    // Capture the reconnect fn rather than firing it.
+    let pendingReconnect: (() => void) | undefined;
+
+    client = new BridgeClient({
+      url: `ws://127.0.0.1:${harness.port}`,
+      token: TOKEN,
+      browser: "test",
+      dispatch: async () => ({}),
+      createSocket: nodeSocketFactory,
+      schedule: (fn) => {
+        pendingReconnect = fn;
+      },
+    });
+    client.start();
+
+    // Wait for the first successful connection (conn #1, welcomed).
+    await waitFor(() => harness?.current() !== undefined);
+    // Ensure the server-side counter has incremented.
+    await waitFor(() => serverConnections >= 1);
+
+    // Close the live socket — this triggers #onClose which captures the reconnect fn.
+    harness.current()?.close();
+    await waitFor(() => pendingReconnect !== undefined);
+
+    // stop() increments cycleToken, then start() resets #stopped and opens conn #2.
+    client.stop();
+    client.start();
+    await waitFor(() => serverConnections >= 2);
+
+    // Now fire the stale captured reconnect — the cycle-token guard must swallow it.
+    pendingReconnect?.();
+
+    // Settle microtasks + any fast I/O.
+    await new Promise<void>((res) => setTimeout(res, 50));
+
+    // Exactly two connections: the stale reconnect was cancelled, not a third.
+    expect(serverConnections).toBe(2);
   });
 });

@@ -9,7 +9,7 @@ export interface SocketLike {
   close(): void;
   onopen: (() => void) | null;
   onmessage: ((ev: { data: unknown }) => void) | null;
-  onclose: (() => void) | null;
+  onclose: ((ev?: { code?: number }) => void) | null;
   onerror: ((err: unknown) => void) | null;
 }
 
@@ -20,6 +20,8 @@ export interface BridgeClientOptions {
   dispatch: Dispatch;
   createSocket: (url: string) => SocketLike;
   onStatus?: (status: ConnectionStatus) => void;
+  /** Called once when the server closes with code 4001 (bad token). No retry follows. */
+  onAuthError?: () => void;
   /** Schedule a reconnect attempt; injectable for tests. Defaults to setTimeout. */
   schedule?: (fn: () => void, ms: number) => void;
 }
@@ -34,6 +36,7 @@ export class BridgeClient {
   #socket: SocketLike | undefined;
   #attempt = 0;
   #stopped = false;
+  #cycleToken = 0;
 
   constructor(opts: BridgeClientOptions) {
     this.#opts = opts;
@@ -46,11 +49,13 @@ export class BridgeClient {
 
   stop(): void {
     this.#stopped = true;
+    this.#cycleToken += 1;
     this.#socket?.close();
     this.#socket = undefined;
   }
 
   #connect(): void {
+    if (this.#socket) return;
     this.#opts.onStatus?.("connecting");
     const socket = this.#opts.createSocket(this.#opts.url);
     this.#socket = socket;
@@ -60,19 +65,26 @@ export class BridgeClient {
       );
     };
     socket.onmessage = (ev) => this.#onMessage(String(ev.data));
-    socket.onclose = () => this.#onClose();
+    socket.onclose = (ev) => this.#onClose(ev?.code);
     socket.onerror = () => socket.close();
   }
 
-  #onClose(): void {
+  #onClose(code?: number): void {
     this.#socket = undefined;
     this.#opts.onStatus?.("disconnected");
     if (this.#stopped) return;
+    if (code === 4001) {
+      this.#stopped = true;
+      this.#opts.onAuthError?.();
+      return;
+    }
     this.#attempt += 1;
     const delay = nextBackoff(this.#attempt);
     const schedule = this.#opts.schedule ?? ((fn, ms) => void setTimeout(fn, ms));
+    const token = this.#cycleToken;
     schedule(() => {
-      if (!this.#stopped) this.#connect();
+      if (this.#stopped || token !== this.#cycleToken || this.#socket) return;
+      this.#connect();
     }, delay);
   }
 
