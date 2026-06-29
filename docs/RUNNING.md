@@ -8,8 +8,9 @@ Chromium browser. It has two halves:
 - **the extension** — an MV3 extension that connects to that WebSocket and
   executes commands in your browser.
 
-> Status: the `list_tabs` loop is implemented. Driving tools (`click`, `type`,
-> `navigate`, `screenshot`, …) land in M2.
+> Status: 11 tools implemented — `list_tabs`, `open_tab`, `close_tab`,
+> `select_tab`, `navigate`, `read_snapshot`, `click`, `type`, `screenshot`,
+> `eval_js`, `wait_for`. (`read_console` / `read_network` are in progress.)
 
 ## 1. Prerequisites & build
 
