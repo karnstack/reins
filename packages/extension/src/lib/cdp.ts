@@ -212,7 +212,9 @@ export async function cdpWaitFor(params: WaitForParams): Promise<{ ok: true }> {
       }>(tabId, "Runtime.evaluate", { expression: checkExpr, returnByValue: true });
       if (res.exceptionDetails) {
         throw new Error(
-          res.exceptionDetails.exception?.description ?? res.exceptionDetails.text ?? "wait_for check failed",
+          res.exceptionDetails.exception?.description ??
+            res.exceptionDetails.text ??
+            "wait_for check failed",
         );
       }
       if (res.result.value) return { ok: true };
