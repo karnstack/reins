@@ -6,6 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch --mode development",
+    "gen:icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "2.7.0",
+    "@resvg/resvg-js": "2.6.2",
     "@types/chrome": "0.2.0",
     "typescript": "6.0.3",
     "vite": "8.1.0",
