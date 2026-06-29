@@ -131,4 +131,67 @@ describe("createServer", () => {
     expect(result.isError).toBe(true);
     await client.close();
   });
+
+  it("screenshot returns an image content block with data and mimeType", async () => {
+    // "hello" base64-encoded — must be valid base64 since the MCP SDK validates it
+    const validBase64 = "aGVsbG8=";
+    const client = await connect(
+      fakeBridge({ request: async () => ({ data: validBase64, mimeType: "image/png" }) }),
+    );
+    const result = await client.callTool({ name: "screenshot", arguments: {} });
+    expect(result.isError).toBeFalsy();
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; data?: string; mimeType?: string }>)[0]!;
+    expect(first.type).toBe("image");
+    expect(first.data).toBe(validBase64);
+    expect(first.mimeType).toBe("image/png");
+    await client.close();
+  });
+
+  it("screenshot reports error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const result = await client.callTool({ name: "screenshot", arguments: {} });
+    expect(result.isError).toBe(true);
+    await client.close();
+  });
+
+  it("eval_js returns the JSON-stringified value", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ value: { answer: 42 } }) }));
+    const result = await client.callTool({
+      name: "eval_js",
+      arguments: { expression: "({ answer: 42 })" },
+    });
+    expect(result.isError).toBeFalsy();
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(JSON.parse(first.text ?? "")).toEqual({ answer: 42 });
+    await client.close();
+  });
+
+  it("eval_js reports error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const result = await client.callTool({ name: "eval_js", arguments: { expression: "1" } });
+    expect(result.isError).toBe(true);
+    await client.close();
+  });
+
+  it("wait_for returns ok", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ ok: true }) }));
+    const result = await client.callTool({
+      name: "wait_for",
+      arguments: { selector: "#btn" },
+    });
+    expect(result.isError).toBeFalsy();
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(first.text).toBe("ok");
+    await client.close();
+  });
+
+  it("wait_for reports error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const result = await client.callTool({ name: "wait_for", arguments: { selector: "#btn" } });
+    expect(result.isError).toBe(true);
+    await client.close();
+  });
 });

@@ -2,14 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   ClickParams,
   CloseTabParams,
+  EvalParams,
+  EvalResult,
   NavigateParams,
   OkResult,
   OpenTabParams,
   OpenTabResult,
+  ScreenshotParams,
+  ScreenshotResult,
   SelectTabParams,
   SnapshotParams,
   SnapshotResult,
   TypeParams,
+  WaitForParams,
 } from "./cdp.js";
 
 describe("cdp schemas", () => {
@@ -66,5 +71,50 @@ describe("cdp schemas", () => {
   it("SelectTabParams requires tabId", () => {
     expect(SelectTabParams.parse({ tabId: 7 }).tabId).toBe(7);
     expect(() => SelectTabParams.parse({})).toThrow();
+  });
+
+  it("ScreenshotParams defaults fullPage=false and format=png", () => {
+    const p = ScreenshotParams.parse({});
+    expect(p.fullPage).toBe(false);
+    expect(p.format).toBe("png");
+  });
+
+  it("ScreenshotParams rejects an invalid format enum", () => {
+    expect(() => ScreenshotParams.parse({ format: "gif" })).toThrow();
+  });
+
+  it("ScreenshotResult carries data and mimeType", () => {
+    const r = ScreenshotResult.parse({ data: "abc123", mimeType: "image/png" });
+    expect(r.data).toBe("abc123");
+    expect(r.mimeType).toBe("image/png");
+  });
+
+  it("EvalParams requires a non-empty expression", () => {
+    expect(() => EvalParams.parse({ expression: "" })).toThrow();
+    expect(EvalParams.parse({ expression: "1+1" }).expression).toBe("1+1");
+  });
+
+  it("EvalParams defaults awaitPromise=false", () => {
+    expect(EvalParams.parse({ expression: "1" }).awaitPromise).toBe(false);
+  });
+
+  it("EvalResult carries an unknown value", () => {
+    expect(EvalResult.parse({ value: 42 }).value).toBe(42);
+    expect(EvalResult.parse({ value: null }).value).toBeNull();
+  });
+
+  it("WaitForParams defaults state=visible and timeoutMs=5000", () => {
+    const p = WaitForParams.parse({ selector: "#foo" });
+    expect(p.state).toBe("visible");
+    expect(p.timeoutMs).toBe(5000);
+  });
+
+  it("WaitForParams throws when neither ref nor selector is given", () => {
+    expect(() => WaitForParams.parse({})).toThrow("wait_for requires a ref or a selector");
+  });
+
+  it("WaitForParams accepts ref without selector", () => {
+    const p = WaitForParams.parse({ ref: "e1" });
+    expect(p.ref).toBe("e1");
   });
 });

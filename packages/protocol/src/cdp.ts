@@ -80,3 +80,38 @@ export type CloseTabParams = z.infer<typeof CloseTabParams>;
 
 export const SelectTabParams = z.object({ tabId: z.number() });
 export type SelectTabParams = z.infer<typeof SelectTabParams>;
+
+export const ScreenshotParams = z.object({
+  tabId,
+  fullPage: z.boolean().default(false),
+  format: z.enum(["png", "jpeg"]).default("png"),
+});
+export type ScreenshotParams = z.infer<typeof ScreenshotParams>;
+
+export const ScreenshotResult = z.object({ data: z.string(), mimeType: z.string() });
+export type ScreenshotResult = z.infer<typeof ScreenshotResult>;
+
+export const EvalParams = z.object({
+  tabId,
+  expression: z.string().min(1),
+  awaitPromise: z.boolean().default(false),
+});
+export type EvalParams = z.infer<typeof EvalParams>;
+
+export const EvalResult = z.object({ value: z.unknown() });
+export type EvalResult = z.infer<typeof EvalResult>;
+
+export const WaitForShape = {
+  tabId,
+  selector: z.string().optional(),
+  ref: z.string().optional(),
+  state: z.enum(["visible", "hidden", "present"]).default("visible"),
+  timeoutMs: z.number().int().positive().default(5000),
+} as const;
+
+export const WaitForParams = z
+  .object(WaitForShape)
+  .refine((v) => v.ref !== undefined || v.selector !== undefined, {
+    message: "wait_for requires a ref or a selector",
+  });
+export type WaitForParams = z.infer<typeof WaitForParams>;

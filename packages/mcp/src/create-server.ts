@@ -2,16 +2,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ClickShape,
   CloseTabParams,
+  EvalParams,
+  EvalResult,
   ListTabsResult,
   NavigateParams,
   NavigateResult,
   OkResult,
   OpenTabParams,
   OpenTabResult,
+  ScreenshotParams,
+  ScreenshotResult,
   SelectTabParams,
   SnapshotParams,
   SnapshotResult,
   TypeShape,
+  WaitForShape,
 } from "@reins/protocol";
 import type { BridgePort } from "./bridge.js";
 
@@ -136,6 +141,46 @@ export function createServer(bridge: BridgePort): McpServer {
     async (args) => {
       if (!bridge.paired) return notConnected;
       OkResult.parse(await bridge.request("select_tab", args));
+      return { content: [{ type: "text", text: "ok" }] };
+    },
+  );
+
+  server.registerTool(
+    "screenshot",
+    {
+      description: "Capture a screenshot of the browser tab as a base64-encoded image.",
+      inputSchema: ScreenshotParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      const shot = ScreenshotResult.parse(await bridge.request("screenshot", args));
+      return { content: [{ type: "image", data: shot.data, mimeType: shot.mimeType }] };
+    },
+  );
+
+  server.registerTool(
+    "eval_js",
+    {
+      description: "Evaluate a JavaScript expression in the browser tab and return the result.",
+      inputSchema: EvalParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      const { value } = EvalResult.parse(await bridge.request("eval_js", args));
+      return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    "wait_for",
+    {
+      description:
+        "Wait for an element (by ref or CSS selector) to reach a given visibility state.",
+      inputSchema: WaitForShape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      OkResult.parse(await bridge.request("wait_for", args));
       return { content: [{ type: "text", text: "ok" }] };
     },
   );
