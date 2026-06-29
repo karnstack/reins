@@ -101,7 +101,7 @@ const TABLE: TestCase[] = [
     args: { url: "https://x" },
     assert: (r) => {
       const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toContain("7");
+      expect(text).toBe("Opened tab 7");
     },
   },
   {
@@ -131,7 +131,7 @@ const TABLE: TestCase[] = [
     args: {},
     assert: (r) => {
       const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toContain("e1");
+      expect(text).toBe("e1: button OK");
     },
   },
   {
