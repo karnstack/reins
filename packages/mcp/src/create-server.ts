@@ -59,16 +59,15 @@ export function createServer(bridge: BridgePort): McpServer {
     "read_snapshot",
     {
       description:
-        "Snapshot the page (text | a11y | dom). Returns content plus element refs for click/type.",
+        "Snapshot the page's interactive and labelled elements, returning a ref for each (use refs with click/type). The `mode` param is reserved for future text/a11y/dom variants.",
       inputSchema: SnapshotParams.shape,
     },
     async (args) => {
       if (!bridge.paired) return notConnected;
       const snap = SnapshotResult.parse(await bridge.request("read_snapshot", args));
-      const refs = snap.refs
-        .map((r) => `${r.ref}: ${r.role ?? ""} ${r.name ?? ""}`.trim())
-        .join("\n");
-      return { content: [{ type: "text", text: `${snap.content}\n\n--- refs ---\n${refs}` }] };
+      const lines = snap.refs.map((r) => `${r.ref}: ${r.role ?? ""} ${r.name ?? ""}`.trim());
+      const text = lines.length ? lines.join("\n") : "(no interactive elements found)";
+      return { content: [{ type: "text", text }] };
     },
   );
 
