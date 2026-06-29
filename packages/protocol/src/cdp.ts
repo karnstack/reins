@@ -65,3 +65,18 @@ export type TypeParams = z.infer<typeof TypeParams>;
 
 export const OkResult = z.object({ ok: z.literal(true) });
 export type OkResult = z.infer<typeof OkResult>;
+
+export const OpenTabParams = z.object({
+  url: z.string().min(1),
+  activate: z.boolean().default(true),
+});
+export type OpenTabParams = z.infer<typeof OpenTabParams>;
+
+export const OpenTabResult = z.object({ tabId: z.number() });
+export type OpenTabResult = z.infer<typeof OpenTabResult>;
+
+export const CloseTabParams = z.object({ tabId: z.number() });
+export type CloseTabParams = z.infer<typeof CloseTabParams>;
+
+export const SelectTabParams = z.object({ tabId: z.number() });
+export type SelectTabParams = z.infer<typeof SelectTabParams>;

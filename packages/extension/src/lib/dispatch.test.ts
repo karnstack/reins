@@ -46,3 +46,27 @@ describe("dispatchMethod routing (CDP)", () => {
     expect(await dispatchMethod("read_snapshot", {})).toEqual({ content: "", refs: [] });
   });
 });
+
+describe("dispatchMethod routing (chrome.tabs)", () => {
+  it("routes open_tab", async () => {
+    vi.stubGlobal("chrome", { tabs: { create: async () => ({ id: 11 }) } });
+    const result = await dispatchMethod("open_tab", { url: "https://new.tab", activate: true });
+    expect(result).toEqual({ tabId: 11 });
+  });
+
+  it("routes close_tab", async () => {
+    const remove = vi.fn(async () => undefined);
+    vi.stubGlobal("chrome", { tabs: { remove } });
+    const result = await dispatchMethod("close_tab", { tabId: 5 });
+    expect(remove).toHaveBeenCalledWith(5);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("routes select_tab", async () => {
+    const update = vi.fn(async () => ({}));
+    vi.stubGlobal("chrome", { tabs: { update } });
+    const result = await dispatchMethod("select_tab", { tabId: 7 });
+    expect(update).toHaveBeenCalledWith(7, { active: true });
+    expect(result).toEqual({ ok: true });
+  });
+});

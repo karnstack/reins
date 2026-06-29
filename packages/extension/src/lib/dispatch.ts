@@ -1,5 +1,5 @@
 import { cdpClick, cdpNavigate, cdpSnapshot, cdpType } from "./cdp.js";
-import { listTabs } from "./tab-handler.js";
+import { closeTab, listTabs, openTab, selectTab } from "./tab-handler.js";
 
 /**
  * Route an incoming bridge method name to the appropriate browser handler.
@@ -9,6 +9,12 @@ export async function dispatchMethod(method: string, params: unknown): Promise<u
   switch (method) {
     case "list_tabs":
       return listTabs();
+    case "open_tab":
+      return openTab(params as Parameters<typeof openTab>[0]);
+    case "close_tab":
+      return closeTab(params as Parameters<typeof closeTab>[0]);
+    case "select_tab":
+      return selectTab(params as Parameters<typeof selectTab>[0]);
     case "navigate":
       return cdpNavigate(params as Parameters<typeof cdpNavigate>[0]);
     case "read_snapshot":

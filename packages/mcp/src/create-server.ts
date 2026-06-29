@@ -1,10 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ClickShape,
+  CloseTabParams,
   ListTabsResult,
   NavigateParams,
   NavigateResult,
   OkResult,
+  OpenTabParams,
+  OpenTabResult,
+  SelectTabParams,
   SnapshotParams,
   SnapshotResult,
   TypeShape,
@@ -93,6 +97,45 @@ export function createServer(bridge: BridgePort): McpServer {
     async (args) => {
       if (!bridge.paired) return notConnected;
       OkResult.parse(await bridge.request("type", args));
+      return { content: [{ type: "text", text: "ok" }] };
+    },
+  );
+
+  server.registerTool(
+    "open_tab",
+    {
+      description: "Open a new browser tab at the given URL; optionally activate (focus) it.",
+      inputSchema: OpenTabParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      const { tabId } = OpenTabResult.parse(await bridge.request("open_tab", args));
+      return { content: [{ type: "text", text: `Opened tab ${tabId}` }] };
+    },
+  );
+
+  server.registerTool(
+    "close_tab",
+    {
+      description: "Close a browser tab by its numeric tab ID.",
+      inputSchema: CloseTabParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      OkResult.parse(await bridge.request("close_tab", args));
+      return { content: [{ type: "text", text: "ok" }] };
+    },
+  );
+
+  server.registerTool(
+    "select_tab",
+    {
+      description: "Switch focus to a browser tab by its numeric tab ID.",
+      inputSchema: SelectTabParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      OkResult.parse(await bridge.request("select_tab", args));
       return { content: [{ type: "text", text: "ok" }] };
     },
   );

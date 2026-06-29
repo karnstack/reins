@@ -92,4 +92,43 @@ describe("createServer", () => {
     expect(result.isError).toBe(true);
     await client.close();
   });
+
+  it("open_tab returns 'Opened tab <tabId>'", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ tabId: 99 }) }));
+    const result = await client.callTool({
+      name: "open_tab",
+      arguments: { url: "https://example.com" },
+    });
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(first.text).toBe("Opened tab 99");
+    await client.close();
+  });
+
+  it("close_tab returns ok", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ ok: true }) }));
+    const result = await client.callTool({ name: "close_tab", arguments: { tabId: 5 } });
+    expect(result.isError).toBeFalsy();
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(first.text).toBe("ok");
+    await client.close();
+  });
+
+  it("select_tab returns ok", async () => {
+    const client = await connect(fakeBridge({ request: async () => ({ ok: true }) }));
+    const result = await client.callTool({ name: "select_tab", arguments: { tabId: 3 } });
+    expect(result.isError).toBeFalsy();
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(first.text).toBe("ok");
+    await client.close();
+  });
+
+  it("open_tab reports error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const result = await client.callTool({ name: "open_tab", arguments: { url: "https://x" } });
+    expect(result.isError).toBe(true);
+    await client.close();
+  });
 });

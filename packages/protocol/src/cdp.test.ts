@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   ClickParams,
+  CloseTabParams,
   NavigateParams,
   OkResult,
+  OpenTabParams,
+  OpenTabResult,
+  SelectTabParams,
   SnapshotParams,
   SnapshotResult,
   TypeParams,
@@ -41,5 +45,26 @@ describe("cdp schemas", () => {
 
   it("OkResult accepts { ok: true }", () => {
     expect(OkResult.parse({ ok: true }).ok).toBe(true);
+  });
+
+  it("OpenTabParams requires a non-empty url and defaults activate to true", () => {
+    expect(OpenTabParams.parse({ url: "https://x" }).activate).toBe(true);
+    expect(OpenTabParams.parse({ url: "https://x", activate: false }).activate).toBe(false);
+    expect(() => OpenTabParams.parse({})).toThrow();
+    expect(() => OpenTabParams.parse({ url: "" })).toThrow();
+  });
+
+  it("OpenTabResult carries tabId", () => {
+    expect(OpenTabResult.parse({ tabId: 42 }).tabId).toBe(42);
+  });
+
+  it("CloseTabParams requires tabId", () => {
+    expect(CloseTabParams.parse({ tabId: 5 }).tabId).toBe(5);
+    expect(() => CloseTabParams.parse({})).toThrow();
+  });
+
+  it("SelectTabParams requires tabId", () => {
+    expect(SelectTabParams.parse({ tabId: 7 }).tabId).toBe(7);
+    expect(() => SelectTabParams.parse({})).toThrow();
   });
 });
