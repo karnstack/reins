@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // vi.mock is hoisted by vitest so cdp.js is stubbed before any imports run.
+vi.mock("./monitor.js", () => ({
+  readConsole: vi.fn(async () => ({
+    entries: [{ level: "error", text: "boom", timestamp: 1000 }],
+  })),
+  readNetwork: vi.fn(async () => ({
+    entries: [{ method: "GET", url: "https://x/", status: 200, timestamp: 2000 }],
+  })),
+}));
+
 vi.mock("./cdp.js", () => ({
   cdpNavigate: vi.fn(async () => ({ url: "https://x/" })),
   cdpSnapshot: vi.fn(async () => ({ content: "", refs: [] })),
@@ -83,5 +92,18 @@ describe("dispatchMethod routing (chrome.tabs)", () => {
     const result = await dispatchMethod("select_tab", { tabId: 7 });
     expect(update).toHaveBeenCalledWith(7, { active: true });
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("dispatchMethod routing (monitor)", () => {
+  it("routes read_console to readConsole", async () => {
+    expect(await dispatchMethod("read_console", {})).toEqual({
+      entries: [{ level: "error", text: "boom", timestamp: 1000 }],
+    });
+  });
+  it("routes read_network to readNetwork", async () => {
+    expect(await dispatchMethod("read_network", {})).toEqual({
+      entries: [{ method: "GET", url: "https://x/", status: 200, timestamp: 2000 }],
+    });
   });
 });

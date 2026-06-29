@@ -7,6 +7,7 @@ import {
   cdpType,
   cdpWaitFor,
 } from "./cdp.js";
+import { readConsole, readNetwork } from "./monitor.js";
 import { closeTab, listTabs, openTab, selectTab } from "./tab-handler.js";
 
 /**
@@ -37,6 +38,10 @@ export async function dispatchMethod(method: string, params: unknown): Promise<u
       return cdpEval(params as Parameters<typeof cdpEval>[0]);
     case "wait_for":
       return cdpWaitFor(params as Parameters<typeof cdpWaitFor>[0]);
+    case "read_console":
+      return readConsole(params as Parameters<typeof readConsole>[0]);
+    case "read_network":
+      return readNetwork(params as Parameters<typeof readNetwork>[0]);
     default:
       throw new Error(`unknown method: ${method}`);
   }
