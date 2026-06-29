@@ -193,7 +193,7 @@ export function createServer(bridge: BridgePort): McpServer {
     "read_console",
     {
       description:
-        "Read recent console messages (level, text, timestamp) for a tab. Filter by sinceMs / levels.",
+        "Read recent console messages (level, text, timestamp) for a tab. Filter by sinceMs / levels. Note: only captures events since monitoring began for that tab.",
       inputSchema: ConsoleParams.shape,
     },
     async (args) => {
@@ -210,7 +210,7 @@ export function createServer(bridge: BridgePort): McpServer {
     "read_network",
     {
       description:
-        "Read recent network requests (method, url, status) for a tab. Filter by sinceMs / urlPattern.",
+        "Read recent network requests (method, url, status) for a tab. Filter by sinceMs / urlPattern. Note: only captures events since monitoring began for that tab.",
       inputSchema: NetworkParams.shape,
     },
     async (args) => {

@@ -229,4 +229,14 @@ describe("createServer", () => {
     expect(result.isError).toBe(true);
     await client.close();
   });
+
+  it("read_network reports error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const res = await client.callTool({ name: "read_network", arguments: {} });
+    expect(res.isError).toBe(true);
+    expect(res.content).toContainEqual(
+      expect.objectContaining({ text: expect.stringMatching(/no browser connected/i) }),
+    );
+    await client.close();
+  });
 });

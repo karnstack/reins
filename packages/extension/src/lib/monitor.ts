@@ -89,8 +89,13 @@ chrome.debugger.onDetach.addListener((source) => {
 
 async function attachMonitor(tabId: number): Promise<Monitor> {
   await chrome.debugger.attach({ tabId }, PROTOCOL);
-  await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
-  await chrome.debugger.sendCommand({ tabId }, "Network.enable");
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
+    await chrome.debugger.sendCommand({ tabId }, "Network.enable");
+  } catch (e) {
+    await chrome.debugger.detach({ tabId }).catch(() => {});
+    throw e;
+  }
   const mon: Monitor = {
     console: new RingBuffer<ConsoleEntry>(RING_CAPACITY),
     network: new RingBuffer<NetworkEntry>(RING_CAPACITY),
