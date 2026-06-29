@@ -145,6 +145,61 @@ describe("BridgeClient", () => {
     });
     expect(response.ok).toBe(false);
     expect((response.error as { message: string }).message).toBe("boom");
+    expect((response.error as { code: string }).code).toBe("HANDLER_ERROR");
+  });
+
+  it("does not produce an unhandled rejection when the socket drops mid-dispatch", async () => {
+    harness = await startServer();
+
+    // Deferred dispatch: dispatch returns a promise we resolve manually after the socket closes.
+    let resolveDispatch!: (v: unknown) => void;
+    const dispatchInflight = new Promise<unknown>((res) => {
+      resolveDispatch = res;
+    });
+    let dispatchCalled = false;
+    // Latch: true once "disconnected" has been observed (avoids racing with fast reconnect).
+    let sawDisconnected = false;
+
+    client = new BridgeClient({
+      url: `ws://127.0.0.1:${harness.port}`,
+      token: TOKEN,
+      browser: "test",
+      dispatch: async () => {
+        dispatchCalled = true;
+        return dispatchInflight;
+      },
+      createSocket: nodeSocketFactory,
+      onStatus: (s) => {
+        if (s === "disconnected") sawDisconnected = true;
+      },
+      schedule: (fn) => setTimeout(fn, 5),
+    });
+    client.start();
+
+    // Wait for server to receive hello (which sets current() and sends welcome).
+    await waitFor(() => harness?.current() !== undefined);
+
+    // Server sends a request; client will process welcome then this request in order.
+    harness
+      .current()
+      ?.send(JSON.stringify({ type: "request", id: "r-drop", method: "slow", params: {} }));
+
+    // Wait until dispatch has started (confirming welcome + request were both processed).
+    await waitFor(() => dispatchCalled);
+
+    // Close the server-side socket while dispatch is still in-flight.
+    harness.current()?.close();
+
+    // Wait for the client to observe disconnect (latch, so we don't race with fast reconnect).
+    await waitFor(() => sawDisconnected);
+
+    // Now resolve the dispatch — this must NOT produce an unhandled rejection.
+    resolveDispatch({ ok: true });
+
+    // Settle the microtask queue; Vitest fails the suite on any unhandled rejection.
+    await new Promise<void>((res) => setTimeout(res, 50));
+
+    expect(sawDisconnected).toBe(true);
   });
 
   it("reconnects after the socket drops", async () => {

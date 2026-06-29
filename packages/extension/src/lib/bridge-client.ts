@@ -96,19 +96,33 @@ export class BridgeClient {
   async #handleRequest(id: string, method: string, params: unknown): Promise<void> {
     const socket = this.#socket;
     if (!socket) return;
+    let result: unknown;
+    let dispatchError: unknown;
+    let threw = false;
     try {
-      const result = await this.#opts.dispatch(method, params);
-      socket.send(JSON.stringify({ type: "response", id, ok: true, result }));
+      result = await this.#opts.dispatch(method, params);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      socket.send(
-        JSON.stringify({
-          type: "response",
-          id,
-          ok: false,
-          error: { code: "HANDLER_ERROR", message },
-        }),
-      );
+      threw = true;
+      dispatchError = err;
+    }
+    if (this.#socket !== socket) return; // socket replaced/closed during dispatch
+    try {
+      if (!threw) {
+        socket.send(JSON.stringify({ type: "response", id, ok: true, result }));
+      } else {
+        const message =
+          dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
+        socket.send(
+          JSON.stringify({
+            type: "response",
+            id,
+            ok: false,
+            error: { code: "HANDLER_ERROR", message },
+          }),
+        );
+      }
+    } catch {
+      // Socket closed between dispatch and send; response cannot be delivered.
     }
   }
 }
