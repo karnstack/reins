@@ -193,7 +193,7 @@ export function createServer(bridge: BridgePort): McpServer {
     "read_console",
     {
       description:
-        "Read recent console messages (level, text, timestamp) for a tab. Filter by sinceMs / levels. Note: only captures events since monitoring began for that tab.",
+        "Read recent console messages (level, text, timestamp) for a tab. Filter by sinceMs / levels. Levels use CDP console types: log, info, warning, error, debug (note: 'warning' not 'warn'). Captures console.* calls only — not uncaught exceptions. Note: only captures events since monitoring began for that tab.",
       inputSchema: ConsoleParams.shape,
     },
     async (args) => {

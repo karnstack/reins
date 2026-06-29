@@ -13,6 +13,11 @@
  * (b) EVENTS SINCE MONITORING BEGAN: read_console and read_network only see
  *     events captured SINCE monitoring began for that tab (the first read
  *     call triggers attach+enable). CDP does not replay past events.
+ *
+ * (c) CONSOLE CAPTURE SCOPE: console capture covers `console.*` calls only
+ *     (CDP `Runtime.consoleAPICalled`). It does NOT include uncaught exceptions
+ *     or failed-resource errors. Console levels use CDP's `type` strings:
+ *     `"log"`, `"info"`, `"warning"` (NOT `"warn"`), `"error"`, `"debug"`.
  */
 
 import type { ConsoleEntry, ConsoleParams, NetworkEntry, NetworkParams } from "@reins/protocol";
@@ -49,19 +54,27 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
     const text = p.args
       .map((a) => (a.value !== undefined ? String(a.value) : (a.description ?? "")))
       .join(" ");
-    mon.console.push({ level: p.type, text, timestamp: p.timestamp * 1000 });
+    // Runtime.consoleAPICalled timestamp is Runtime.Timestamp = ms since epoch already.
+    mon.console.push({ level: p.type, text, timestamp: p.timestamp });
   } else if (method === "Network.requestWillBeSent") {
     const p = params as unknown as {
       requestId: string;
       request: { method: string; url: string };
-      timestamp: number;
+      timestamp: number; // Network.MonotonicTime — NOT epoch; do not use for display
+      wallTime: number; // Network.TimeSinceEpoch = seconds since epoch — use this
     };
     const entry: NetworkEntry = {
       method: p.request.method,
       url: p.request.url,
       status: undefined,
-      timestamp: p.timestamp * 1000,
+      // wallTime is seconds since epoch; convert to epoch-ms for consistency with console.
+      timestamp: p.wallTime * 1000,
     };
+    // Backstop: if the map has grown beyond ring capacity, evict the oldest entry.
+    if (mon.byRequestId.size >= RING_CAPACITY) {
+      const oldest = mon.byRequestId.keys().next().value;
+      if (oldest !== undefined) mon.byRequestId.delete(oldest);
+    }
     mon.network.push(entry);
     mon.byRequestId.set(p.requestId, entry);
   } else if (method === "Network.responseReceived") {
@@ -77,6 +90,11 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
       entry.status = p.response.status;
     }
     // Always clean up byRequestId after response — eviction may have orphaned it.
+    mon.byRequestId.delete(p.requestId);
+  } else if (method === "Network.loadingFailed") {
+    const p = params as unknown as { requestId: string };
+    // Request failed / was aborted or blocked — it will never receive a response.
+    // Remove the map entry to prevent unbounded growth; the ring buffer entry remains.
     mon.byRequestId.delete(p.requestId);
   }
 });
