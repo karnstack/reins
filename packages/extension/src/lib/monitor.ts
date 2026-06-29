@@ -49,7 +49,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
     const text = p.args
       .map((a) => (a.value !== undefined ? String(a.value) : (a.description ?? "")))
       .join(" ");
-    mon.console.push({ level: p.type, text, timestamp: p.timestamp });
+    mon.console.push({ level: p.type, text, timestamp: p.timestamp * 1000 });
   } else if (method === "Network.requestWillBeSent") {
     const p = params as unknown as {
       requestId: string;
@@ -60,7 +60,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
       method: p.request.method,
       url: p.request.url,
       status: undefined,
-      timestamp: p.timestamp,
+      timestamp: p.timestamp * 1000,
     };
     mon.network.push(entry);
     mon.byRequestId.set(p.requestId, entry);
