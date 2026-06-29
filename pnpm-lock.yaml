@@ -33,6 +33,9 @@ importers:
       '@types/chrome':
         specifier: 0.2.0
         version: 0.2.0
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -42,6 +45,9 @@ importers:
       vitest:
         specifier: 4.1.9
         version: 4.1.9(@types/node@26.0.1)(vite@8.1.0(@types/node@26.0.1))
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
 
   packages/mcp:
     dependencies:
