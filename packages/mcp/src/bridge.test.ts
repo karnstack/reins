@@ -112,6 +112,48 @@ describe("BridgeHost", () => {
     await closed;
   });
 
+  it("rejects start() when the port is already in use (EADDRINUSE)", async () => {
+    // Start host A on port 0 to obtain an ephemeral port.
+    host = new BridgeHost({ port: 0, token: TOKEN });
+    await host.start();
+    const takenPort = host.port;
+
+    // Attempt to start host B on the same port — must reject.
+    const hostB = new BridgeHost({ port: takenPort, token: TOKEN });
+    try {
+      await expect(hostB.start()).rejects.toThrow();
+    } finally {
+      await hostB.stop();
+    }
+  });
+
+  it("a malformed response frame is ignored — the pending request times out, not mis-settles", async () => {
+    host = new BridgeHost({ port: 0, token: TOKEN });
+    await host.start();
+    const client = await connectClient(host.port);
+
+    // On receiving the request, send a malformed response (id is a number, not a string).
+    client.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request") {
+        client.send(JSON.stringify({ type: "response", id: 42, ok: true, result: "bad" }));
+      }
+    });
+
+    // The malformed frame must be ignored; the request must time out.
+    await expect(host.request("list_tabs", {}, 200)).rejects.toThrow(/timed out/i);
+    client.close();
+  });
+
+  it("a hello missing the token is rejected (code 4001)", async () => {
+    host = new BridgeHost({ port: 0, token: TOKEN });
+    await host.start();
+
+    // Send a hello that parses as a valid JSON object but has no token field.
+    await expect(connectClient(host.port, { token: "" })).rejects.toThrow("closed 4001");
+    expect(host.paired).toBe(false);
+  });
+
   it("second authenticated client replaces and closes the first (code 4002)", async () => {
     host = new BridgeHost({ port: 0, token: TOKEN });
     await host.start();

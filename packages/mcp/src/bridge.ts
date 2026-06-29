@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
+import { HelloFrame, RequestFrame, ResponseFrame, WelcomeFrame } from "@reins/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 
 export interface BridgePort {
@@ -59,20 +60,22 @@ export class BridgeHost implements BridgePort {
       const msg = this.#parse(data);
       if (!msg) return;
       if (!authed) {
-        if (msg.type === "hello" && msg.token === this.#token) {
+        const hello = HelloFrame.safeParse(msg);
+        if (hello.success && hello.data.token === this.#token) {
           authed = true;
           if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
             this.#client.close(4002, "replaced by a new connection");
           }
           this.#client = ws;
-          ws.send(JSON.stringify({ type: "welcome", server: "reins" }));
+          ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
         } else {
           ws.close(4001, "bad token");
         }
         return;
       }
-      if (msg.type === "response" && typeof msg.id === "string") {
-        this.#settle(msg.id, msg);
+      const response = ResponseFrame.safeParse(msg);
+      if (response.success) {
+        this.#settle(response.data.id, response.data);
       }
     });
     ws.on("close", () => {
@@ -101,18 +104,15 @@ export class BridgeHost implements BridgePort {
     }
   }
 
-  #settle(id: string, msg: Record<string, unknown>): void {
+  #settle(id: string, frame: ResponseFrame): void {
     const pending = this.#pending.get(id);
     if (!pending) return;
     clearTimeout(pending.timer);
     this.#pending.delete(id);
-    if (msg.ok === true) {
-      pending.resolve(msg.result);
+    if (frame.ok === true) {
+      pending.resolve(frame.result);
     } else {
-      const err = (msg.error ?? { code: "ERR", message: "request failed" }) as {
-        code: string;
-        message: string;
-      };
+      const err = frame.error ?? { code: "ERR", message: "request failed" };
       pending.reject(new Error(`${err.code}: ${err.message}`));
     }
   }
@@ -129,7 +129,7 @@ export class BridgeHost implements BridgePort {
         reject(new Error(`request "${method}" timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       this.#pending.set(id, { resolve, reject, timer });
-      client.send(JSON.stringify({ type: "request", id, method, params }));
+      client.send(JSON.stringify(RequestFrame.parse({ type: "request", id, method, params })));
     });
   }
 
