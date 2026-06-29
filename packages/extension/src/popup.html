@@ -2,12 +2,67 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>reins</title>
   </head>
   <body>
-    <main>
-      <h1>reins</h1>
-      <p id="status">Not paired (M1)</p>
+    <main class="reins">
+      <header class="reins__header">
+        <span class="reins__mark" aria-hidden="true">
+          <svg viewBox="0 0 128 128" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M42 42 C 42 80, 86 48, 86 86" stroke="#fff" stroke-width="12" stroke-linecap="round" fill="none" />
+            <circle cx="42" cy="42" r="13" fill="#fff" />
+            <circle cx="86" cy="86" r="13" fill="#fff" />
+          </svg>
+        </span>
+        <div class="reins__heading">
+          <h1 class="reins__title">reins</h1>
+          <p class="reins__subtitle">Drive this browser from your agent</p>
+        </div>
+        <span class="reins__status reins__status--idle" id="status" role="status">
+          <span class="reins__status-dot"></span>
+          <span class="reins__status-label" id="status-label">Not paired</span>
+        </span>
+      </header>
+
+      <form class="reins__form" id="pair-form">
+        <div class="reins__field">
+          <label class="reins__label" for="url">Server URL</label>
+          <input
+            class="reins__input reins__input--mono"
+            id="url"
+            name="url"
+            type="text"
+            inputmode="url"
+            placeholder="ws://127.0.0.1:8765"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+        </div>
+        <div class="reins__field">
+          <label class="reins__label" for="token">Pairing token</label>
+          <input
+            class="reins__input reins__input--mono"
+            id="token"
+            name="token"
+            type="password"
+            placeholder="paste from `reins pair`"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+        </div>
+        <button class="reins__btn reins__btn--primary" id="connect" type="submit">Connect</button>
+      </form>
+
+      <button class="reins__btn reins__btn--ghost reins__btn--danger" id="disconnect" type="button" hidden>
+        Disconnect
+      </button>
+
+      <p class="reins__hint">
+        Run <code>reins pair</code> in your terminal to get the URL &amp; token.
+      </p>
     </main>
     <script type="module" src="./popup.ts"></script>
   </body>

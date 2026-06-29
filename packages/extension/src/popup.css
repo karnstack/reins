@@ -1,0 +1,254 @@
+:root {
+  color-scheme: light;
+  --violet-1: #7c83ff;
+  --violet-2: #6d28d9;
+  --violet-800: #5b21b6;
+  --violet-900: #4c1d95;
+  --ink: #18181b; /* zinc-900 */
+  --muted: #71717a; /* zinc-500 */
+  --line: rgba(24, 24, 27, 0.1);
+  --line-strong: rgba(24, 24, 27, 0.16);
+  --bg: #ffffff;
+  --ok: #10b981;
+  --warn: #f59e0b;
+  --err: #ef4444;
+  --idle: #a1a1aa; /* zinc-400 */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.reins {
+  width: 320px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header */
+.reins__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reins__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--violet-1), var(--violet-2));
+  flex: none;
+}
+
+.reins__mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+.reins__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.reins__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.reins__subtitle {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+/* Status pill */
+.reins__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 550;
+  background: rgba(24, 24, 27, 0.05);
+  color: var(--muted);
+  flex: none;
+}
+
+.reins__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--idle);
+  flex: none;
+}
+
+.reins__status--connecting .reins__status-dot {
+  background: var(--warn);
+  animation: reins-pulse 1s ease-in-out infinite;
+}
+
+.reins__status--connected {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.reins__status--connected .reins__status-dot {
+  background: var(--ok);
+}
+
+.reins__status--error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.reins__status--error .reins__status-dot {
+  background: var(--err);
+}
+
+@keyframes reins-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Form */
+.reins__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reins__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.reins__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.reins__input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.reins__input::placeholder {
+  color: var(--idle);
+}
+
+.reins__input:hover {
+  border-color: var(--line-strong);
+}
+
+.reins__input:focus-visible {
+  border-color: var(--violet-2);
+  box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.18);
+}
+
+.reins__input--mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+/* Buttons */
+.reins__btn {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.reins__btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.35);
+}
+
+.reins__btn--primary {
+  color: #fff;
+  background: var(--violet-2);
+}
+
+.reins__btn--primary:hover {
+  background: var(--violet-800);
+}
+
+.reins__btn--primary:active {
+  background: var(--violet-900);
+}
+
+.reins__btn--ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.reins__btn--ghost:hover {
+  background: rgba(24, 24, 27, 0.04);
+  color: var(--ink);
+}
+
+.reins__btn--danger:hover {
+  color: var(--err);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+/* Hint */
+.reins__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.reins__hint code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(24, 24, 27, 0.06);
+  color: var(--ink);
+}
