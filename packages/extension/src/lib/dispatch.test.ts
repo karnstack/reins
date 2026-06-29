@@ -6,6 +6,9 @@ vi.mock("./cdp.js", () => ({
   cdpSnapshot: vi.fn(async () => ({ content: "", refs: [] })),
   cdpClick: vi.fn(async () => ({ ok: true })),
   cdpType: vi.fn(async () => ({ ok: true })),
+  cdpScreenshot: vi.fn(async () => ({ data: "abc123", mimeType: "image/png" })),
+  cdpEval: vi.fn(async () => ({ value: 42 })),
+  cdpWaitFor: vi.fn(async () => ({ ok: true })),
 }));
 
 import { dispatchMethod } from "./dispatch.js";
@@ -44,6 +47,18 @@ describe("dispatchMethod routing (CDP)", () => {
     expect(await dispatchMethod("click", { ref: "e1" })).toEqual({ ok: true });
     expect(await dispatchMethod("type", { ref: "e1", text: "hi" })).toEqual({ ok: true });
     expect(await dispatchMethod("read_snapshot", {})).toEqual({ content: "", refs: [] });
+  });
+  it("routes screenshot to cdpScreenshot", async () => {
+    expect(await dispatchMethod("screenshot", {})).toEqual({
+      data: "abc123",
+      mimeType: "image/png",
+    });
+  });
+  it("routes eval_js to cdpEval", async () => {
+    expect(await dispatchMethod("eval_js", { expression: "1+1" })).toEqual({ value: 42 });
+  });
+  it("routes wait_for to cdpWaitFor", async () => {
+    expect(await dispatchMethod("wait_for", { selector: "#btn" })).toEqual({ ok: true });
   });
 });
 

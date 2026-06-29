@@ -1,4 +1,12 @@
-import { cdpClick, cdpNavigate, cdpSnapshot, cdpType } from "./cdp.js";
+import {
+  cdpClick,
+  cdpEval,
+  cdpNavigate,
+  cdpScreenshot,
+  cdpSnapshot,
+  cdpType,
+  cdpWaitFor,
+} from "./cdp.js";
 import { closeTab, listTabs, openTab, selectTab } from "./tab-handler.js";
 
 /**
@@ -23,6 +31,12 @@ export async function dispatchMethod(method: string, params: unknown): Promise<u
       return cdpClick(params as Parameters<typeof cdpClick>[0]);
     case "type":
       return cdpType(params as Parameters<typeof cdpType>[0]);
+    case "screenshot":
+      return cdpScreenshot(params as Parameters<typeof cdpScreenshot>[0]);
+    case "eval_js":
+      return cdpEval(params as Parameters<typeof cdpEval>[0]);
+    case "wait_for":
+      return cdpWaitFor(params as Parameters<typeof cdpWaitFor>[0]);
     default:
       throw new Error(`unknown method: ${method}`);
   }

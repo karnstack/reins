@@ -1,4 +1,12 @@
-import type { ClickParams, NavigateParams, SnapshotParams, TypeParams } from "@reins/protocol";
+import type {
+  ClickParams,
+  EvalParams,
+  NavigateParams,
+  ScreenshotParams,
+  SnapshotParams,
+  TypeParams,
+  WaitForParams,
+} from "@reins/protocol";
 
 const PROTOCOL = "1.3";
 
@@ -128,5 +136,85 @@ export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
       }
     }
     return { ok: true };
+  });
+}
+
+export async function cdpScreenshot(
+  params: ScreenshotParams,
+): Promise<{ data: string; mimeType: string }> {
+  const tabId = await resolveTabId(params.tabId);
+  return withDebugger(tabId, async () => {
+    const fmt = params.format ?? "png";
+    const res = await send<{ data: string }>(tabId, "Page.captureScreenshot", {
+      format: fmt,
+      captureBeyondViewport: params.fullPage ?? false,
+    });
+    return { data: res.data, mimeType: fmt === "jpeg" ? "image/jpeg" : "image/png" };
+  });
+}
+
+export async function cdpEval(params: EvalParams): Promise<{ value: unknown }> {
+  const tabId = await resolveTabId(params.tabId);
+  return withDebugger(tabId, async () => {
+    const res = await send<{
+      result: { value: unknown };
+      exceptionDetails?: { exception?: { description?: string }; text?: string };
+    }>(tabId, "Runtime.evaluate", {
+      expression: params.expression,
+      returnByValue: true,
+      awaitPromise: params.awaitPromise ?? false,
+    });
+    if (res.exceptionDetails) {
+      throw new Error(
+        res.exceptionDetails.exception?.description ??
+          res.exceptionDetails.text ??
+          "evaluation failed",
+      );
+    }
+    return { value: res.result.value };
+  });
+}
+
+export async function cdpWaitFor(params: WaitForParams): Promise<{ ok: true }> {
+  const tabId = await resolveTabId(params.tabId);
+  const css = selectorFor(params.ref, params.selector);
+  const state = params.state ?? "visible";
+  const timeoutMs = params.timeoutMs ?? 5000;
+
+  let checkExpr: string;
+  if (state === "present") {
+    checkExpr = `!!document.querySelector(${JSON.stringify(css)})`;
+  } else if (state === "visible") {
+    checkExpr = `(() => {
+      const el = document.querySelector(${JSON.stringify(css)});
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none";
+    })()`;
+  } else {
+    // hidden: element missing OR not visible
+    checkExpr = `(() => {
+      const el = document.querySelector(${JSON.stringify(css)});
+      if (!el) return true;
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      return !(r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none");
+    })()`;
+  }
+
+  return withDebugger(tabId, async () => {
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const { result } = await send<{ result: { value: boolean } }>(tabId, "Runtime.evaluate", {
+        expression: checkExpr,
+        returnByValue: true,
+      });
+      if (result.value) return { ok: true };
+      if (Date.now() >= deadline) {
+        throw new Error(`wait_for timed out after ${timeoutMs}ms for ${css} (${state})`);
+      }
+      await new Promise<void>((r) => setTimeout(r, 100));
+    }
   });
 }
