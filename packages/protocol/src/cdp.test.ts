@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   ClickParams,
   CloseTabParams,
+  ConsoleEntry,
+  ConsoleParams,
+  ConsoleResult,
   EvalParams,
   EvalResult,
   NavigateParams,
+  NetworkEntry,
+  NetworkParams,
+  NetworkResult,
   OkResult,
   OpenTabParams,
   OpenTabResult,
@@ -116,5 +122,120 @@ describe("cdp schemas", () => {
   it("WaitForParams accepts ref without selector", () => {
     const p = WaitForParams.parse({ ref: "e1" });
     expect(p.ref).toBe("e1");
+  });
+});
+
+describe("ConsoleEntry schema", () => {
+  it("validates a complete entry", () => {
+    const e = ConsoleEntry.parse({ level: "log", text: "hello", timestamp: 1234567890 });
+    expect(e.level).toBe("log");
+    expect(e.text).toBe("hello");
+    expect(e.timestamp).toBe(1234567890);
+  });
+
+  it("accepts any non-empty level string (permissive)", () => {
+    expect(ConsoleEntry.parse({ level: "warning", text: "x", timestamp: 0 }).level).toBe("warning");
+    expect(ConsoleEntry.parse({ level: "debug", text: "x", timestamp: 0 }).level).toBe("debug");
+    expect(ConsoleEntry.parse({ level: "error", text: "x", timestamp: 0 }).level).toBe("error");
+  });
+
+  it("rejects missing required fields", () => {
+    expect(() => ConsoleEntry.parse({ level: "log", text: "x" })).toThrow();
+    expect(() => ConsoleEntry.parse({ level: "log", timestamp: 0 })).toThrow();
+    expect(() => ConsoleEntry.parse({ text: "x", timestamp: 0 })).toThrow();
+  });
+});
+
+describe("NetworkEntry schema", () => {
+  it("validates a complete entry with status", () => {
+    const e = NetworkEntry.parse({
+      method: "GET",
+      url: "https://x.com",
+      status: 200,
+      timestamp: 1,
+    });
+    expect(e.method).toBe("GET");
+    expect(e.url).toBe("https://x.com");
+    expect(e.status).toBe(200);
+    expect(e.timestamp).toBe(1);
+  });
+
+  it("status is optional", () => {
+    const e = NetworkEntry.parse({ method: "POST", url: "https://y.com", timestamp: 2 });
+    expect(e.status).toBeUndefined();
+  });
+
+  it("rejects missing required fields", () => {
+    expect(() => NetworkEntry.parse({ url: "https://x.com", timestamp: 0 })).toThrow();
+    expect(() => NetworkEntry.parse({ method: "GET", timestamp: 0 })).toThrow();
+    expect(() => NetworkEntry.parse({ method: "GET", url: "https://x.com" })).toThrow();
+  });
+});
+
+describe("ConsoleParams schema", () => {
+  it("accepts empty object (all fields optional)", () => {
+    const p = ConsoleParams.parse({});
+    expect(p.tabId).toBeUndefined();
+    expect(p.sinceMs).toBeUndefined();
+    expect(p.levels).toBeUndefined();
+  });
+
+  it("accepts all optional fields", () => {
+    const p = ConsoleParams.parse({ tabId: 1, sinceMs: 5000, levels: ["log", "error"] });
+    expect(p.tabId).toBe(1);
+    expect(p.sinceMs).toBe(5000);
+    expect(p.levels).toEqual(["log", "error"]);
+  });
+});
+
+describe("NetworkParams schema", () => {
+  it("accepts empty object (all fields optional)", () => {
+    const p = NetworkParams.parse({});
+    expect(p.tabId).toBeUndefined();
+    expect(p.sinceMs).toBeUndefined();
+    expect(p.urlPattern).toBeUndefined();
+  });
+
+  it("accepts all optional fields", () => {
+    const p = NetworkParams.parse({ tabId: 2, sinceMs: 1000, urlPattern: "*/api/*" });
+    expect(p.tabId).toBe(2);
+    expect(p.sinceMs).toBe(1000);
+    expect(p.urlPattern).toBe("*/api/*");
+  });
+});
+
+describe("ConsoleResult schema", () => {
+  it("wraps an array of ConsoleEntry", () => {
+    const r = ConsoleResult.parse({
+      entries: [{ level: "info", text: "msg", timestamp: 10 }],
+    });
+    expect(r.entries).toHaveLength(1);
+    expect(r.entries[0]?.level).toBe("info");
+  });
+
+  it("accepts empty entries array", () => {
+    expect(ConsoleResult.parse({ entries: [] }).entries).toEqual([]);
+  });
+
+  it("rejects missing entries", () => {
+    expect(() => ConsoleResult.parse({})).toThrow();
+  });
+});
+
+describe("NetworkResult schema", () => {
+  it("wraps an array of NetworkEntry", () => {
+    const r = NetworkResult.parse({
+      entries: [{ method: "GET", url: "https://a.com", status: 200, timestamp: 5 }],
+    });
+    expect(r.entries).toHaveLength(1);
+    expect(r.entries[0]?.url).toBe("https://a.com");
+  });
+
+  it("accepts empty entries array", () => {
+    expect(NetworkResult.parse({ entries: [] }).entries).toEqual([]);
+  });
+
+  it("rejects missing entries", () => {
+    expect(() => NetworkResult.parse({})).toThrow();
   });
 });

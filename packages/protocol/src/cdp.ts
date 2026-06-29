@@ -115,3 +115,41 @@ export const WaitForParams = z
     message: "wait_for requires a ref or a selector",
   });
 export type WaitForParams = z.infer<typeof WaitForParams>;
+
+// ─── M3 event-buffer schemas ─────────────────────────────────────────────────
+
+export const ConsoleEntry = z.object({
+  /** CDP console type: "log"|"info"|"warning"|"error"|"debug"|... (permissive) */
+  level: z.string(),
+  text: z.string(),
+  timestamp: z.number(),
+});
+export type ConsoleEntry = z.infer<typeof ConsoleEntry>;
+
+export const NetworkEntry = z.object({
+  method: z.string(),
+  url: z.string(),
+  status: z.number().optional(),
+  timestamp: z.number(),
+});
+export type NetworkEntry = z.infer<typeof NetworkEntry>;
+
+export const ConsoleParams = z.object({
+  tabId: z.number().optional(),
+  sinceMs: z.number().optional(),
+  levels: z.array(z.string()).optional(),
+});
+export type ConsoleParams = z.infer<typeof ConsoleParams>;
+
+export const NetworkParams = z.object({
+  tabId: z.number().optional(),
+  sinceMs: z.number().optional(),
+  urlPattern: z.string().optional(),
+});
+export type NetworkParams = z.infer<typeof NetworkParams>;
+
+export const ConsoleResult = z.object({ entries: z.array(ConsoleEntry) });
+export type ConsoleResult = z.infer<typeof ConsoleResult>;
+
+export const NetworkResult = z.object({ entries: z.array(NetworkEntry) });
+export type NetworkResult = z.infer<typeof NetworkResult>;
