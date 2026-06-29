@@ -34,9 +34,12 @@ commands via the Chrome DevTools Protocol from inside an offscreen document.
 | `screenshot` | Capture the page as an image |
 | `eval_js` | Evaluate JavaScript in the page and return the value |
 | `wait_for` | Wait for an element to be visible / hidden / present |
+| `read_console` | Read recent console messages (level, text) for a tab |
+| `read_network` | Read recent network requests (method, url, status) for a tab |
 
-`read_console` / `read_network` are in progress (they need a persistent CDP
-session — see the design spec).
+`read_console` / `read_network` start a persistent monitor on first use, so they
+capture events from that point on; a monitored tab can't be driven by the
+per-call tools at the same time (one debugger per tab).
 
 ## Quick start
 

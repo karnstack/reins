@@ -8,9 +8,10 @@ Chromium browser. It has two halves:
 - **the extension** — an MV3 extension that connects to that WebSocket and
   executes commands in your browser.
 
-> Status: 11 tools implemented — `list_tabs`, `open_tab`, `close_tab`,
+> Status: all 13 tools implemented — `list_tabs`, `open_tab`, `close_tab`,
 > `select_tab`, `navigate`, `read_snapshot`, `click`, `type`, `screenshot`,
-> `eval_js`, `wait_for`. (`read_console` / `read_network` are in progress.)
+> `eval_js`, `wait_for`, `read_console`, `read_network`. The CDP execution is
+> verified by loading the extension in a real browser (below).
 
 ## 1. Prerequisites & build
 
