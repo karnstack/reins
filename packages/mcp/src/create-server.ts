@@ -2,11 +2,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   ClickShape,
   CloseTabParams,
+  ConsoleParams,
+  ConsoleResult,
   EvalParams,
   EvalResult,
   ListTabsResult,
   NavigateParams,
   NavigateResult,
+  NetworkParams,
+  NetworkResult,
   OkResult,
   OpenTabParams,
   OpenTabResult,
@@ -182,6 +186,42 @@ export function createServer(bridge: BridgePort): McpServer {
       if (!bridge.paired) return notConnected;
       OkResult.parse(await bridge.request("wait_for", args));
       return { content: [{ type: "text", text: "ok" }] };
+    },
+  );
+
+  server.registerTool(
+    "read_console",
+    {
+      description:
+        "Read recent console messages (level, text, timestamp) for a tab. Filter by sinceMs / levels.",
+      inputSchema: ConsoleParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      const { entries } = ConsoleResult.parse(await bridge.request("read_console", args));
+      const text = entries.length
+        ? entries.map((e) => `[${e.level}] ${e.text}`).join("\n")
+        : "(no console entries)";
+      return { content: [{ type: "text", text }] };
+    },
+  );
+
+  server.registerTool(
+    "read_network",
+    {
+      description:
+        "Read recent network requests (method, url, status) for a tab. Filter by sinceMs / urlPattern.",
+      inputSchema: NetworkParams.shape,
+    },
+    async (args) => {
+      if (!bridge.paired) return notConnected;
+      const { entries } = NetworkResult.parse(await bridge.request("read_network", args));
+      const text = entries.length
+        ? entries
+            .map((e) => `${e.method} ${e.url}${e.status !== undefined ? ` -> ${e.status}` : ""}`)
+            .join("\n")
+        : "(no network entries)";
+      return { content: [{ type: "text", text }] };
     },
   );
 

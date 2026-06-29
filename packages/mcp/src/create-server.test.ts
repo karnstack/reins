@@ -194,4 +194,39 @@ describe("createServer", () => {
     expect(result.isError).toBe(true);
     await client.close();
   });
+
+  it("read_console returns formatted lines", async () => {
+    const client = await connect(
+      fakeBridge({
+        request: async () => ({ entries: [{ level: "error", text: "boom", timestamp: 1 }] }),
+      }),
+    );
+    const result = await client.callTool({ name: "read_console", arguments: {} });
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(first.text).toContain("[error] boom");
+    await client.close();
+  });
+
+  it("read_network returns formatted lines", async () => {
+    const client = await connect(
+      fakeBridge({
+        request: async () => ({
+          entries: [{ method: "GET", url: "https://x", status: 200, timestamp: 1 }],
+        }),
+      }),
+    );
+    const result = await client.callTool({ name: "read_network", arguments: {} });
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    expect(first.text).toContain("GET https://x -> 200");
+    await client.close();
+  });
+
+  it("read_console reports error when not paired", async () => {
+    const client = await connect(fakeBridge({ paired: false }));
+    const result = await client.callTool({ name: "read_console", arguments: {} });
+    expect(result.isError).toBe(true);
+    await client.close();
+  });
 });

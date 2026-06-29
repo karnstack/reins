@@ -38,6 +38,8 @@ const METHOD_RESULTS: Record<string, unknown> = {
   screenshot: { data: "aGVsbG8=", mimeType: "image/png" },
   eval_js: { value: { answer: 42 } },
   wait_for: { ok: true },
+  read_console: { entries: [{ level: "error", text: "boom", timestamp: 1 }] },
+  read_network: { entries: [{ method: "GET", url: "https://x", status: 200, timestamp: 1 }] },
 };
 
 /** Stand-in extension: connects, authenticates, and answers any method via the lookup table. */
@@ -170,6 +172,24 @@ const TABLE: TestCase[] = [
     tool: "wait_for",
     args: { ref: "e1" },
     assert: (r) => expect(r.isError).toBeFalsy(),
+  },
+  {
+    label: "read_console",
+    tool: "read_console",
+    args: {},
+    assert: (r) => {
+      const text = (r.content as MaybeContent)[0]?.text ?? "";
+      expect(text).toContain("[error] boom");
+    },
+  },
+  {
+    label: "read_network",
+    tool: "read_network",
+    args: {},
+    assert: (r) => {
+      const text = (r.content as MaybeContent)[0]?.text ?? "";
+      expect(text).toContain("GET https://x -> 200");
+    },
   },
 ];
 
