@@ -29,10 +29,8 @@ offscreen document, popup, and icons — upload it as-is.
      [Store listing description](#store-listing-description-paste-ready) below
      (well under the 16k-character field limit).
    - **Category**: *Developer Tools*.
-   - **Language**, and a store icon (128×128 is in the zip).
-   - **Screenshots**: at least one **1280×800** (or 640×400) PNG. The store
-     will not publish without one. A good shot: the toolbar popover in its
-     connected state next to an agent driving a page.
+   - **Language**, and the graphic assets (see
+     [Graphic assets](#graphic-assets) below).
 3. **Privacy** tab:
    - **Single purpose**: "Lets a local daemon (installed by the user via the
      reins CLI, e.g. for coding agents) drive the user's own browser —
@@ -55,6 +53,25 @@ offscreen document, popup, and icons — upload it as-is.
 4. **Distribution**: Public — or Unlisted first if you want to test the store
    install privately before going public.
 5. **Submit for review.**
+
+## Graphic assets
+
+The **Graphic assets** section of the listing form. Ready-made, branded assets
+live in [`packages/extension/store-assets/`](../packages/extension/store-assets)
+(regenerate with `python3 packages/extension/store-assets/generate.py`).
+
+| Slot | Required | Size | Format | Use |
+|---|---|---|---|---|
+| **Store icon** | ✅ | 128×128 | PNG | `packages/extension/icons/icon-128.png` |
+| **Screenshots** (≤5) | ✅ (≥1) | 1280×800 or 640×400 | JPEG / 24-bit PNG, no alpha | `store-assets/screenshot-1280x800.png` |
+| **Small promo tile** | optional | 440×280 | JPEG / 24-bit PNG, no alpha | `store-assets/small-tile-440x280.png` |
+| **Marquee promo tile** | optional | 1400×560 | JPEG / 24-bit PNG, no alpha | `store-assets/marquee-1400x560.png` |
+| Global promo video | optional | — | YouTube URL | skip |
+
+The generated screenshot is a **branded hero** — enough to submit. For a
+stronger listing, add real captures too (up to 5): the toolbar popover in its
+connected state, and an agent driving a page. Capture at exactly 1280×800 (or
+640×400) with no alpha channel.
 
 ## Store listing description (paste-ready)
 
