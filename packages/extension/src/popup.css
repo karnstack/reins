@@ -289,9 +289,12 @@ body {
 .reins__advanced {
   border-top: 1px solid var(--line);
   padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+}
+
+/* <details> renders as block and ignores flex/gap in Chrome — space the
+   disclosed children with explicit margins instead. */
+.reins__advanced > :not(summary) {
+  margin-top: 10px;
 }
 
 .reins__advanced summary {
