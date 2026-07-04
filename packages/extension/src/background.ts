@@ -21,7 +21,7 @@ function ensureOffscreen(): Promise<void> {
     offscreenPromise = (async () => {
       if (!(await chrome.offscreen.hasDocument())) {
         await chrome.offscreen.createDocument({
-          url: "offscreen.html",
+          url: "src/offscreen.html",
           reasons: [chrome.offscreen.Reason.WORKERS],
           justification:
             "Maintain a persistent WebSocket connection to the local reins MCP server.",
