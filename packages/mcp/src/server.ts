@@ -7,10 +7,11 @@ import { createLogger } from "./log.js";
 
 const log = createLogger();
 const config = loadOrCreateConfig();
-const bridge = new BridgeHost({ port: config.port, token: config.token, log });
+// Interim: empty allowlist until Task 3 (allowlist) + Task 5 (serve) land.
+const bridge = new BridgeHost({ allowedOrigins: new Set<string>(), log });
 
 try {
-  await bridge.start();
+  await bridge.listen(config.port);
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err);
   log(

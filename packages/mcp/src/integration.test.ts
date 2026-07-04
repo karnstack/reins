@@ -5,7 +5,7 @@ import { WebSocket } from "ws";
 import { BridgeHost } from "./bridge.js";
 import { createServer } from "./create-server.js";
 
-const TOKEN = "integration-token";
+const ORIGIN = "chrome-extension://standin";
 let host: BridgeHost | undefined;
 let extension: WebSocket | undefined;
 let server: ReturnType<typeof createServer> | undefined;
@@ -45,12 +45,10 @@ const METHOD_RESULTS: Record<string, unknown> = {
 /** Stand-in extension: connects, authenticates, and answers any method via the lookup table. */
 function standInExtension(port: number): Promise<WebSocket> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
-    headers: { origin: "chrome-extension://standin" },
+    headers: { origin: ORIGIN },
   });
   return new Promise((resolve, reject) => {
-    ws.on("open", () =>
-      ws.send(JSON.stringify({ type: "hello", token: TOKEN, browser: "standin" })),
-    );
+    ws.on("open", () => ws.send(JSON.stringify({ type: "hello", browser: "standin" })));
     ws.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as { type: string; id?: string; method?: string };
       if (msg.type === "welcome") resolve(ws);
@@ -65,8 +63,8 @@ function standInExtension(port: number): Promise<WebSocket> {
 
 /** Wire up the full end-to-end harness; assigns module-level vars for afterEach teardown. */
 async function setupHarness(): Promise<Client> {
-  host = new BridgeHost({ port: 0, token: TOKEN });
-  await host.start();
+  host = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: () => {} });
+  await host.listen(0);
   extension = await standInExtension(host.port);
   expect(host.paired).toBe(true);
   server = createServer(host);

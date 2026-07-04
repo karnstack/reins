@@ -1,15 +1,9 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import type { Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { HelloFrame, RequestFrame, ResponseFrame, WelcomeFrame } from "@reins/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 import type { Log } from "./log.js";
-
-/** Constant-time token comparison (localhost-only, but cheap to do right). */
-function tokenMatches(candidate: string, expected: string): boolean {
-  const a = Buffer.from(candidate);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export interface BridgePort {
   readonly paired: boolean;
@@ -24,27 +18,31 @@ interface Pending {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * Server half of the reins bridge. The extension is authenticated by its
+ * WebSocket Origin header — an exact `chrome-extension://<id>` match against
+ * the allowlist. Browsers stamp that header themselves, so web pages and
+ * other extensions cannot forge it; see the 2026-07-04 daemon spec.
+ */
 export class BridgeHost implements BridgePort {
-  readonly #token: string;
-  readonly #originPrefix: string;
-  readonly #requestedPort: number;
+  readonly #allowedOrigins: ReadonlySet<string>;
   readonly #log: Log;
   #wss: WebSocketServer | undefined;
+  #ownServer = false;
   #client: WebSocket | undefined;
   readonly #pending = new Map<string, Pending>();
 
-  constructor(opts: { port: number; token: string; allowedOriginPrefix?: string; log?: Log }) {
-    this.#requestedPort = opts.port;
-    this.#token = opts.token;
-    this.#originPrefix = opts.allowedOriginPrefix ?? "chrome-extension://";
+  constructor(opts: { allowedOrigins: ReadonlySet<string>; log?: Log }) {
+    this.#allowedOrigins = opts.allowedOrigins;
     this.#log = opts.log ?? ((message) => process.stderr.write(`${message}\n`));
   }
 
-  start(): Promise<void> {
+  /** Own a socket (stdio mode): bind 127.0.0.1:port. */
+  listen(port: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wss = new WebSocketServer({ host: "127.0.0.1", port: this.#requestedPort });
+      const wss = new WebSocketServer({ host: "127.0.0.1", port });
       wss.on("listening", () => {
-        this.#log(`reins-mcp: bridge listening on 127.0.0.1:${this.port}`);
+        this.#log(`reins: bridge listening on 127.0.0.1:${this.port}`);
         resolve();
       });
       wss.on("error", (err) => {
@@ -54,13 +52,34 @@ export class BridgeHost implements BridgePort {
       });
       wss.on("connection", (ws, req) => this.#onConnection(ws, req.headers.origin));
       this.#wss = wss;
+      this.#ownServer = true;
     });
+  }
+
+  /** Ride a caller-owned HTTP server (daemon mode). */
+  attach(server: HttpServer): void {
+    const wss = new WebSocketServer({ noServer: true });
+    server.on("upgrade", (req, socket, head) => {
+      if (!this.#originAllowed(req.headers.origin)) {
+        this.#log(`reins: rejected upgrade: origin not allowed (${req.headers.origin})`);
+        socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+      wss.handleUpgrade(req, socket, head, (ws) => this.#onConnection(ws, req.headers.origin));
+    });
+    this.#wss = wss;
+    this.#ownServer = false;
+  }
+
+  #originAllowed(origin: string | undefined): boolean {
+    return origin !== undefined && this.#allowedOrigins.has(origin);
   }
 
   get port(): number {
     const addr = this.#wss?.address();
     if (addr && typeof addr === "object") return (addr as AddressInfo).port;
-    return this.#requestedPort;
+    return 0;
   }
 
   get paired(): boolean {
@@ -68,32 +87,32 @@ export class BridgeHost implements BridgePort {
   }
 
   #onConnection(ws: WebSocket, origin: string | undefined): void {
-    this.#log(`reins-mcp: connection from origin=${origin}`);
-    if (!origin?.startsWith(this.#originPrefix)) {
-      this.#log(`reins-mcp: rejected: origin not allowed (${origin})`);
+    this.#log(`reins: connection from origin=${origin}`);
+    if (!this.#originAllowed(origin)) {
+      // listen() mode has no pre-upgrade gate, so enforce here too.
+      this.#log(`reins: rejected: origin not allowed (${origin})`);
       ws.close(4003, "origin not allowed");
       return;
     }
-    let authed = false;
+    let helloed = false;
     ws.on("message", (data) => {
       const msg = this.#parse(data);
       if (!msg) return;
-      if (!authed) {
+      if (!helloed) {
         const hello = HelloFrame.safeParse(msg);
-        if (hello.success && tokenMatches(hello.data.token, this.#token)) {
-          authed = true;
-          if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
-            this.#log("reins-mcp: client replaced by new connection");
-            this.#client.close(4002, "replaced by a new connection");
-          }
-          this.#client = ws;
-          const browser = hello.data.browser;
-          this.#log(`reins-mcp: authed${browser ? ` (browser=${browser})` : ""}`);
-          ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
-        } else {
-          this.#log("reins-mcp: rejected: bad token");
-          ws.close(4001, "bad token");
+        if (!hello.success) {
+          this.#log("reins: rejected: malformed hello");
+          ws.close(4001, "malformed hello");
+          return;
         }
+        helloed = true;
+        if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
+          this.#log("reins: client replaced by new connection");
+          this.#client.close(4002, "replaced by a new connection");
+        }
+        this.#client = ws;
+        this.#log(`reins: browser connected (${hello.data.browser})`);
+        ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
         return;
       }
       const response = ResponseFrame.safeParse(msg);
@@ -102,7 +121,7 @@ export class BridgeHost implements BridgePort {
       }
     });
     ws.on("close", (code) => {
-      this.#log(`reins-mcp: connection closed (code=${code})`);
+      this.#log(`reins: connection closed (code=${code})`);
       if (this.#client === ws) {
         this.#client = undefined;
         // Spec §7: fail fast — don't leave in-flight requests hanging to timeout.
@@ -172,6 +191,10 @@ export class BridgeHost implements BridgePort {
     this.#wss = undefined;
     if (!wss) return Promise.resolve();
     for (const ws of wss.clients) ws.terminate();
+    if (!this.#ownServer) {
+      wss.close();
+      return Promise.resolve(); // caller owns the HTTP server
+    }
     return new Promise((resolve) => wss.close(() => resolve()));
   }
 }

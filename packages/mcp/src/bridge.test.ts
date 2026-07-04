@@ -1,63 +1,100 @@
+import { createServer as createHttpServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { BridgeHost } from "./bridge.js";
 
-const TOKEN = "test-token";
+const ALLOWED = "chrome-extension://abcdef";
 let host: BridgeHost | undefined;
+let httpServer: Server | undefined;
 
 afterEach(async () => {
   await host?.stop();
   host = undefined;
+  if (httpServer) {
+    await new Promise((r) => httpServer?.close(() => r(undefined)));
+    httpServer = undefined;
+  }
 });
 
 /** Connect a stand-in extension client and resolve once it is welcomed. */
-function connectClient(
-  port: number,
-  opts: { token?: string; origin?: string } = {},
-): Promise<WebSocket> {
+function connectClient(port: number, opts: { origin?: string } = {}): Promise<WebSocket> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
-    headers: { origin: opts.origin ?? "chrome-extension://abcdef" },
+    headers: { origin: opts.origin ?? ALLOWED },
   });
   return new Promise((resolve, reject) => {
-    ws.on("open", () =>
-      ws.send(JSON.stringify({ type: "hello", token: opts.token ?? TOKEN, browser: "test" })),
-    );
+    ws.on("open", () => ws.send(JSON.stringify({ type: "hello", browser: "test" })));
     ws.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "welcome") resolve(ws);
+      if (JSON.parse(data.toString()).type === "welcome") resolve(ws);
     });
     ws.on("close", (code) => reject(new Error(`closed ${code}`)));
     ws.on("error", reject);
   });
 }
 
-describe("BridgeHost", () => {
-  it("welcomes a client with valid origin + token and reports paired", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
+function newHost() {
+  return new BridgeHost({ allowedOrigins: new Set([ALLOWED]), log: () => {} });
+}
+
+describe("BridgeHost (listen mode)", () => {
+  it("welcomes an allowlisted origin and reports paired", async () => {
+    host = newHost();
+    await host.listen(0);
     const client = await connectClient(host.port);
     expect(host.paired).toBe(true);
     client.close();
   });
 
-  it("closes a client with a bad token (code 4001)", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
-    await expect(connectClient(host.port, { token: "wrong" })).rejects.toThrow("closed 4001");
+  it("rejects a non-allowlisted extension origin (exact match, not prefix)", async () => {
+    host = newHost();
+    await host.listen(0);
+    await expect(
+      connectClient(host.port, { origin: "chrome-extension://evilzz" }),
+    ).rejects.toThrow();
     expect(host.paired).toBe(false);
   });
 
-  it("closes a client with a disallowed origin (code 4003)", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
-    await expect(connectClient(host.port, { origin: "https://evil.example" })).rejects.toThrow(
-      "closed 4003",
-    );
+  it("rejects a web-page origin", async () => {
+    host = newHost();
+    await host.listen(0);
+    await expect(connectClient(host.port, { origin: "https://evil.example" })).rejects.toThrow();
   });
 
-  it("round-trips a request to the paired client", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
+  it("rejects a missing origin", async () => {
+    host = newHost();
+    await host.listen(0);
+    const port = host.port;
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    await expect(
+      new Promise((resolve, reject) => {
+        ws.on("open", () => ws.send(JSON.stringify({ type: "hello", browser: "test" })));
+        ws.on("message", (data) => {
+          if (JSON.parse(data.toString()).type === "welcome") resolve(undefined);
+        });
+        ws.on("close", (code) => reject(new Error(`closed ${code}`)));
+        ws.on("error", reject);
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("closes a connection sending a malformed hello (code 4001)", async () => {
+    host = newHost();
+    await host.listen(0);
+    const ws = new WebSocket(`ws://127.0.0.1:${host.port}`, { headers: { origin: ALLOWED } });
+    await expect(
+      new Promise((resolve, reject) => {
+        ws.on("open", () => ws.send(JSON.stringify({ type: "hello" })));
+        ws.on("message", (data) => {
+          if (JSON.parse(data.toString()).type === "welcome") resolve(undefined);
+        });
+        ws.on("close", (code) => reject(new Error(`closed ${code}`)));
+        ws.on("error", reject);
+      }),
+    ).rejects.toThrow("closed 4001");
+  });
+
+  it("round-trips a request to the connected client", async () => {
+    host = newHost();
+    await host.listen(0);
     const client = await connectClient(host.port);
     client.on("message", (data) => {
       const msg = JSON.parse(data.toString());
@@ -67,42 +104,77 @@ describe("BridgeHost", () => {
         );
       }
     });
-    const result = await host.request("list_tabs", {});
-    expect(result).toEqual({ tabs: [] });
+    expect(await host.request("list_tabs", {})).toEqual({ tabs: [] });
     client.close();
   });
 
-  it("rejects a request when no client is paired", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
+  it("rejects requests when nothing is connected", async () => {
+    host = newHost();
+    await host.listen(0);
     await expect(host.request("list_tabs", {})).rejects.toThrow(/not connected/i);
   });
 
   it("rejects a request that times out", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
+    host = newHost();
+    await host.listen(0);
     const client = await connectClient(host.port);
-    // client never replies
     await expect(host.request("list_tabs", {}, 100)).rejects.toThrow(/timed out/i);
     client.close();
   });
 
-  it("rejects in-flight requests when the paired client disconnects", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
+  it("rejects in-flight requests when the client disconnects", async () => {
+    host = newHost();
+    await host.listen(0);
     const client = await connectClient(host.port);
-    // On receiving the request, the client drops instead of replying.
     client.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "request") client.close();
+      if (JSON.parse(data.toString()).type === "request") client.close();
     });
-    // Long timeout so the rejection comes from the disconnect, not the timer.
     await expect(host.request("list_tabs", {}, 10_000)).rejects.toThrow(/disconnected/i);
   });
 
+  it("a malformed response frame is ignored — the pending request times out", async () => {
+    host = newHost();
+    await host.listen(0);
+    const client = await connectClient(host.port);
+    client.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request") {
+        client.send(JSON.stringify({ type: "response", id: 42, ok: true, result: "bad" }));
+      }
+    });
+    await expect(host.request("list_tabs", {}, 200)).rejects.toThrow(/timed out/i);
+    client.close();
+  });
+
+  it("second client replaces the first (code 4002)", async () => {
+    host = newHost();
+    await host.listen(0);
+    const a = await connectClient(host.port);
+    const aClosed = new Promise<number>((resolve) => a.on("close", resolve));
+    const b = await connectClient(host.port);
+    b.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request" && msg.method === "list_tabs") {
+        b.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: ["b"] } }));
+      }
+    });
+    expect(await aClosed).toBe(4002);
+    expect(host.paired).toBe(true);
+    expect(await host.request("list_tabs", {})).toEqual({ tabs: ["b"] });
+    b.close();
+  });
+
+  it("listen() rejects on a busy port", async () => {
+    host = newHost();
+    await host.listen(0);
+    const other = newHost();
+    await expect(other.listen(host.port)).rejects.toThrow();
+    await other.stop();
+  });
+
   it("stop() terminates a connected client", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
+    host = newHost();
+    await host.listen(0);
     const client = await connectClient(host.port);
     const closed = new Promise<void>((resolve, reject) => {
       client.on("close", () => resolve());
@@ -111,80 +183,30 @@ describe("BridgeHost", () => {
     await host.stop();
     await closed;
   });
+});
 
-  it("rejects start() when the port is already in use (EADDRINUSE)", async () => {
-    // Start host A on port 0 to obtain an ephemeral port.
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
-    const takenPort = host.port;
-
-    // Attempt to start host B on the same port — must reject.
-    const hostB = new BridgeHost({ port: takenPort, token: TOKEN });
-    try {
-      await expect(hostB.start()).rejects.toThrow();
-    } finally {
-      await hostB.stop();
-    }
-  });
-
-  it("a malformed response frame is ignored — the pending request times out, not mis-settles", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
-    const client = await connectClient(host.port);
-
-    // On receiving the request, send a malformed response (id is a number, not a string).
-    client.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "request") {
-        client.send(JSON.stringify({ type: "response", id: 42, ok: true, result: "bad" }));
-      }
-    });
-
-    // The malformed frame must be ignored; the request must time out.
-    await expect(host.request("list_tabs", {}, 200)).rejects.toThrow(/timed out/i);
-    client.close();
-  });
-
-  it("a hello missing the token is rejected (code 4001)", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
-
-    // Send a hello that parses as a valid JSON object but has no token field.
-    await expect(connectClient(host.port, { token: "" })).rejects.toThrow("closed 4001");
-    expect(host.paired).toBe(false);
-  });
-
-  it("second authenticated client replaces and closes the first (code 4002)", async () => {
-    host = new BridgeHost({ port: 0, token: TOKEN });
-    await host.start();
-
-    // Connect client A
-    const clientA = await connectClient(host.port);
-    const aClosedCode = new Promise<number>((resolve, reject) => {
-      clientA.on("close", (code) => resolve(code));
-      setTimeout(() => reject(new Error("client A did not close within 1000ms")), 1000);
-    });
-
-    // Connect client B and set up a reply handler
-    const clientB = await connectClient(host.port);
-    clientB.on("message", (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === "request" && msg.method === "list_tabs") {
-        clientB.send(
-          JSON.stringify({ type: "response", id: msg.id, ok: true, result: { tabs: ["b"] } }),
-        );
-      }
-    });
-
-    // A should have been closed with 4002
-    const code = await aClosedCode;
-    expect(code).toBe(4002);
-
-    // B is the active paired client
+describe("BridgeHost (attach mode)", () => {
+  it("serves WS upgrades on a caller-owned HTTP server and leaves it open on stop()", async () => {
+    httpServer = createHttpServer();
+    await new Promise<void>((r) => httpServer?.listen(0, "127.0.0.1", r));
+    const port = (httpServer.address() as { port: number }).port;
+    host = newHost();
+    host.attach(httpServer);
+    const client = await connectClient(port);
     expect(host.paired).toBe(true);
-    const result = await host.request("list_tabs", {});
-    expect(result).toEqual({ tabs: ["b"] });
+    client.close();
+    await host.stop();
+    host = undefined;
+    expect(httpServer.listening).toBe(true);
+  });
 
-    clientB.close();
+  it("rejects a bad-origin upgrade before the WS handshake completes", async () => {
+    httpServer = createHttpServer();
+    await new Promise<void>((r) => httpServer?.listen(0, "127.0.0.1", r));
+    const port = (httpServer.address() as { port: number }).port;
+    host = newHost();
+    host.attach(httpServer);
+    await expect(connectClient(port, { origin: "https://evil.example" })).rejects.toThrow();
+    expect(host.paired).toBe(false);
   });
 });
