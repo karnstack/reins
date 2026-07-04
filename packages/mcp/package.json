@@ -21,7 +21,6 @@
     "agent"
   ],
   "bin": {
-    "reins-mcp": "./dist/server.js",
     "reins": "./dist/cli.js"
   },
   "files": [

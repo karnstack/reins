@@ -1,73 +1,70 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { BrowserInfo, Tab } from "@reins/protocol";
 import type { ReinsConfig } from "./config.js";
 
-/** Human-readable pairing instructions for `reins pair`. */
-export function pairText(cfg: ReinsConfig): string {
-  return [
-    "reins pairing",
-    "",
-    `  WebSocket URL : ws://127.0.0.1:${cfg.port}`,
-    `  Token        : ${cfg.token}`,
-    "",
-    "Paste both into the reins extension popup to connect this browser.",
-  ].join("\n");
-}
-
-export interface DoctorReport {
-  checks: Array<{ name: string; ok: boolean; detail: string }>;
+export interface DaemonHealth {
   ok: boolean;
+  version: string;
+  paired: boolean;
+  browsers: BrowserInfo[];
 }
 
-/** Diagnostic checks for `reins doctor`. */
-export function doctorReport(cfg: ReinsConfig): DoctorReport {
-  const checks = [
-    { name: "config-dir", ok: cfg.dir.length > 0, detail: cfg.dir },
-    { name: "token", ok: cfg.token.length >= 43, detail: `${cfg.token.length} chars` },
-    { name: "port", ok: Number.isInteger(cfg.port) && cfg.port > 0, detail: String(cfg.port) },
-    { name: "node", ok: process.versions.node.length > 0, detail: `v${process.versions.node}` },
+/** argv for `claude mcp add` that registers the daemon's HTTP endpoint for all projects. */
+export function claudeInstallArgs(port: number): string[] {
+  return [
+    "mcp",
+    "add",
+    "--transport",
+    "http",
+    "reins",
+    `http://127.0.0.1:${port}/mcp`,
+    "--scope",
+    "user",
   ];
-  return { checks, ok: checks.every((c) => c.ok) };
-}
-
-/** argv for `claude mcp add` that registers reins for all projects. */
-export function claudeInstallArgs(): string[] {
-  return ["mcp", "add", "reins", "--scope", "user", "--", "npx", "-y", "reins-mcp"];
 }
 
 /** Codex config snippet (~/.codex/config.toml). */
-export function codexSnippet(): string {
-  return ["[mcp_servers.reins]", 'command = "npx"', 'args = ["-y", "reins-mcp"]'].join("\n");
+export function codexSnippet(port: number): string {
+  return [
+    "[mcp_servers.reins]",
+    `url = "http://127.0.0.1:${port}/mcp"`,
+    "",
+    "# no HTTP support in your client? use stdio instead:",
+    "# [mcp_servers.reins]",
+    '# command = "npx"',
+    '# args = ["-y", "@karnstack/reins", "serve", "--stdio"]',
+  ].join("\n");
 }
 
 /** Generic MCP JSON config snippet (Cursor, Windsurf, claude_desktop_config.json, …). */
-export function mcpJsonSnippet(): string {
+export function mcpJsonSnippet(port: number): string {
   return JSON.stringify(
-    { mcpServers: { reins: { command: "npx", args: ["-y", "reins-mcp"] } } },
+    { mcpServers: { reins: { type: "http", url: `http://127.0.0.1:${port}/mcp` } } },
     null,
     2,
   );
 }
 
 /** Overview printed by `reins install` with no client argument. */
-export function installText(): string {
+export function installText(port: number): string {
   return [
-    "Register the reins MCP server with your agent:",
+    "Register the reins MCP endpoint with your agent:",
     "",
     "  Claude Code   reins install claude",
-    `                (runs: claude ${claudeInstallArgs().join(" ")})`,
+    `                (runs: claude ${claudeInstallArgs(port).join(" ")})`,
     "",
     "  Codex         add to ~/.codex/config.toml:",
-    ...codexSnippet()
+    ...codexSnippet(port)
       .split("\n")
       .map((l) => `                ${l}`),
     "",
     "  Other MCP clients (JSON config):",
-    ...mcpJsonSnippet()
+    ...mcpJsonSnippet(port)
       .split("\n")
       .map((l) => `                ${l}`),
     "",
-    "Then load the reins extension and run `reins pair` to connect the browser.",
+    "Then install the reins browser extension — it connects on its own.",
   ].join("\n");
 }
 
@@ -79,9 +76,15 @@ export function helpText(version: string): string {
     "Usage: reins <command>",
     "",
     "Commands:",
-    "  install [claude|codex]  register the MCP server with an agent",
-    "  pair                    print the WebSocket URL + token for the extension popup",
-    "  status                  show config, port, and whether a server is running",
+    "  up                      install + start the daemon (autostarts on login)",
+    "  down                    stop the daemon and remove it from autostart",
+    "  restart                 restart the daemon (e.g. after an upgrade)",
+    "  serve [--stdio]         run the server in the foreground (stdio for HTTP-less clients)",
+    "  install [claude|codex]  register the MCP endpoint with an agent",
+    "  allow <extension-id>    allow an unpacked/dev extension to connect",
+    "  browsers                list browsers connected to the daemon",
+    "  tabs [browserId]        list tabs the daemon can reach",
+    "  status                  daemon state, port, connected browsers",
     "  doctor                  run diagnostic checks",
     "  logs                    show the server log location and recent lines",
     "  help                    show this help",
@@ -89,6 +92,72 @@ export function helpText(version: string): string {
     "Options:",
     "  -v, --version           print the version",
   ].join("\n");
+}
+
+/** Human status lines for `reins status`. */
+export function healthSummary(h: DaemonHealth | undefined, port: number): string {
+  if (!h) {
+    return [
+      `daemon : not running (no reins daemon answered on the candidate ports around ${port})`,
+      "         start it with `reins up` (or `reins serve` in the foreground)",
+    ].join("\n");
+  }
+  const lines = [`daemon : running on 127.0.0.1:${port} (v${h.version})`];
+  if (h.browsers.length === 0) {
+    lines.push(
+      "browser: none connected — install the reins extension (or `reins allow <id>` for dev builds)",
+    );
+  } else {
+    lines.push(`browser: ${h.browsers.length} connected`);
+    lines.push(browsersText(h.browsers));
+  }
+  return lines.join("\n");
+}
+
+/** Roster for `reins browsers`. */
+export function browsersText(browsers: BrowserInfo[]): string {
+  if (browsers.length === 0) return "(no browsers connected)";
+  return browsers
+    .map((b) => `  ${b.id}  ${b.browser}  (connected ${new Date(b.connectedAt).toLocaleString()})`)
+    .join("\n");
+}
+
+/** Tab listing for `reins tabs`. */
+export function tabsText(tabs: Tab[]): string {
+  if (tabs.length === 0) return "(no tabs)";
+  return tabs
+    .map(
+      (t) =>
+        `  ${t.browserId ?? "?"}  tab ${t.tabId}${t.active ? " *" : "  "}  ${t.title || "(untitled)"} — ${t.url}`,
+    )
+    .join("\n");
+}
+
+export interface DoctorReport {
+  checks: Array<{ name: string; ok: boolean; detail: string }>;
+  ok: boolean;
+}
+
+/** Diagnostic checks for `reins doctor`. */
+export function doctorReport(cfg: ReinsConfig, health?: DaemonHealth): DoctorReport {
+  const checks = [
+    { name: "config-dir", ok: cfg.dir.length > 0, detail: cfg.dir },
+    { name: "port", ok: Number.isInteger(cfg.port) && cfg.port > 0, detail: String(cfg.port) },
+    { name: "node", ok: process.versions.node.length > 0, detail: `v${process.versions.node}` },
+    {
+      name: "daemon",
+      ok: health !== undefined,
+      detail: health ? `running (v${health.version})` : "not running — `reins up`",
+    },
+    {
+      name: "browser",
+      ok: (health?.browsers.length ?? 0) > 0,
+      detail: health?.browsers.length
+        ? `${health.browsers.length} connected`
+        : "none connected — install the extension (dev builds need `reins allow`)",
+    },
+  ];
+  return { checks, ok: checks.every((c) => c.ok) };
 }
 
 export interface LogsInfo {

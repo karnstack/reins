@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/server.ts", "src/cli.ts", "src/create-server.ts", "src/bridge.ts", "src/config.ts"],
+  entry: ["src/serve.ts", "src/cli.ts", "src/create-server.ts", "src/bridge.ts", "src/config.ts"],
   format: ["esm"],
   dts: true,
   clean: true,
