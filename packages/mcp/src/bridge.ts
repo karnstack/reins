@@ -1,35 +1,56 @@
 import { randomUUID } from "node:crypto";
 import type { Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { HelloFrame, RequestFrame, ResponseFrame, WelcomeFrame } from "@reins/protocol";
+import {
+  type BrowserInfo,
+  HelloFrame,
+  RequestFrame,
+  ResponseFrame,
+  WelcomeFrame,
+} from "@reins/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 import type { Log } from "./log.js";
 
+export interface RequestOpts {
+  browserId?: string;
+  timeoutMs?: number;
+}
+
 export interface BridgePort {
   readonly paired: boolean;
-  request(method: string, params: unknown, timeoutMs?: number): Promise<unknown>;
+  readonly browsers: BrowserInfo[];
+  request(method: string, params: unknown, opts?: RequestOpts): Promise<unknown>;
 }
 
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
   timer: NodeJS.Timeout;
+  browserId: string;
+}
+
+interface ConnectedBrowser {
+  ws: WebSocket;
+  browser: string;
+  connectedAt: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * Server half of the reins bridge. The extension is authenticated by its
- * WebSocket Origin header — an exact `chrome-extension://<id>` match against
- * the allowlist. Browsers stamp that header themselves, so web pages and
- * other extensions cannot forge it; see the 2026-07-04 daemon spec.
+ * Server half of the reins bridge. Any number of browsers connect
+ * concurrently (one connection per running browser). Each is authenticated
+ * by its WebSocket Origin header — an exact `chrome-extension://<id>` match
+ * against the allowlist. Browsers stamp that header themselves, so web pages
+ * and other extensions cannot forge it; see the 2026-07-04 daemon spec.
  */
 export class BridgeHost implements BridgePort {
   readonly #allowedOrigins: ReadonlySet<string>;
   readonly #log: Log;
   #wss: WebSocketServer | undefined;
   #ownServer = false;
-  #client: WebSocket | undefined;
+  #nextBrowserId = 1;
+  readonly #browsers = new Map<string, ConnectedBrowser>();
   readonly #pending = new Map<string, Pending>();
 
   constructor(opts: { allowedOrigins: ReadonlySet<string>; log?: Log }) {
@@ -83,7 +104,14 @@ export class BridgeHost implements BridgePort {
   }
 
   get paired(): boolean {
-    return this.#client !== undefined && this.#client.readyState === WebSocket.OPEN;
+    return this.browsers.length > 0;
+  }
+
+  /** Connected browsers, oldest first. */
+  get browsers(): BrowserInfo[] {
+    return [...this.#browsers.entries()]
+      .filter(([, b]) => b.ws.readyState === WebSocket.OPEN)
+      .map(([id, b]) => ({ id, browser: b.browser, connectedAt: b.connectedAt }));
   }
 
   #onConnection(ws: WebSocket, origin: string | undefined): void {
@@ -94,24 +122,24 @@ export class BridgeHost implements BridgePort {
       ws.close(4003, "origin not allowed");
       return;
     }
-    let helloed = false;
+    let browserId: string | undefined;
     ws.on("message", (data) => {
       const msg = this.#parse(data);
       if (!msg) return;
-      if (!helloed) {
+      if (browserId === undefined) {
         const hello = HelloFrame.safeParse(msg);
         if (!hello.success) {
           this.#log("reins: rejected: malformed hello");
           ws.close(4001, "malformed hello");
           return;
         }
-        helloed = true;
-        if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
-          this.#log("reins: client replaced by new connection");
-          this.#client.close(4002, "replaced by a new connection");
-        }
-        this.#client = ws;
-        this.#log(`reins: browser connected (${hello.data.browser})`);
+        browserId = `b${this.#nextBrowserId++}`;
+        this.#browsers.set(browserId, {
+          ws,
+          browser: hello.data.browser,
+          connectedAt: Date.now(),
+        });
+        this.#log(`reins: browser connected (${browserId}: ${hello.data.browser})`);
         ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
         return;
       }
@@ -121,13 +149,21 @@ export class BridgeHost implements BridgePort {
       }
     });
     ws.on("close", (code) => {
-      this.#log(`reins: connection closed (code=${code})`);
-      if (this.#client === ws) {
-        this.#client = undefined;
+      this.#log(`reins: connection closed (${browserId ?? "unauthed"}, code=${code})`);
+      if (browserId !== undefined && this.#browsers.delete(browserId)) {
         // Spec §7: fail fast — don't leave in-flight requests hanging to timeout.
-        this.#rejectAllPending("extension disconnected");
+        this.#rejectPendingFor(browserId, "browser disconnected");
       }
     });
+  }
+
+  #rejectPendingFor(browserId: string, message: string): void {
+    for (const [id, pending] of this.#pending) {
+      if (pending.browserId !== browserId) continue;
+      clearTimeout(pending.timer);
+      pending.reject(new Error(message));
+      this.#pending.delete(id);
+    }
   }
 
   #rejectAllPending(message: string): void {
@@ -160,20 +196,45 @@ export class BridgeHost implements BridgePort {
     }
   }
 
-  request(method: string, params: unknown, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<unknown> {
-    const client = this.#client;
-    if (!client || client.readyState !== WebSocket.OPEN) {
-      return Promise.reject(new Error("extension not connected"));
+  /** Pick the target browser: explicit id, or the only one connected. */
+  #resolveBrowser(browserId: string | undefined): { id: string; ws: WebSocket } {
+    const live = this.browsers;
+    const roster = live.map((b) => `${b.id} (${b.browser})`).join(", ");
+    if (browserId !== undefined) {
+      const entry = this.#browsers.get(browserId);
+      if (!entry || entry.ws.readyState !== WebSocket.OPEN) {
+        throw new Error(
+          `unknown browserId "${browserId}"${roster ? ` — connected: ${roster}` : " — no browsers connected"}`,
+        );
+      }
+      return { id: browserId, ws: entry.ws };
     }
+    if (live.length === 0) throw new Error("extension not connected");
+    if (live.length > 1) {
+      throw new Error(`several browsers connected — pass browserId. Connected: ${roster}`);
+    }
+    const only = live[0] as BrowserInfo;
+    const entry = this.#browsers.get(only.id) as ConnectedBrowser;
+    return { id: only.id, ws: entry.ws };
+  }
+
+  request(method: string, params: unknown, opts: RequestOpts = {}): Promise<unknown> {
+    let target: { id: string; ws: WebSocket };
+    try {
+      target = this.#resolveBrowser(opts.browserId);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const id = randomUUID();
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error(`request "${method}" timed out after ${timeoutMs}ms`));
       }, timeoutMs);
-      this.#pending.set(id, { resolve, reject, timer });
+      this.#pending.set(id, { resolve, reject, timer, browserId: target.id });
       try {
-        client.send(JSON.stringify(RequestFrame.parse({ type: "request", id, method, params })));
+        target.ws.send(JSON.stringify(RequestFrame.parse({ type: "request", id, method, params })));
       } catch (err) {
         // Sync send failure (socket closing, bad frame): clean up so the timer
         // doesn't keep the process alive and the pending map doesn't leak.
@@ -186,7 +247,7 @@ export class BridgeHost implements BridgePort {
 
   stop(): Promise<void> {
     this.#rejectAllPending("bridge stopped");
-    this.#client = undefined;
+    this.#browsers.clear();
     const wss = this.#wss;
     this.#wss = undefined;
     if (!wss) return Promise.resolve();

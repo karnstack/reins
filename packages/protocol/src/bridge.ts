@@ -1,13 +1,24 @@
 import { z } from "zod";
 
-/** A browser tab as seen by the agent. */
+/** A browser tab as seen by the agent. browserId/browser are tagged by the
+ *  daemon when aggregating tabs across several connected browsers. */
 export const Tab = z.object({
   tabId: z.number(),
   title: z.string(),
   url: z.string(),
   active: z.boolean(),
+  browserId: z.string().optional(),
+  browser: z.string().optional(),
 });
 export type Tab = z.infer<typeof Tab>;
+
+/** A browser connected to the daemon's bridge. */
+export const BrowserInfo = z.object({
+  id: z.string(),
+  browser: z.string(),
+  connectedAt: z.number(),
+});
+export type BrowserInfo = z.infer<typeof BrowserInfo>;
 
 /** Structured error carried by a failed response. */
 export const FrameError = z.object({ code: z.string(), message: z.string() });

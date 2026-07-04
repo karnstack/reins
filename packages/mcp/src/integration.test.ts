@@ -92,7 +92,16 @@ const TABLE: TestCase[] = [
     args: {},
     assert: (r) => {
       const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(JSON.parse(text)).toEqual([{ tabId: 1, title: "t", url: "https://a", active: true }]);
+      expect(JSON.parse(text)).toEqual([
+        {
+          tabId: 1,
+          title: "t",
+          url: "https://a",
+          active: true,
+          browserId: "b1",
+          browser: "standin",
+        },
+      ]);
     },
   },
   {

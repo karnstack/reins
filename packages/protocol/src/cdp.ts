@@ -2,8 +2,14 @@ import { z } from "zod";
 
 /** Optional target tab; defaults (server/extension side) to the active tab. */
 const tabId = z.number().optional();
+/** Optional target browser; required only when several browsers are connected. */
+const browserId = z.string().optional();
+
+export const ListTabsParams = z.object({ browserId });
+export type ListTabsParams = z.infer<typeof ListTabsParams>;
 
 export const NavigateParams = z.object({
+  browserId,
   tabId,
   /** A URL, or one of "back" | "forward" | "reload". */
   to: z.string().min(1),
@@ -14,6 +20,7 @@ export const NavigateResult = z.object({ url: z.string() });
 export type NavigateResult = z.infer<typeof NavigateResult>;
 
 export const SnapshotParams = z.object({
+  browserId,
   tabId,
   mode: z.enum(["text", "a11y", "dom"]).default("a11y"),
   maxChars: z.number().optional(),
@@ -34,6 +41,7 @@ export const SnapshotResult = z.object({
 export type SnapshotResult = z.infer<typeof SnapshotResult>;
 
 export const ClickShape = {
+  browserId,
   tabId,
   ref: z.string().optional(),
   selector: z.string().optional(),
@@ -49,6 +57,7 @@ export const ClickParams = z
 export type ClickParams = z.infer<typeof ClickParams>;
 
 export const TypeShape = {
+  browserId,
   tabId,
   ref: z.string().optional(),
   selector: z.string().optional(),
@@ -67,6 +76,7 @@ export const OkResult = z.object({ ok: z.literal(true) });
 export type OkResult = z.infer<typeof OkResult>;
 
 export const OpenTabParams = z.object({
+  browserId,
   url: z.string().min(1),
   activate: z.boolean().default(true),
 });
@@ -75,13 +85,14 @@ export type OpenTabParams = z.infer<typeof OpenTabParams>;
 export const OpenTabResult = z.object({ tabId: z.number() });
 export type OpenTabResult = z.infer<typeof OpenTabResult>;
 
-export const CloseTabParams = z.object({ tabId: z.number() });
+export const CloseTabParams = z.object({ browserId, tabId: z.number() });
 export type CloseTabParams = z.infer<typeof CloseTabParams>;
 
-export const SelectTabParams = z.object({ tabId: z.number() });
+export const SelectTabParams = z.object({ browserId, tabId: z.number() });
 export type SelectTabParams = z.infer<typeof SelectTabParams>;
 
 export const ScreenshotParams = z.object({
+  browserId,
   tabId,
   fullPage: z.boolean().default(false),
   format: z.enum(["png", "jpeg"]).default("png"),
@@ -92,6 +103,7 @@ export const ScreenshotResult = z.object({ data: z.string(), mimeType: z.string(
 export type ScreenshotResult = z.infer<typeof ScreenshotResult>;
 
 export const EvalParams = z.object({
+  browserId,
   tabId,
   expression: z.string().min(1),
   awaitPromise: z.boolean().default(false),
@@ -102,6 +114,7 @@ export const EvalResult = z.object({ value: z.unknown() });
 export type EvalResult = z.infer<typeof EvalResult>;
 
 export const WaitForShape = {
+  browserId,
   tabId,
   selector: z.string().optional(),
   ref: z.string().optional(),
@@ -135,6 +148,7 @@ export const NetworkEntry = z.object({
 export type NetworkEntry = z.infer<typeof NetworkEntry>;
 
 export const ConsoleParams = z.object({
+  browserId,
   tabId,
   sinceMs: z.number().optional(),
   levels: z.array(z.string()).optional(),
@@ -142,6 +156,7 @@ export const ConsoleParams = z.object({
 export type ConsoleParams = z.infer<typeof ConsoleParams>;
 
 export const NetworkParams = z.object({
+  browserId,
   tabId,
   sinceMs: z.number().optional(),
   urlPattern: z.string().optional(),

@@ -7,6 +7,7 @@ import { createServer } from "./create-server.js";
 function fakeBridge(over: Partial<BridgePort> = {}): BridgePort {
   return {
     paired: true,
+    browsers: [{ id: "b1", browser: "test", connectedAt: 0 }],
     request: async () => ({ tabs: [] }),
     ...over,
   };
@@ -31,13 +32,54 @@ describe("createServer", () => {
     await client.close();
   });
 
-  it("list_tabs returns the bridge's tabs as JSON", async () => {
+  it("list_tabs returns the bridge's tabs tagged with the browser", async () => {
     const tabs = [{ tabId: 1, title: "Home", url: "https://x", active: true }];
     const client = await connect(fakeBridge({ request: async () => ({ tabs }) }));
     const result = await client.callTool({ name: "list_tabs", arguments: {} });
     // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item; TS noUncheckedIndexedAccess requires the assertion
     const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
-    expect(JSON.parse(first.text ?? "")).toEqual(tabs);
+    expect(JSON.parse(first.text ?? "")).toEqual([
+      { tabId: 1, title: "Home", url: "https://x", active: true, browserId: "b1", browser: "test" },
+    ]);
+    await client.close();
+  });
+
+  it("list_tabs aggregates across several browsers", async () => {
+    const client = await connect(
+      fakeBridge({
+        browsers: [
+          { id: "b1", browser: "Chrome", connectedAt: 0 },
+          { id: "b2", browser: "Brave", connectedAt: 1 },
+        ],
+        request: async (_method, _params, opts) => ({
+          tabs: [{ tabId: 1, title: opts?.browserId ?? "?", url: "https://x", active: true }],
+        }),
+      }),
+    );
+    const result = await client.callTool({ name: "list_tabs", arguments: {} });
+    // biome-ignore lint/style/noNonNullAssertion: tool result always has >=1 content item
+    const first = (result.content as Array<{ type: string; text?: string }>)[0]!;
+    const tabs = JSON.parse(first.text ?? "") as Array<{ browserId: string; browser: string }>;
+    expect(tabs.map((t) => t.browserId)).toEqual(["b1", "b2"]);
+    expect(tabs.map((t) => t.browser)).toEqual(["Chrome", "Brave"]);
+    await client.close();
+  });
+
+  it("tools pass browserId to the bridge for routing", async () => {
+    let seen: { method?: string; browserId?: string; params?: unknown } = {};
+    const client = await connect(
+      fakeBridge({
+        request: async (method, params, opts) => {
+          seen = { method, browserId: opts?.browserId, params };
+          return { ok: true };
+        },
+      }),
+    );
+    await client.callTool({ name: "click", arguments: { ref: "e1", browserId: "b9" } });
+    expect(seen.method).toBe("click");
+    expect(seen.browserId).toBe("b9");
+    // browserId is routing, not payload — the browser must not receive it.
+    expect(seen.params).not.toHaveProperty("browserId");
     await client.close();
   });
 
