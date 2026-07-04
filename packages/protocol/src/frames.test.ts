@@ -2,17 +2,18 @@ import { describe, expect, it } from "vitest";
 import { HelloFrame } from "./frames.js";
 
 describe("HelloFrame", () => {
-  it("accepts a valid hello frame", () => {
-    const frame = HelloFrame.parse({ type: "hello", token: "abc123", browser: "chrome" });
-    expect(frame.token).toBe("abc123");
-    expect(frame.type).toBe("hello");
+  it("parses a tokenless hello", () => {
+    const parsed = HelloFrame.safeParse({ type: "hello", browser: "chrome" });
+    expect(parsed.success).toBe(true);
   });
 
-  it("rejects a hello frame with an empty token", () => {
-    expect(() => HelloFrame.parse({ type: "hello", token: "", browser: "chrome" })).toThrow();
+  it("ignores a legacy token field (non-strict object)", () => {
+    const parsed = HelloFrame.safeParse({ type: "hello", browser: "chrome", token: "old" });
+    expect(parsed.success).toBe(true);
+    expect((parsed.data as Record<string, unknown>).token).toBeUndefined();
   });
 
-  it("rejects a hello frame missing the token", () => {
-    expect(() => HelloFrame.parse({ type: "hello", browser: "chrome" })).toThrow();
+  it("rejects a missing browser", () => {
+    expect(HelloFrame.safeParse({ type: "hello" }).success).toBe(false);
   });
 });
