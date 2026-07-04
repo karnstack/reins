@@ -23,6 +23,7 @@ import {
   WaitForShape,
 } from "@reins/protocol";
 import type { BridgePort } from "./bridge.js";
+import { packageVersion } from "./version.js";
 
 const notConnected = {
   isError: true as const,
@@ -36,7 +37,7 @@ const notConnected = {
 
 /** Build the reins MCP server, wired to a bridge that reaches the browser. */
 export function createServer(bridge: BridgePort): McpServer {
-  const server = new McpServer({ name: "reins", version: "0.0.0" });
+  const server = new McpServer({ name: "reins", version: packageVersion() });
 
   server.registerTool(
     "ping",

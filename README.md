@@ -38,35 +38,48 @@ commands via the Chrome DevTools Protocol from inside an offscreen document.
 | `read_network` | Read recent network requests (method, url, status) for a tab |
 
 `read_console` / `read_network` start a persistent monitor on first use, so they
-capture events from that point on; a monitored tab can't be driven by the
-per-call tools at the same time (one debugger per tab).
+capture events from that point on. The per-call tools detect a monitored tab
+and reuse its debugger session, so a monitored tab stays drivable.
 
-## Quick start
-
-Full walkthrough: **[docs/RUNNING.md](docs/RUNNING.md)**. In short:
+## Install (users)
 
 ```bash
-mise install && pnpm install && pnpm build
-claude mcp add reins -- node "$(pwd)/packages/mcp/dist/server.js"
-# chrome://extensions → Load unpacked → packages/extension/dist
-node packages/mcp/dist/cli.js pair    # paste URL + token into the popup → Connect
-# then ask your agent to call list_tabs, navigate, click, …
+# 1. register the MCP server with Claude Code
+npx -y --package=reins-mcp reins install claude
+#    (Codex/other clients: npx -y --package=reins-mcp reins install)
+
+# 2. install the reins extension (Chrome Web Store, or a release zip via
+#    chrome://extensions → Load unpacked)
+
+# 3. pair the browser: print the URL + token, paste into the extension popup
+npx -y --package=reins-mcp reins pair
 ```
 
-## Packages
-
-- `packages/protocol` — shared zod bridge + tool schemas (`@reins/protocol`)
-- `packages/mcp` — MCP server + `reins` CLI (`reins-mcp`)
-- `packages/extension` — MV3 extension (Vite + crxjs)
+The server starts automatically with your MCP client, logs to
+`~/.reins/logs/`, and shuts down with it. `reins status`, `reins doctor`, and
+`reins logs` help when something looks off.
 
 ## Develop
 
 ```bash
 mise install        # Node 24.18.0 + pnpm 11.9.0 (exact, via mise)
 pnpm install
+pnpm dev            # watch-build all packages (extension → dist/)
 pnpm test           # protocol + mcp + extension unit/integration tests
 pnpm lint && pnpm typecheck && pnpm build
+pnpm mcp            # build + run the MCP server on stdio (Ctrl-C to stop)
+pnpm reins pair     # build + run any CLI command (status, doctor, logs, …)
+pnpm zip            # package the extension for the Chrome Web Store
 ```
+
+Local walkthrough (load unpacked, pair, try tools): **[docs/RUNNING.md](docs/RUNNING.md)**.
+Release process (npm + Chrome Web Store): **[docs/PUBLISHING.md](docs/PUBLISHING.md)**.
+
+## Packages
+
+- `packages/protocol` — shared zod bridge + tool schemas (`@reins/protocol`, private, bundled into reins-mcp)
+- `packages/mcp` — MCP server + `reins` CLI (published to npm as [`reins-mcp`](https://www.npmjs.com/package/reins-mcp))
+- `packages/extension` — MV3 extension (Vite + crxjs)
 
 ## Security
 
@@ -76,7 +89,13 @@ pnpm lint && pnpm typecheck && pnpm build
 - `chrome.debugger` shows the native "browser is being debugged" banner while a
   command runs; the popup's **Disconnect** button is the kill switch.
 - Pairing material lives in `~/.reins` (token file mode `0600`).
+- The extension collects nothing and talks to nothing but your local server —
+  see [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Design
 
 See [`docs/superpowers/specs/2026-06-28-reins-design.md`](docs/superpowers/specs/2026-06-28-reins-design.md).
+
+## License
+
+[MIT](LICENSE)

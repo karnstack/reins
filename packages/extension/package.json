@@ -1,12 +1,13 @@
 {
   "name": "@reins/extension",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch --mode development",
     "gen:icons": "node scripts/generate-icons.mjs",
+    "zip": "vite build && node scripts/zip.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

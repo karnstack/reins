@@ -1,7 +1,25 @@
 {
   "name": "reins-mcp",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "MCP server that drives your real, logged-in browser through the reins Chrome extension.",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/karnstack/reins.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/karnstack/reins#readme",
+  "bugs": "https://github.com/karnstack/reins/issues",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "browser",
+    "automation",
+    "chrome",
+    "cdp",
+    "agent"
+  ],
   "bin": {
     "reins-mcp": "./dist/server.js",
     "reins": "./dist/cli.js"
@@ -9,18 +27,26 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "tsdown"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
-    "@reins/protocol": "workspace:*",
     "ws": "8.21.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@reins/protocol": "workspace:*",
     "@types/node": "26.0.1",
     "@types/ws": "8.18.1",
     "tsdown": "0.22.3",

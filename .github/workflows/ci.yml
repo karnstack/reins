@@ -14,3 +14,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reins-extension
+          path: packages/extension/release/*.zip
+          if-no-files-found: error

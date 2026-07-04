@@ -12,7 +12,11 @@
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "build": "turbo run build"
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "mcp": "turbo run build --filter=reins-mcp --output-logs=errors-only && node packages/mcp/dist/server.js",
+    "reins": "turbo run build --filter=reins-mcp --output-logs=errors-only && node packages/mcp/dist/cli.js",
+    "zip": "turbo run zip"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",

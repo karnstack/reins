@@ -4,14 +4,13 @@ reins lets an MCP client (Claude Code, Codex) drive your real, logged-in
 Chromium browser. It has two halves:
 
 - **`reins-mcp`** — a stdio MCP server that hosts a localhost WebSocket and
-  exposes browser tools (currently `list_tabs`).
+  exposes the browser tools.
 - **the extension** — an MV3 extension that connects to that WebSocket and
   executes commands in your browser.
 
-> Status: all 13 tools implemented — `list_tabs`, `open_tab`, `close_tab`,
-> `select_tab`, `navigate`, `read_snapshot`, `click`, `type`, `screenshot`,
-> `eval_js`, `wait_for`, `read_console`, `read_network`. The CDP execution is
-> verified by loading the extension in a real browser (below).
+> Just want to use it? See the **Install** section of the
+> [README](../README.md) — `npx -y --package=reins-mcp reins install claude`.
+> This document is the from-source walkthrough.
 
 ## 1. Prerequisites & build
 
@@ -25,6 +24,8 @@ This produces:
 - `packages/mcp/dist/server.js` — the MCP server
 - `packages/mcp/dist/cli.js` — the `reins` CLI
 - `packages/extension/dist/` — the loadable unpacked extension
+
+While iterating, `pnpm dev` watch-builds all packages instead.
 
 ## 2. Register the MCP server with your agent
 
@@ -43,7 +44,8 @@ args = ["/absolute/path/to/reins/packages/mcp/dist/server.js"]
 ```
 
 On first start the server creates `~/.reins/{token,port}` (token is 32 random
-bytes, file mode 0600) and binds `ws://127.0.0.1:8765`.
+bytes, file mode 0600), binds `ws://127.0.0.1:8765`, and logs to
+`~/.reins/logs/mcp-<date>.log`.
 
 ## 3. Load the extension
 
@@ -56,7 +58,7 @@ bytes, file mode 0600) and binds `ws://127.0.0.1:8765`.
 Print the pairing details:
 
 ```bash
-node packages/mcp/dist/cli.js pair
+pnpm reins pair
 # WebSocket URL : ws://127.0.0.1:8765
 # Token        : <token>
 ```
@@ -65,7 +67,8 @@ Click the reins toolbar icon, paste the **URL** and **token**, and hit
 **Connect**. The status pill turns green ("Connected") once the extension
 authenticates.
 
-(`reins doctor` checks the config; `reins status` shows the configured port.)
+(`pnpm reins doctor` checks the config; `pnpm reins status` shows the port and
+whether a server is running; `pnpm reins logs` tails the server log.)
 
 ## 5. Try it
 
@@ -78,12 +81,15 @@ paired browser (`tabId`, `title`, `url`, `active`).
   token and a `chrome-extension://` origin.
 - A bad token closes the connection (no infinite retry) and surfaces an
   "Auth failed" status in the popup.
-- The extension uses `chrome.debugger` in later milestones, which shows the
-  native "being debugged" banner. The popup's **Disconnect** is the kill switch.
+- `chrome.debugger` shows the native "being debugged" banner while attached.
+  The popup's **Disconnect** is the kill switch.
 
 ## Troubleshooting
 
 - **Port already in use:** another `reins-mcp` is running (the default port is
-  fixed at 8765). Stop the other client or override with `REINS_PORT`.
-- **Popup says "Auth failed":** re-run `reins pair` and paste the current token
-  (the token rotates only if `~/.reins/token` is deleted/regenerated).
+  fixed at 8765 — one MCP client at a time). Stop the other client or override
+  with `REINS_PORT`. Stale servers no longer linger: the server exits when its
+  MCP client disconnects.
+- **Popup says "Auth failed":** re-run `pnpm reins pair` and paste the current
+  token (the token rotates only if `~/.reins/token` is deleted/regenerated).
+- **Something else:** `pnpm reins logs` shows the server's recent log lines.

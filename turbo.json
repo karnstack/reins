@@ -5,8 +5,17 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
     "typecheck": {
       "dependsOn": ["^build"]
+    },
+    "zip": {
+      "dependsOn": ["^build"],
+      "outputs": ["release/**"]
     },
     "test": {
       "dependsOn": ["^build"]
