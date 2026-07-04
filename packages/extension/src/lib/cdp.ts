@@ -7,6 +7,7 @@ import type {
   TypeParams,
   WaitForParams,
 } from "@reins/protocol";
+import { isMonitored } from "./monitor.js";
 
 const PROTOCOL = "1.3";
 
@@ -18,7 +19,17 @@ async function resolveTabId(tabId?: number): Promise<number> {
 }
 
 async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
-  await chrome.debugger.attach({ tabId }, PROTOCOL);
+  // Chrome allows one debugger session per tab. If the monitor (read_console /
+  // read_network) already holds it, reuse that session — and leave it attached
+  // afterwards so monitoring continues.
+  if (isMonitored(tabId)) return fn();
+  try {
+    await chrome.debugger.attach({ tabId }, PROTOCOL);
+  } catch (err) {
+    // Lost a race with a monitor attach; its session serves our commands too.
+    if (isMonitored(tabId)) return fn();
+    throw err;
+  }
   try {
     return await fn();
   } finally {

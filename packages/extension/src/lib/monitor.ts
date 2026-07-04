@@ -3,12 +3,12 @@
  *
  * IMPORTANT LIMITATIONS (v1):
  *
- * (a) CONFLICT WITH PER-CALL TOOLS: This module holds a SEPARATE persistent
- *     chrome.debugger attach for each monitored tab. Chrome allows only ONE
- *     debugger session per tab. If read_console or read_network is called on
- *     a tab that is also being used with the per-call tools (click, navigate,
- *     screenshot, etc., which call withDebugger), one of the attaches will
- *     fail with "Already attached". This is a known v1 limitation.
+ * (a) ONE DEBUGGER SESSION PER TAB: this module holds a persistent
+ *     chrome.debugger attach for each monitored tab. The per-call tools
+ *     (click, navigate, screenshot, … — see cdp.ts withDebugger) detect a
+ *     monitored tab via isMonitored() and reuse this session instead of
+ *     attaching their own, so monitored tabs stay drivable. A tab attached
+ *     by DevTools or another extension still cannot be monitored.
  *
  * (b) EVENTS SINCE MONITORING BEGAN: read_console and read_network only see
  *     events captured SINCE monitoring began for that tab (the first read
@@ -105,8 +105,26 @@ chrome.debugger.onDetach.addListener((source) => {
   if (tabId !== undefined) MONITORS.delete(tabId);
 });
 
+/** True if this module holds (or is acquiring) the debugger session for the tab. */
+export function isMonitored(tabId: number): boolean {
+  return MONITORS.has(tabId);
+}
+
 async function attachMonitor(tabId: number): Promise<Monitor> {
-  await chrome.debugger.attach({ tabId }, PROTOCOL);
+  try {
+    await chrome.debugger.attach({ tabId }, PROTOCOL);
+  } catch (attachErr) {
+    // The MV3 service worker may have been restarted while our debugger
+    // session survived: MONITORS is empty but the tab is still attached by
+    // this extension. Probe with a command — if it succeeds we own the
+    // session and can adopt it; if it fails, someone else (DevTools, another
+    // extension) holds the tab, so surface the original attach error.
+    try {
+      await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
+    } catch {
+      throw attachErr;
+    }
+  }
   try {
     await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
     await chrome.debugger.sendCommand({ tabId }, "Network.enable");

@@ -4,7 +4,32 @@ import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
 type Status = WorkerStatus;
 
-let status: Status = "idle";
+const STATUS_KEY = "reinsStatus";
+
+/**
+ * Connection status lives in chrome.storage.session, not a module variable:
+ * MV3 kills an idle service worker after ~30s, and a plain variable would
+ * reset to "idle" on the next wake even though the offscreen document is
+ * still happily connected. session storage survives worker restarts (and is
+ * cleared when the browser exits, which matches the connection's lifetime).
+ */
+async function readStatus(): Promise<Status> {
+  try {
+    const got = await chrome.storage.session.get(STATUS_KEY);
+    return normalizeStatus(got[STATUS_KEY]);
+  } catch {
+    return "idle";
+  }
+}
+
+function writeStatus(status: Status): void {
+  void chrome.storage.session.set({ [STATUS_KEY]: status }).catch(() => {});
+}
+
+/** Fire-and-forget runtime message; swallow "no receiver" rejections. */
+function send(message: Record<string, unknown>): void {
+  void chrome.runtime.sendMessage(message).catch(() => {});
+}
 
 /**
  * Ensure the offscreen document is alive; create it if none exists.
@@ -38,7 +63,7 @@ async function autoConnect(): Promise<void> {
   const p = await loadPairing();
   if (!p) return;
   await ensureOffscreen();
-  void chrome.runtime.sendMessage({
+  send({
     type: "offscreen:connect",
     url: p.url,
     token: p.token,
@@ -79,33 +104,23 @@ chrome.runtime.onMessage.addListener(
 
     switch (message.type) {
       case "reins:connect": {
-        void (async () => {
-          const p = await loadPairing();
-          if (!p) return;
-          await ensureOffscreen();
-          void chrome.runtime.sendMessage({
-            type: "offscreen:connect",
-            url: p.url,
-            token: p.token,
-            browser: "reins-extension",
-          });
-        })();
+        void autoConnect();
         return;
       }
 
       case "reins:disconnect": {
-        void chrome.runtime.sendMessage({ type: "offscreen:disconnect" });
-        status = "idle";
+        send({ type: "offscreen:disconnect" });
+        writeStatus("idle");
         return;
       }
 
       case "reins:status": {
-        sendResponse({ status });
+        void readStatus().then((status) => sendResponse({ status }));
         return true;
       }
 
       case "reins:status-update": {
-        status = normalizeStatus(message.status);
+        writeStatus(normalizeStatus(message.status));
         return;
       }
 

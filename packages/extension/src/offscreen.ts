@@ -40,10 +40,15 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       createSocket: (u) => new WebSocket(u) as unknown as SocketLike,
       dispatch: offscreenDispatch,
       onStatus: (s) => {
-        void chrome.runtime.sendMessage({ type: "reins:status-update", status: s });
+        // .catch: the worker may be waking up with no listener yet — the
+        // status lands in session storage on the next update; don't spam
+        // the offscreen console with unhandled rejections.
+        void chrome.runtime.sendMessage({ type: "reins:status-update", status: s }).catch(() => {});
       },
       onAuthError: () => {
-        void chrome.runtime.sendMessage({ type: "reins:status-update", status: "error" });
+        void chrome.runtime
+          .sendMessage({ type: "reins:status-update", status: "error" })
+          .catch(() => {});
       },
     });
     client.start();

@@ -1,7 +1,15 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { HelloFrame, RequestFrame, ResponseFrame, WelcomeFrame } from "@reins/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
+import type { Log } from "./log.js";
+
+/** Constant-time token comparison (localhost-only, but cheap to do right). */
+function tokenMatches(candidate: string, expected: string): boolean {
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export interface BridgePort {
   readonly paired: boolean;
@@ -20,21 +28,23 @@ export class BridgeHost implements BridgePort {
   readonly #token: string;
   readonly #originPrefix: string;
   readonly #requestedPort: number;
+  readonly #log: Log;
   #wss: WebSocketServer | undefined;
   #client: WebSocket | undefined;
   readonly #pending = new Map<string, Pending>();
 
-  constructor(opts: { port: number; token: string; allowedOriginPrefix?: string }) {
+  constructor(opts: { port: number; token: string; allowedOriginPrefix?: string; log?: Log }) {
     this.#requestedPort = opts.port;
     this.#token = opts.token;
     this.#originPrefix = opts.allowedOriginPrefix ?? "chrome-extension://";
+    this.#log = opts.log ?? ((message) => process.stderr.write(`${message}\n`));
   }
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       const wss = new WebSocketServer({ host: "127.0.0.1", port: this.#requestedPort });
       wss.on("listening", () => {
-        process.stderr.write(`reins-mcp: bridge listening on 127.0.0.1:${this.port}\n`);
+        this.#log(`reins-mcp: bridge listening on 127.0.0.1:${this.port}`);
         resolve();
       });
       wss.on("error", (err) => {
@@ -58,9 +68,9 @@ export class BridgeHost implements BridgePort {
   }
 
   #onConnection(ws: WebSocket, origin: string | undefined): void {
-    process.stderr.write(`reins-mcp: connection from origin=${origin}\n`);
+    this.#log(`reins-mcp: connection from origin=${origin}`);
     if (!origin?.startsWith(this.#originPrefix)) {
-      process.stderr.write(`reins-mcp: rejected: origin not allowed (${origin})\n`);
+      this.#log(`reins-mcp: rejected: origin not allowed (${origin})`);
       ws.close(4003, "origin not allowed");
       return;
     }
@@ -70,18 +80,18 @@ export class BridgeHost implements BridgePort {
       if (!msg) return;
       if (!authed) {
         const hello = HelloFrame.safeParse(msg);
-        if (hello.success && hello.data.token === this.#token) {
+        if (hello.success && tokenMatches(hello.data.token, this.#token)) {
           authed = true;
           if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
-            process.stderr.write("reins-mcp: client replaced by new connection\n");
+            this.#log("reins-mcp: client replaced by new connection");
             this.#client.close(4002, "replaced by a new connection");
           }
           this.#client = ws;
           const browser = hello.data.browser;
-          process.stderr.write(`reins-mcp: authed${browser ? ` (browser=${browser})` : ""}\n`);
+          this.#log(`reins-mcp: authed${browser ? ` (browser=${browser})` : ""}`);
           ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
         } else {
-          process.stderr.write("reins-mcp: rejected: bad token\n");
+          this.#log("reins-mcp: rejected: bad token");
           ws.close(4001, "bad token");
         }
         return;
@@ -92,7 +102,7 @@ export class BridgeHost implements BridgePort {
       }
     });
     ws.on("close", (code) => {
-      process.stderr.write(`reins-mcp: connection closed (code=${code})\n`);
+      this.#log(`reins-mcp: connection closed (code=${code})`);
       if (this.#client === ws) {
         this.#client = undefined;
         // Spec §7: fail fast — don't leave in-flight requests hanging to timeout.
@@ -143,7 +153,15 @@ export class BridgeHost implements BridgePort {
         reject(new Error(`request "${method}" timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       this.#pending.set(id, { resolve, reject, timer });
-      client.send(JSON.stringify(RequestFrame.parse({ type: "request", id, method, params })));
+      try {
+        client.send(JSON.stringify(RequestFrame.parse({ type: "request", id, method, params })));
+      } catch (err) {
+        // Sync send failure (socket closing, bad frame): clean up so the timer
+        // doesn't keep the process alive and the pending map doesn't leak.
+        clearTimeout(timer);
+        this.#pending.delete(id);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
