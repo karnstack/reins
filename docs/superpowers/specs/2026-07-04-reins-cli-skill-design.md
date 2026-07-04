@@ -1,8 +1,10 @@
 # reins CLI + skill design (MCP removed)
 
 Date: 2026-07-04
-Status: approved (supersedes the MCP surface of `2026-07-04-reins-daemon-design.md`;
-the daemon/discovery/multi-browser parts of that spec stay in force)
+Status: shipped. Canonical design doc for reins. The architecture below —
+CLI + local daemon (port discovery, multi-browser roster) + MV3 extension
+over a WebSocket bridge — is what the code implements; earlier MCP-era design
+notes have been retired.
 
 ## Decision
 

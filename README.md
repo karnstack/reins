@@ -97,9 +97,7 @@ Local walkthrough (load unpacked, allow the dev ID, drive tabs):
 
 ## Design
 
-- [`docs/superpowers/specs/2026-06-28-reins-design.md`](docs/superpowers/specs/2026-06-28-reins-design.md) — bridge protocol + tools
-- [`docs/superpowers/specs/2026-07-04-reins-daemon-design.md`](docs/superpowers/specs/2026-07-04-reins-daemon-design.md) — daemon, discovery, multi-browser
-- [`docs/superpowers/specs/2026-07-04-reins-cli-skill-design.md`](docs/superpowers/specs/2026-07-04-reins-cli-skill-design.md) — CLI-first pivot, skill, full page control
+- [`docs/superpowers/specs/2026-07-04-reins-cli-skill-design.md`](docs/superpowers/specs/2026-07-04-reins-cli-skill-design.md) — CLI + daemon + extension, discovery, multi-browser, page control, skill
 
 ## License
 

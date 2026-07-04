@@ -57,8 +57,7 @@ function ensureOffscreen(): Promise<void> {
         await chrome.offscreen.createDocument({
           url: "src/offscreen.html",
           reasons: [chrome.offscreen.Reason.WORKERS],
-          justification:
-            "Maintain a persistent WebSocket connection to the local reins MCP daemon.",
+          justification: "Maintain a persistent WebSocket connection to the local reins daemon.",
         });
       }
     })().finally(() => {

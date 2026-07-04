@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 /**
- * Version of the reins-mcp package, read from package.json at runtime.
+ * Version of the reins package, read from package.json at runtime.
  * Resolves relative to this module, so it works both from src/ (tests) and
  * from dist/ (published package — dist/../package.json).
  */

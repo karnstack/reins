@@ -16,7 +16,7 @@ export function logFilePath(dir: string, now = new Date()): string {
 }
 
 /**
- * Logger that mirrors every line to stderr (visible in the MCP client's logs)
+ * Logger that mirrors every line to stderr (visible when running in the foreground)
  * and appends it to a dated file under ~/.reins/logs. File writes are
  * best-effort: a full disk or bad permissions must never take the server down.
  */

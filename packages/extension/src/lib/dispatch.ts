@@ -23,7 +23,7 @@ import { closeTab, listTabs, openTab, resizeWindow, selectTab } from "./tab-hand
 
 /**
  * Route an incoming bridge method name to the appropriate browser handler.
- * Add new cases here as more MCP tools are implemented.
+ * Add new cases here as more bridge methods are implemented.
  */
 export async function dispatchMethod(method: string, params: unknown): Promise<unknown> {
   switch (method) {
