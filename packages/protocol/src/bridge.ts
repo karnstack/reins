@@ -43,10 +43,13 @@ export const ResponseFrame = z.object({
 });
 export type ResponseFrame = z.infer<typeof ResponseFrame>;
 
-/** Server → extension: handshake acknowledgement. */
+/** Server → extension: handshake acknowledgement. version/browserId let the
+ *  popup show what it connected to and who it is on the daemon's roster. */
 export const WelcomeFrame = z.object({
   type: z.literal("welcome"),
   server: z.string(),
+  version: z.string().optional(),
+  browserId: z.string().optional(),
 });
 export type WelcomeFrame = z.infer<typeof WelcomeFrame>;
 

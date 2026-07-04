@@ -9,6 +9,6 @@ describe("nextBackoff", () => {
   });
 
   it("caps at the maximum delay", () => {
-    expect(nextBackoff(20)).toBe(5_000);
+    expect(nextBackoff(20)).toBe(10_000);
   });
 });

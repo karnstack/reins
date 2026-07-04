@@ -1,65 +1,69 @@
 import "./popup.css";
-import { clearPairing, loadPairing, savePairing } from "./lib/pairing.js";
-import { normalizeStatus } from "./lib/status.js";
+import { loadSettings, saveSettings } from "./lib/settings.js";
+import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
-type Status = "idle" | "connecting" | "connected" | "error";
+interface ConnInfo {
+  port?: number;
+  version?: string;
+  browserId?: string;
+  browser?: string;
+}
 
-const form = document.getElementById("pair-form") as HTMLFormElement;
-const urlInput = document.getElementById("url") as HTMLInputElement;
-const tokenInput = document.getElementById("token") as HTMLInputElement;
-const disconnectBtn = document.getElementById("disconnect") as HTMLButtonElement;
 const statusEl = document.getElementById("status") as HTMLElement;
 const statusLabel = document.getElementById("status-label") as HTMLElement;
+const infoEl = document.getElementById("info") as HTMLElement;
+const infoDaemon = document.getElementById("info-daemon") as HTMLElement;
+const infoBrowser = document.getElementById("info-browser") as HTMLElement;
+const hintEl = document.getElementById("hint") as HTMLElement;
+const toggleBtn = document.getElementById("toggle") as HTMLButtonElement;
+const portInput = document.getElementById("port") as HTMLInputElement;
+const savePortBtn = document.getElementById("save-port") as HTMLButtonElement;
 
-const STATUS_LABELS: Record<Status, string> = {
-  idle: "Not paired",
+const LABELS: Record<WorkerStatus, string> = {
+  idle: "Disconnected",
   connecting: "Connecting…",
   connected: "Connected",
-  error: "Auth failed",
 };
 
-/** Idle means "not connected": label depends on whether a pairing is saved. */
-function labelFor(status: Status): string {
-  if (status === "idle") return tokenInput.value.trim() ? "Paired" : "Not paired";
-  return STATUS_LABELS[status];
-}
-
-function setStatus(status: Status, label = labelFor(status)): void {
+function render(status: WorkerStatus, info?: ConnInfo): void {
   statusEl.className = `reins__status reins__status--${status}`;
-  statusLabel.textContent = label;
+  statusLabel.textContent = LABELS[status];
+
+  const connected = status === "connected";
+  infoEl.hidden = !connected;
+  hintEl.hidden = connected;
+  if (connected && info) {
+    infoDaemon.textContent = `${info.version ? `v${info.version}` : "reins"} · 127.0.0.1:${info.port ?? "?"}`;
+    infoBrowser.textContent = info.browserId
+      ? `${info.browserId}${info.browser ? ` (${info.browser})` : ""}`
+      : (info.browser ?? "connected");
+  }
 }
 
-/** Fire-and-forget message to the background worker (lands in M1b-wire). */
+function setToggle(autoConnect: boolean): void {
+  toggleBtn.textContent = autoConnect ? "Disconnect" : "Connect";
+  toggleBtn.classList.toggle("reins__btn--danger", autoConnect);
+}
+
 function notifyBackground(type: string): void {
   try {
     chrome.runtime.sendMessage({ type }, () => void chrome.runtime.lastError);
   } catch {
-    // No background handler yet (pre-M1b-wire) — pairing is still persisted.
-  }
-}
-
-/** Ask the worker for the live connection status; falls back to idle. */
-async function queryStatus(): Promise<Status> {
-  try {
-    const res = (await chrome.runtime.sendMessage({ type: "reins:status" })) as
-      | { status?: unknown }
-      | undefined;
-    return normalizeStatus(res?.status);
-  } catch {
-    return "idle";
+    // worker unavailable; settings are persisted regardless
   }
 }
 
 async function refresh(): Promise<void> {
-  const pairing = await loadPairing();
-  if (pairing) {
-    urlInput.value = pairing.url;
-    tokenInput.value = pairing.token;
-    disconnectBtn.hidden = false;
-    setStatus(await queryStatus());
-  } else {
-    disconnectBtn.hidden = true;
-    setStatus("idle");
+  const settings = await loadSettings();
+  portInput.value = settings.portOverride !== undefined ? String(settings.portOverride) : "";
+  setToggle(settings.autoConnect);
+  try {
+    const res = (await chrome.runtime.sendMessage({ type: "reins:status" })) as
+      | { status?: unknown; info?: ConnInfo }
+      | undefined;
+    render(normalizeStatus(res?.status), res?.info);
+  } catch {
+    render("idle");
   }
 }
 
@@ -67,26 +71,32 @@ async function refresh(): Promise<void> {
 chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (!msg || typeof msg !== "object") return;
   const message = msg as Record<string, unknown>;
-  if (message.type === "reins:status-update") setStatus(normalizeStatus(message.status));
+  if (message.type === "reins:status-update") {
+    // Re-query for the full picture (status + connection info).
+    void refresh();
+  }
 });
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const url = urlInput.value.trim();
-  const token = tokenInput.value.trim();
-  if (!url || !token) return;
-  await savePairing({ url, token });
-  disconnectBtn.hidden = false;
-  setStatus("connecting");
+toggleBtn.addEventListener("click", async () => {
+  const settings = await loadSettings();
+  if (settings.autoConnect) {
+    notifyBackground("reins:disconnect");
+    setToggle(false);
+    render("idle");
+  } else {
+    notifyBackground("reins:connect");
+    setToggle(true);
+    render("connecting");
+  }
+});
+
+savePortBtn.addEventListener("click", async () => {
+  const raw = portInput.value.trim();
+  const port = raw === "" ? undefined : Number(raw);
+  if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535)) return;
+  await saveSettings({ portOverride: port });
   notifyBackground("reins:connect");
-});
-
-disconnectBtn.addEventListener("click", async () => {
-  await clearPairing();
-  tokenInput.value = "";
-  disconnectBtn.hidden = true;
-  setStatus("idle");
-  notifyBackground("reins:disconnect");
+  render("connecting");
 });
 
 void refresh();

@@ -13,23 +13,34 @@ export interface SocketLike {
   onerror: ((err: unknown) => void) | null;
 }
 
+export interface WelcomeInfo {
+  version?: string;
+  browserId?: string;
+}
+
 export interface BridgeClientOptions {
-  url: string;
-  token: string;
+  /** Candidate ws:// URLs, best guess first (sticky port, then the shared range). */
+  urls: () => string[];
   browser: string;
   dispatch: Dispatch;
   createSocket: (url: string) => SocketLike;
   onStatus?: (status: ConnectionStatus) => void;
-  /** Called once when the server closes with code 4001 (bad token). No retry follows. */
-  onAuthError?: () => void;
-  /** Schedule a reconnect attempt; injectable for tests. Defaults to setTimeout. */
+  /** Reports the URL that produced a welcome (persist its port for next
+   *  time) plus the daemon's self-description from the welcome frame. */
+  onConnected?: (url: string, welcome: WelcomeInfo) => void;
+  /** Schedule a reconnect cycle; injectable for tests. Defaults to setTimeout. */
   schedule?: (fn: () => void, ms: number) => void;
+  /** How long to wait per candidate for the welcome frame. */
+  probeTimeoutMs?: number;
 }
 
 /**
- * Client half of the reins bridge: connects to the MCP server's WebSocket,
- * authenticates with the pairing token, answers `request` frames via `dispatch`,
- * and reconnects with exponential backoff. Transport-agnostic via `createSocket`.
+ * Client half of the reins bridge with built-in daemon discovery: each
+ * connect cycle walks the candidate URLs, sends `hello`, and adopts the
+ * first socket that answers `welcome` (anything else on those ports closes
+ * or stays silent and is skipped). Cycles repeat with exponential backoff
+ * forever — the daemon may start long after the browser. Transport-agnostic
+ * via `createSocket`.
  */
 export class BridgeClient {
   readonly #opts: BridgeClientOptions;
@@ -44,7 +55,7 @@ export class BridgeClient {
 
   start(): void {
     this.#stopped = false;
-    this.#connect();
+    void this.#cycle(this.#cycleToken);
   }
 
   stop(): void {
@@ -54,38 +65,95 @@ export class BridgeClient {
     this.#socket = undefined;
   }
 
-  #connect(): void {
-    if (this.#socket) return;
-    this.#opts.onStatus?.("connecting");
-    const socket = this.#opts.createSocket(this.#opts.url);
-    this.#socket = socket;
-    socket.onopen = () => {
-      socket.send(
-        JSON.stringify({ type: "hello", token: this.#opts.token, browser: this.#opts.browser }),
-      );
-    };
-    socket.onmessage = (ev) => this.#onMessage(String(ev.data));
-    socket.onclose = (ev) => this.#onClose(ev?.code);
-    socket.onerror = () => socket.close();
+  #schedule(fn: () => void, ms: number): void {
+    (this.#opts.schedule ?? ((f, m) => void setTimeout(f, m)))(fn, ms);
   }
 
-  #onClose(code?: number): void {
+  async #cycle(token: number): Promise<void> {
+    if (this.#stopped || token !== this.#cycleToken || this.#socket) return;
+    this.#opts.onStatus?.("connecting");
+    for (const url of this.#opts.urls()) {
+      const probed = await this.#tryUrl(url);
+      if (this.#stopped || token !== this.#cycleToken || this.#socket) {
+        probed?.socket.close();
+        return;
+      }
+      if (probed) {
+        this.#adopt(probed.socket, url, probed.welcome);
+        return;
+      }
+    }
+    this.#opts.onStatus?.("disconnected");
+    this.#attempt += 1;
+    this.#schedule(() => void this.#cycle(token), nextBackoff(this.#attempt));
+  }
+
+  /** Open one candidate: resolves the welcomed socket, or null (closed/silent/timeout). */
+  #tryUrl(url: string): Promise<{ socket: SocketLike; welcome: WelcomeInfo } | null> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let socket: SocketLike;
+      try {
+        socket = this.#opts.createSocket(url);
+      } catch {
+        resolve(null);
+        return;
+      }
+      const settle = (welcome: WelcomeInfo | null) => {
+        if (settled) return;
+        settled = true;
+        if (!welcome) {
+          try {
+            socket.close();
+          } catch {
+            // already closed
+          }
+        }
+        resolve(welcome ? { socket, welcome } : null);
+      };
+      socket.onopen = () => {
+        socket.send(JSON.stringify({ type: "hello", browser: this.#opts.browser }));
+      };
+      socket.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(String(ev.data)) as {
+            type?: string;
+            version?: string;
+            browserId?: string;
+          };
+          if (msg.type === "welcome") {
+            settle({ version: msg.version, browserId: msg.browserId });
+          }
+        } catch {
+          // not a reins server — keep waiting for the timeout
+        }
+      };
+      socket.onclose = () => settle(null);
+      socket.onerror = () => settle(null);
+      // Real timer on purpose: the injectable schedule() is for reconnect
+      // cycles; a probe must time out on the wall clock.
+      setTimeout(() => settle(null), this.#opts.probeTimeoutMs ?? 1500);
+    });
+  }
+
+  #adopt(socket: SocketLike, url: string, welcome: WelcomeInfo): void {
+    this.#socket = socket;
+    this.#attempt = 0;
+    socket.onmessage = (ev) => this.#onMessage(String(ev.data));
+    socket.onclose = () => this.#onClose();
+    socket.onerror = () => socket.close();
+    this.#opts.onStatus?.("connected");
+    this.#opts.onConnected?.(url, welcome);
+  }
+
+  #onClose(): void {
+    if (!this.#socket) return; // stopped or already replaced
     this.#socket = undefined;
     this.#opts.onStatus?.("disconnected");
     if (this.#stopped) return;
-    if (code === 4001) {
-      this.#stopped = true;
-      this.#opts.onAuthError?.();
-      return;
-    }
     this.#attempt += 1;
-    const delay = nextBackoff(this.#attempt);
-    const schedule = this.#opts.schedule ?? ((fn, ms) => void setTimeout(fn, ms));
     const token = this.#cycleToken;
-    schedule(() => {
-      if (this.#stopped || token !== this.#cycleToken || this.#socket) return;
-      this.#connect();
-    }, delay);
+    this.#schedule(() => void this.#cycle(token), nextBackoff(this.#attempt));
   }
 
   #onMessage(raw: string): void {
@@ -93,11 +161,6 @@ export class BridgeClient {
     try {
       msg = JSON.parse(raw) as Record<string, unknown>;
     } catch {
-      return;
-    }
-    if (msg.type === "welcome") {
-      this.#attempt = 0;
-      this.#opts.onStatus?.("connected");
       return;
     }
     if (msg.type === "request" && typeof msg.id === "string" && typeof msg.method === "string") {

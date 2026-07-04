@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 import { BridgeClient, type SocketLike } from "./bridge-client.js";
 
-const TOKEN = "client-token";
-
 interface Harness {
   server: WebSocketServer;
   port: number;
@@ -13,6 +11,7 @@ interface Harness {
 }
 
 let harness: Harness | undefined;
+let silentServer: WebSocketServer | undefined;
 let client: BridgeClient | undefined;
 
 afterEach(async () => {
@@ -23,9 +22,14 @@ afterEach(async () => {
     harness.server.close(() => resolve());
   });
   harness = undefined;
+  await new Promise<void>((resolve) => {
+    if (!silentServer) return resolve();
+    silentServer.close(() => resolve());
+  });
+  silentServer = undefined;
 });
 
-/** A stand-in reins server: origin check, hello->welcome, exposes the live socket. */
+/** A stand-in reins daemon: hello → welcome, exposes the live socket. */
 function startServer(): Promise<Harness> {
   return new Promise((resolve) => {
     let live: WebSocket | undefined;
@@ -34,17 +38,25 @@ function startServer(): Promise<Harness> {
       if (!req.headers.origin?.startsWith("chrome-extension://")) return ws.close(4003);
       ws.on("message", (data: RawData) => {
         const msg = JSON.parse(data.toString());
-        if (msg.type === "hello" && msg.token === TOKEN) {
+        if (msg.type === "hello") {
           live = ws;
           ws.send(JSON.stringify({ type: "welcome", server: "reins" }));
-        } else if (msg.type === "hello") {
-          ws.close(4001, "bad token");
         }
       });
     });
     server.on("listening", () => {
       const port = (server.address() as AddressInfo).port;
       resolve({ server, port, current: () => live });
+    });
+  });
+}
+
+/** A WS server that accepts connections but never answers hello (not reins). */
+function startSilentServer(): Promise<number> {
+  return new Promise((resolve) => {
+    silentServer = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    silentServer.on("listening", () => {
+      resolve((silentServer?.address() as AddressInfo).port);
     });
   });
 }
@@ -67,7 +79,7 @@ function nodeSocketFactory(url: string): SocketLike {
   return sock;
 }
 
-function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
+function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const tick = () => {
@@ -79,16 +91,25 @@ function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   });
 }
 
+function makeClient(
+  urls: string[],
+  over: Partial<ConstructorParameters<typeof BridgeClient>[0]> = {},
+) {
+  return new BridgeClient({
+    urls: () => urls,
+    browser: "test",
+    dispatch: async () => ({}),
+    createSocket: nodeSocketFactory,
+    probeTimeoutMs: 250,
+    ...over,
+  });
+}
+
 describe("BridgeClient", () => {
   it("connects, sends hello, and reaches connected on welcome", async () => {
     harness = await startServer();
     let status = "";
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: TOKEN,
-      browser: "test",
-      dispatch: async () => ({}),
-      createSocket: nodeSocketFactory,
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       onStatus: (s) => {
         status = s;
       },
@@ -98,14 +119,52 @@ describe("BridgeClient", () => {
     expect(status).toBe("connected");
   });
 
+  it("discovers the daemon across candidates: dead port, silent server, then reins", async () => {
+    harness = await startServer();
+    const silentPort = await startSilentServer();
+    // Port 1 is reserved/unassigned — connection refused immediately.
+    const urls = [
+      "ws://127.0.0.1:1",
+      `ws://127.0.0.1:${silentPort}`,
+      `ws://127.0.0.1:${harness.port}`,
+    ];
+    let connectedUrl = "";
+    let status = "";
+    client = makeClient(urls, {
+      onStatus: (s) => {
+        status = s;
+      },
+      onConnected: (url) => {
+        connectedUrl = url;
+      },
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+    expect(connectedUrl).toBe(`ws://127.0.0.1:${harness.port}`);
+  });
+
+  it("keeps cycling with backoff when no candidate answers, then connects", async () => {
+    const silentPort = await startSilentServer();
+    let connects = 0;
+    let cycles = 0;
+    client = makeClient([`ws://127.0.0.1:${silentPort}`], {
+      onStatus: (s) => {
+        if (s === "connected") connects += 1;
+        if (s === "connecting") cycles += 1;
+      },
+      schedule: (fn) => setTimeout(fn, 5),
+    });
+    client.start();
+    // At least two full scan cycles run without a connection — the client
+    // never gives up while only non-reins listeners answer.
+    await waitFor(() => cycles >= 2);
+    expect(connects).toBe(0);
+  });
+
   it("dispatches a request and replies with the result", async () => {
     harness = await startServer();
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: TOKEN,
-      browser: "test",
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       dispatch: async (method) => (method === "list_tabs" ? { tabs: [{ tabId: 1 }] } : {}),
-      createSocket: nodeSocketFactory,
     });
     client.start();
     await waitFor(() => harness?.current() !== undefined);
@@ -124,14 +183,10 @@ describe("BridgeClient", () => {
 
   it("replies ok:false when the dispatcher throws", async () => {
     harness = await startServer();
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: TOKEN,
-      browser: "test",
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       dispatch: async () => {
         throw new Error("boom");
       },
-      createSocket: nodeSocketFactory,
     });
     client.start();
     await waitFor(() => harness?.current() !== undefined);
@@ -162,15 +217,11 @@ describe("BridgeClient", () => {
     // Latch: true once "disconnected" has been observed (avoids racing with fast reconnect).
     let sawDisconnected = false;
 
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: TOKEN,
-      browser: "test",
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       dispatch: async () => {
         dispatchCalled = true;
         return dispatchInflight;
       },
-      createSocket: nodeSocketFactory,
       onStatus: (s) => {
         if (s === "disconnected") sawDisconnected = true;
       },
@@ -178,41 +229,24 @@ describe("BridgeClient", () => {
     });
     client.start();
 
-    // Wait for server to receive hello (which sets current() and sends welcome).
     await waitFor(() => harness?.current() !== undefined);
-
-    // Server sends a request; client will process welcome then this request in order.
     harness
       .current()
       ?.send(JSON.stringify({ type: "request", id: "r-drop", method: "slow", params: {} }));
-
-    // Wait until dispatch has started (confirming welcome + request were both processed).
     await waitFor(() => dispatchCalled);
 
-    // Close the server-side socket while dispatch is still in-flight.
     harness.current()?.close();
-
-    // Wait for the client to observe disconnect (latch, so we don't race with fast reconnect).
     await waitFor(() => sawDisconnected);
 
-    // Now resolve the dispatch — this must NOT produce an unhandled rejection.
     resolveDispatch({ ok: true });
-
-    // Settle the microtask queue; Vitest fails the suite on any unhandled rejection.
     await new Promise<void>((res) => setTimeout(res, 50));
-
     expect(sawDisconnected).toBe(true);
   });
 
   it("reconnects after the socket drops", async () => {
     harness = await startServer();
     let connects = 0;
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: TOKEN,
-      browser: "test",
-      dispatch: async () => ({}),
-      createSocket: nodeSocketFactory,
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       onStatus: (s) => {
         if (s === "connected") connects += 1;
       },
@@ -227,87 +261,36 @@ describe("BridgeClient", () => {
     expect(connects).toBe(2);
   });
 
-  it("terminal auth failure on 4001: fires onAuthError once and does not reconnect", async () => {
-    harness = await startServer();
-    const statuses: string[] = [];
-    let authErrors = 0;
-    let connectingCount = 0;
-
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: "WRONG_TOKEN",
-      browser: "test",
-      dispatch: async () => ({}),
-      createSocket: nodeSocketFactory,
-      onStatus: (s) => {
-        statuses.push(s);
-        if (s === "connecting") connectingCount += 1;
-      },
-      onAuthError: () => {
-        authErrors += 1;
-      },
-      // Use a fast schedule to catch any accidental retries quickly.
-      schedule: (fn) => setTimeout(fn, 10),
-    });
-    client.start();
-
-    // Wait for "disconnected" to arrive (client received the 4001 close).
-    await waitFor(() => statuses.includes("disconnected"));
-
-    // Give a bounded window to detect any stale retry (there should be none).
-    await new Promise<void>((res) => setTimeout(res, 60));
-
-    expect(authErrors).toBe(1);
-    expect(statuses.at(-1)).toBe("disconnected");
-    // "connecting" was emitted exactly once (the initial attempt); no retry.
-    expect(connectingCount).toBe(1);
-  });
-
   it("stop() cancels a pending reconnect — no overlapping sockets", async () => {
     harness = await startServer();
 
-    // Count every new server-side connection.
     let serverConnections = 0;
     harness.server.on("connection", () => {
       serverConnections += 1;
     });
 
-    // Capture the reconnect fn rather than firing it.
     let pendingReconnect: (() => void) | undefined;
 
-    client = new BridgeClient({
-      url: `ws://127.0.0.1:${harness.port}`,
-      token: TOKEN,
-      browser: "test",
-      dispatch: async () => ({}),
-      createSocket: nodeSocketFactory,
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       schedule: (fn) => {
         pendingReconnect = fn;
       },
     });
     client.start();
 
-    // Wait for the first successful connection (conn #1, welcomed).
     await waitFor(() => harness?.current() !== undefined);
-    // Ensure the server-side counter has incremented.
     await waitFor(() => serverConnections >= 1);
 
-    // Close the live socket — this triggers #onClose which captures the reconnect fn.
     harness.current()?.close();
     await waitFor(() => pendingReconnect !== undefined);
 
-    // stop() increments cycleToken, then start() resets #stopped and opens conn #2.
     client.stop();
     client.start();
     await waitFor(() => serverConnections >= 2);
 
-    // Now fire the stale captured reconnect — the cycle-token guard must swallow it.
     pendingReconnect?.();
-
-    // Settle microtasks + any fast I/O.
     await new Promise<void>((res) => setTimeout(res, 50));
 
-    // Exactly two connections: the stale reconnect was cancelled, not a third.
     expect(serverConnections).toBe(2);
   });
 });

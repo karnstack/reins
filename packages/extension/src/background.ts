@@ -1,10 +1,19 @@
 import { dispatchMethod } from "./lib/dispatch.js";
-import { loadPairing } from "./lib/pairing.js";
+import { candidateUrls, loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
 type Status = WorkerStatus;
 
 const STATUS_KEY = "reinsStatus";
+const CONN_INFO_KEY = "reinsConnInfo";
+
+/** What the popup shows about the live connection (from the welcome frame). */
+export interface ConnInfo {
+  port?: number;
+  version?: string;
+  browserId?: string;
+  browser?: string;
+}
 
 /**
  * Connection status lives in chrome.storage.session, not a module variable:
@@ -49,7 +58,7 @@ function ensureOffscreen(): Promise<void> {
           url: "src/offscreen.html",
           reasons: [chrome.offscreen.Reason.WORKERS],
           justification:
-            "Maintain a persistent WebSocket connection to the local reins MCP server.",
+            "Maintain a persistent WebSocket connection to the local reins MCP daemon.",
         });
       }
     })().finally(() => {
@@ -59,16 +68,12 @@ function ensureOffscreen(): Promise<void> {
   return offscreenPromise;
 }
 
+/** Connect (via the offscreen document) if auto-connect is enabled. */
 async function autoConnect(): Promise<void> {
-  const p = await loadPairing();
-  if (!p) return;
+  const settings = await loadSettings();
+  if (!settings.autoConnect) return;
   await ensureOffscreen();
-  send({
-    type: "offscreen:connect",
-    url: p.url,
-    token: p.token,
-    browser: "reins-extension",
-  });
+  send({ type: "offscreen:connect", urls: candidateUrls(settings) });
 }
 
 chrome.runtime.onStartup.addListener(() => {
@@ -83,10 +88,12 @@ chrome.runtime.onInstalled.addListener(() => {
  * Central message router for the service worker.
  *
  * Inbound types handled here:
- *   reins:connect        — popup asks worker to open the bridge
- *   reins:disconnect     — popup asks worker to close the bridge
+ *   reins:connect        — popup enables auto-connect and asks for a connection
+ *   reins:disconnect     — popup disables auto-connect and drops the bridge
  *   reins:status         — popup polls current connection status
  *   reins:status-update  — offscreen document reports a new status
+ *   reins:connected-port — offscreen reports which port answered (persisted
+ *                          as lastPort so the next scan tries it first)
  *   reins:dispatch       — offscreen document asks worker to call a chrome.* handler
  *
  * The worker also sends outbound messages (offscreen:connect, offscreen:disconnect).
@@ -104,23 +111,48 @@ chrome.runtime.onMessage.addListener(
 
     switch (message.type) {
       case "reins:connect": {
-        void autoConnect();
+        void saveSettings({ autoConnect: true }).then(() => autoConnect());
         return;
       }
 
       case "reins:disconnect": {
+        void saveSettings({ autoConnect: false });
         send({ type: "offscreen:disconnect" });
         writeStatus("idle");
         return;
       }
 
       case "reins:status": {
-        void readStatus().then((status) => sendResponse({ status }));
+        void (async () => {
+          const status = await readStatus();
+          let info: ConnInfo | undefined;
+          try {
+            const got = await chrome.storage.session.get(CONN_INFO_KEY);
+            info = got[CONN_INFO_KEY] as ConnInfo | undefined;
+          } catch {
+            // no info — popup shows status only
+          }
+          sendResponse({ status, info });
+        })();
         return true;
       }
 
       case "reins:status-update": {
         writeStatus(normalizeStatus(message.status));
+        return;
+      }
+
+      case "reins:connected-info": {
+        const info: ConnInfo = {
+          port: typeof message.port === "number" ? message.port : undefined,
+          version: typeof message.version === "string" ? message.version : undefined,
+          browserId: typeof message.browserId === "string" ? message.browserId : undefined,
+          browser: typeof message.browser === "string" ? message.browser : undefined,
+        };
+        void chrome.storage.session.set({ [CONN_INFO_KEY]: info }).catch(() => {});
+        if (info.port !== undefined) {
+          void saveSettings({ lastPort: info.port }).catch(() => {});
+        }
         return;
       }
 

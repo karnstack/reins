@@ -21,48 +21,50 @@
         </div>
         <span class="reins__status reins__status--idle" id="status" role="status">
           <span class="reins__status-dot"></span>
-          <span class="reins__status-label" id="status-label">Not paired</span>
+          <span class="reins__status-label" id="status-label">Disconnected</span>
         </span>
       </header>
 
-      <form class="reins__form" id="pair-form">
-        <div class="reins__field">
-          <label class="reins__label" for="url">Server URL</label>
-          <input
-            class="reins__input reins__input--mono"
-            id="url"
-            name="url"
-            type="text"
-            inputmode="url"
-            placeholder="ws://127.0.0.1:8765"
-            autocomplete="off"
-            spellcheck="false"
-            required
-          />
+      <dl class="reins__info" id="info" hidden>
+        <div class="reins__info-row">
+          <dt>Daemon</dt>
+          <dd id="info-daemon">—</dd>
         </div>
-        <div class="reins__field">
-          <label class="reins__label" for="token">Pairing token</label>
-          <input
-            class="reins__input reins__input--mono"
-            id="token"
-            name="token"
-            type="password"
-            placeholder="paste from `reins pair`"
-            autocomplete="off"
-            spellcheck="false"
-            required
-          />
+        <div class="reins__info-row">
+          <dt>This browser</dt>
+          <dd id="info-browser">—</dd>
         </div>
-        <button class="reins__btn reins__btn--primary" id="connect" type="submit">Connect</button>
-      </form>
+      </dl>
 
-      <button class="reins__btn reins__btn--ghost reins__btn--danger" id="disconnect" type="button" hidden>
+      <p class="reins__hint" id="hint">
+        Looking for the reins daemon on this machine… start it with
+        <code>reins up</code>. Dev build? Run <code>reins allow &lt;id&gt;</code>
+        with the ID from <code>chrome://extensions</code>.
+      </p>
+
+      <button class="reins__btn reins__btn--ghost reins__btn--danger" id="toggle" type="button">
         Disconnect
       </button>
 
-      <p class="reins__hint">
-        Run <code>reins pair</code> in your terminal to get the URL &amp; token.
-      </p>
+      <details class="reins__advanced">
+        <summary>Advanced</summary>
+        <div class="reins__field">
+          <label class="reins__label" for="port">Pin daemon port (empty = auto-discover)</label>
+          <input
+            class="reins__input reins__input--mono"
+            id="port"
+            name="port"
+            type="number"
+            min="1"
+            max="65535"
+            placeholder="auto"
+            autocomplete="off"
+          />
+        </div>
+        <button class="reins__btn reins__btn--ghost" id="save-port" type="button">
+          Save &amp; reconnect
+        </button>
+      </details>
     </main>
     <script type="module" src="./popup.ts"></script>
   </body>

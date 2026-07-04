@@ -10,6 +10,7 @@ import {
 } from "@reins/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 import type { Log } from "./log.js";
+import { packageVersion } from "./version.js";
 
 export interface RequestOpts {
   browserId?: string;
@@ -140,7 +141,16 @@ export class BridgeHost implements BridgePort {
           connectedAt: Date.now(),
         });
         this.#log(`reins: browser connected (${browserId}: ${hello.data.browser})`);
-        ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
+        ws.send(
+          JSON.stringify(
+            WelcomeFrame.parse({
+              type: "welcome",
+              server: "reins",
+              version: packageVersion(),
+              browserId,
+            }),
+          ),
+        );
         return;
       }
       const response = ResponseFrame.safeParse(msg);

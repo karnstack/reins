@@ -10,8 +10,8 @@ describe("normalizeStatus", () => {
     expect(normalizeStatus("connected")).toBe("connected");
   });
 
-  it("passes through 'error'", () => {
-    expect(normalizeStatus("error")).toBe("error");
+  it("maps the retired 'error' status → 'idle'", () => {
+    expect(normalizeStatus("error")).toBe("idle");
   });
 
   it("maps 'disconnected' → 'idle'", () => {
