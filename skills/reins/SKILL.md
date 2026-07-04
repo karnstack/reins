@@ -76,8 +76,13 @@ otherwise, never guess. `reins browsers` shows who's connected.
 
 ## Gotchas
 
-- A JS dialog (alert/confirm/prompt) blocks the page — nothing works until
-  `reins dialog --accept` (or `--dismiss`).
+- A native JS dialog (alert/confirm/prompt) freezes the page's renderer.
+  `reins dialog --accept`/`--dismiss` can answer one only if reins was already
+  driving that tab when it opened; a dialog that appeared on its own can't be
+  cleared this way — close the tab (`reins close --tab <id>`) to recover.
+  Prefer suppressing dialogs up front with `reins eval 'window.confirm=()=>true'`.
+- `reins click --count 2` sets the click count but doesn't emit a separate
+  `dblclick`; for a true double-click use `reins eval 'el.dispatchEvent(...)'`.
 - `type` sends real keystrokes (triggers autocomplete etc.); `fill` sets the
   value in one step and fires input/change — prefer it for forms.
 - `console`/`network` only capture from their first use on a tab onward.
