@@ -18,13 +18,36 @@ export async function resolveTabId(tabId?: number): Promise<number> {
   return active.id;
 }
 
+// Attach errors that mean "try again in a moment", not "give up". The main
+// one: driving a tab back-to-back, the previous command's detach can still be
+// releasing the debuggee when the next attach lands — Chromium then rejects
+// with a transient (and, on some builds, misleading "different extension")
+// error. Retrying through it keeps rapid command sequences reliable.
+const TRANSIENT_ATTACH =
+  /already attached|different extension|cannot attach|cannot access|detached while|target closed/i;
+
+async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await chrome.debugger.attach({ tabId }, PROTOCOL);
+      return;
+    } catch (err) {
+      // A monitor may have grabbed the session mid-race; the caller reuses it.
+      if (isMonitored(tabId)) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt >= maxTries || !TRANSIENT_ATTACH.test(msg)) throw err;
+      await new Promise<void>((r) => setTimeout(r, 50 * attempt));
+    }
+  }
+}
+
 export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
   // Chrome allows one debugger session per tab. If the monitor (read_console /
   // read_network) already holds it, reuse that session — and leave it attached
   // afterwards so monitoring continues.
   if (isMonitored(tabId)) return fn();
   try {
-    await chrome.debugger.attach({ tabId }, PROTOCOL);
+    await attachWithRetry(tabId);
   } catch (err) {
     // Lost a race with a monitor attach; its session serves our commands too.
     if (isMonitored(tabId)) return fn();
