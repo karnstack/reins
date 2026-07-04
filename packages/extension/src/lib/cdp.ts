@@ -26,6 +26,26 @@ export async function resolveTabId(tabId?: number): Promise<number> {
 const TRANSIENT_ATTACH =
   /already attached|different extension|cannot attach|cannot access|detached while|target closed/i;
 
+/**
+ * Build a human-actionable attach error. When getTargets shows the tab is
+ * already `attached`, another debugger client (Claude-in-Chrome, Dia's AI,
+ * DevTools) holds the one-per-tab slot — the real, unrecoverable cause behind
+ * Chromium's cryptic "different extension" text.
+ */
+async function attachErrorMessage(tabId: number, attempt: number, msg: string): Promise<string> {
+  try {
+    const targets = await chrome.debugger.getTargets();
+    const t = targets.find((x) => x.tabId === tabId);
+    if (t?.attached) {
+      return `cannot drive tab ${tabId}: another debugger is already attached to it (DevTools, or an extension like Claude-in-Chrome, or the browser's own AI). Chrome allows only one debugger per tab. Close the other tool, or run reins in a separate browser profile.`;
+    }
+    const detail = t ? `attached=${t.attached} url=${t.url}` : "not in getTargets";
+    return `attach tab ${tabId} failed after ${attempt} tries: ${msg} [${detail}]`;
+  } catch {
+    return `attach tab ${tabId} failed after ${attempt} tries: ${msg}`;
+  }
+}
+
 async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
@@ -36,17 +56,7 @@ async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
       if (isMonitored(tabId)) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt >= maxTries || !TRANSIENT_ATTACH.test(msg)) {
-        let who = "";
-        try {
-          const targets = await chrome.debugger.getTargets();
-          const t = targets.find((x) => x.tabId === tabId);
-          who = t
-            ? ` [target: attached=${t.attached} type=${t.type} url=${t.url}]`
-            : " [target: NOT FOUND in getTargets]";
-        } catch {
-          // ignore diagnostics failure
-        }
-        throw new Error(`attach tab ${tabId} failed after ${attempt} tries: ${msg}${who}`);
+        throw new Error(await attachErrorMessage(tabId, attempt, msg));
       }
       await new Promise<void>((r) => setTimeout(r, 50 * attempt));
     }

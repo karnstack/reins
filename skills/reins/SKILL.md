@@ -87,4 +87,8 @@ otherwise, never guess. `reins browsers` shows who's connected.
   value in one step and fires input/change — prefer it for forms.
 - `console`/`network` only capture from their first use on a tab onward.
 - Errors like `element not found` usually mean a stale ref — `snapshot` again.
+- "another debugger is already attached" means another tool holds the tab
+  (DevTools, the Claude-in-Chrome extension, or an AI browser's own agent).
+  Chrome allows one debugger per tab — close the other tool or run reins in a
+  dedicated browser/profile.
 - Deeper diagnostics: `reins doctor`, `reins logs`.
