@@ -131,7 +131,7 @@ exit code 1.
 | `reins select (--ref \| --selector) --value "…"` | `select_option` | set `<select>` value, dispatch `change` |
 | `reins upload (--ref \| --selector) --file <path> [--file <path>…]` | `upload` | `DOM.setFileInputFiles` (CLI resolves paths to absolute first) |
 | `reins text [--ref \| --selector] [--max-chars N]` | `read_text` | `innerText` of element or `document.body`, truncated — the "read the page" primitive (snapshot only lists interactive elements) |
-| `reins resize --width 1280 --height 800 [--clear]` | `resize` | `Emulation.setDeviceMetricsOverride` / `clearDeviceMetricsOverride` |
+| `reins resize --width 1280 --height 800` | `resize` | `chrome.windows.update` on the tab's window — real window resize. (CDP emulation overrides reset when the debugger detaches, so `Emulation.*` stays behind `reins cdp` with that caveat noted in the skill.) |
 | `reins dialog (--accept \| --dismiss) [--text "…"]` | `handle_dialog` | `Page.handleJavaScriptDialog` on the open dialog; error if none open |
 | `reins cdp <Domain.method> [json-params]` | `cdp` | raw `chrome.debugger.sendCommand` passthrough — the escape hatch that makes the surface "basically CDP": drag, cookies, geolocation, PDF, tracing, … |
 
