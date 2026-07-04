@@ -9,10 +9,10 @@ export function logsDir(home = homedir()): string {
   return join(home, ".reins", "logs");
 }
 
-/** Log file for a given day, e.g. ~/.reins/logs/mcp-2026-07-04.log. */
+/** Log file for a given day, e.g. ~/.reins/logs/daemon-2026-07-04.log. */
 export function logFilePath(dir: string, now = new Date()): string {
   const day = now.toISOString().slice(0, 10);
-  return join(dir, `mcp-${day}.log`);
+  return join(dir, `daemon-${day}.log`);
 }
 
 /**

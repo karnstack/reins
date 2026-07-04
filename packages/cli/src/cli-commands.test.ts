@@ -100,10 +100,10 @@ describe("logsInfo", () => {
   it("tails the newest log file", () => {
     const dir = mkdtempSync(join(tmpdir(), "reins-logs-"));
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "mcp-2026-01-01.log"), "old\n");
-    writeFileSync(join(dir, "mcp-2026-01-02.log"), "one\ntwo\nthree\n");
+    writeFileSync(join(dir, "daemon-2026-01-01.log"), "old\n");
+    writeFileSync(join(dir, "daemon-2026-01-02.log"), "one\ntwo\nthree\n");
     const info = logsInfo(dir, 2);
-    expect(info.latest).toContain("mcp-2026-01-02.log");
+    expect(info.latest).toContain("daemon-2026-01-02.log");
     expect(info.tail).toEqual(["two", "three"]);
   });
 });

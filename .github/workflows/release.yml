@@ -1,7 +1,7 @@
 name: release
 
 # Publish flow (see docs/PUBLISHING.md):
-#   1. Bump versions (packages/mcp + packages/extension package.json).
+#   1. Bump versions (packages/cli + packages/extension package.json).
 #   2. Tag: git tag v0.1.0 && git push --tags
 #   3. This workflow publishes @karnstack/reins to npm and attaches the extension
 #      zip to the GitHub release. Requires the NPM_TOKEN repo secret.

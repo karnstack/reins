@@ -18,6 +18,34 @@ importers:
         specifier: 6.0.3
         version: 6.0.3
 
+  packages/cli:
+    dependencies:
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@reins/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@types/node':
+        specifier: 26.0.1
+        version: 26.0.1
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
+      tsdown:
+        specifier: 0.22.3
+        version: 0.22.3(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.9
+        version: 4.1.9(@types/node@26.0.1)(vite@8.1.0(@types/node@26.0.1))
+
   packages/extension:
     dependencies:
       '@reins/protocol':
@@ -48,34 +76,6 @@ importers:
       ws:
         specifier: 8.21.0
         version: 8.21.0
-
-  packages/mcp:
-    dependencies:
-      ws:
-        specifier: 8.21.0
-        version: 8.21.0
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@reins/protocol':
-        specifier: workspace:*
-        version: link:../protocol
-      '@types/node':
-        specifier: 26.0.1
-        version: 26.0.1
-      '@types/ws':
-        specifier: 8.18.1
-        version: 8.18.1
-      tsdown:
-        specifier: 0.22.3
-        version: 0.22.3(typescript@6.0.3)
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 4.1.9
-        version: 4.1.9(@types/node@26.0.1)(vite@8.1.0(@types/node@26.0.1))
 
   packages/protocol:
     dependencies:

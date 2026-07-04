@@ -1,24 +1,24 @@
 {
   "name": "@karnstack/reins",
   "version": "0.2.0",
-  "description": "One CLI for reins: a local MCP daemon that drives your real, logged-in browsers through the reins extension.",
+  "description": "Drive your real, logged-in browsers from any coding agent: the reins CLI + local daemon, paired with the reins browser extension.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/karnstack/reins.git",
-    "directory": "packages/mcp"
+    "directory": "packages/cli"
   },
   "homepage": "https://github.com/karnstack/reins#readme",
   "bugs": "https://github.com/karnstack/reins/issues",
   "keywords": [
-    "mcp",
-    "model-context-protocol",
     "browser",
     "automation",
     "chrome",
     "cdp",
-    "agent"
+    "agent",
+    "skill",
+    "cli"
   ],
   "bin": {
     "reins": "./dist/cli.js"

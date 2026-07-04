@@ -14,8 +14,8 @@
     "test": "turbo run test",
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "mcp": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/mcp/dist/cli.js serve",
-    "reins": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/mcp/dist/cli.js",
+    "daemon": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/cli/dist/cli.js daemon",
+    "reins": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/cli/dist/cli.js",
     "zip": "turbo run zip"
   },
   "devDependencies": {

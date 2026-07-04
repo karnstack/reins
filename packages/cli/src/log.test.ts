@@ -13,7 +13,7 @@ describe("logsDir", () => {
 describe("logFilePath", () => {
   it("is dated by day", () => {
     const path = logFilePath("/x", new Date("2026-07-04T12:00:00Z"));
-    expect(path).toBe(join("/x", "mcp-2026-07-04.log"));
+    expect(path).toBe(join("/x", "daemon-2026-07-04.log"));
   });
 });
 
