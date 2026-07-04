@@ -1,7 +1,5 @@
 import { request as httpRequest } from "node:http";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { BridgeHost } from "./bridge.js";
 import { startDaemon } from "./daemon.js";
@@ -24,7 +22,7 @@ function forgedHostRequest(opts: {
         headers: {
           host: "evil.example",
           "content-type": "application/json",
-          accept: "application/json, text/event-stream",
+          accept: "application/json",
         },
       },
       (res) => {
@@ -48,13 +46,13 @@ afterEach(async () => {
   bridge = undefined;
 });
 
-async function boot() {
+async function boot(onShutdown?: () => void) {
   bridge = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: silent });
-  daemon = await startDaemon({ port: 0, bridge, log: silent });
+  daemon = await startDaemon({ port: 0, bridge, log: silent, onShutdown });
   return daemon;
 }
 
-/** Fake extension: answers list_tabs with one tab. */
+/** Fake extension: answers list_tabs with one tab and echoes eval_js params. */
 function fakeExtension(port: number, browser = "Chrome"): Promise<WebSocket> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { origin: ORIGIN } });
   return new Promise((resolve, reject) => {
@@ -62,7 +60,8 @@ function fakeExtension(port: number, browser = "Chrome"): Promise<WebSocket> {
     ws.on("message", (data) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === "welcome") resolve(ws);
-      if (msg.type === "request" && msg.method === "list_tabs") {
+      if (msg.type !== "request") return;
+      if (msg.method === "list_tabs") {
         ws.send(
           JSON.stringify({
             type: "response",
@@ -71,16 +70,37 @@ function fakeExtension(port: number, browser = "Chrome"): Promise<WebSocket> {
             result: { tabs: [{ tabId: 1, title: "t", url: "https://x", active: true }] },
           }),
         );
+      } else if (msg.method === "eval_js") {
+        ws.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            ok: true,
+            result: { value: { echoed: msg.params, browser } },
+          }),
+        );
+      } else {
+        ws.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            ok: false,
+            error: { code: "dispatch", message: `unknown method: ${msg.method}` },
+          }),
+        );
       }
     });
     ws.on("error", reject);
   });
 }
 
-async function mcpClient(port: number): Promise<Client> {
-  const client = new Client({ name: "test", version: "0.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
-  return client;
+async function rpc(port: number, body: unknown): Promise<{ status: number; json: any }> {
+  const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, json: await res.json() };
 }
 
 describe("daemon", () => {
@@ -101,85 +121,103 @@ describe("daemon", () => {
     ext.close();
   });
 
-  it("GET /browsers lists connected browsers", async () => {
+  it("POST /rpc list_tabs aggregates across browsers with tags", async () => {
     const d = await boot();
     const a = await fakeExtension(d.port, "Chrome");
     const b = await fakeExtension(d.port, "Brave");
-    const res = await fetch(`http://127.0.0.1:${d.port}/browsers`);
-    const body = (await res.json()) as { browsers: Array<{ id: string; browser: string }> };
-    expect(body.browsers.map((x) => x.browser)).toEqual(["Chrome", "Brave"]);
-    a.close();
-    b.close();
-  });
-
-  it("GET /tabs aggregates tabs across browsers with tags", async () => {
-    const d = await boot();
-    const a = await fakeExtension(d.port, "Chrome");
-    const b = await fakeExtension(d.port, "Brave");
-    const res = await fetch(`http://127.0.0.1:${d.port}/tabs`);
-    const body = (await res.json()) as { tabs: Array<{ browser: string; url: string }> };
-    expect(body.tabs).toHaveLength(2);
-    expect(body.tabs.map((t) => t.browser).sort()).toEqual(["Brave", "Chrome"]);
-    a.close();
-    b.close();
-  });
-
-  it("serves a full MCP session over streamable HTTP (initialize → tools/list → list_tabs)", async () => {
-    const d = await boot();
-    const ext = await fakeExtension(d.port);
-    const client = await mcpClient(d.port);
-    const tools = await client.listTools();
-    expect(tools.tools.map((t) => t.name)).toContain("list_tabs");
-    const result = await client.callTool({ name: "list_tabs", arguments: {} });
-    expect(JSON.stringify(result.content)).toContain("https://x");
-    await client.close();
-    ext.close();
-  });
-
-  it("supports two concurrent MCP sessions sharing one bridge", async () => {
-    const d = await boot();
-    const ext = await fakeExtension(d.port);
-    const [a, b] = await Promise.all([mcpClient(d.port), mcpClient(d.port)]);
-    const [ra, rb] = await Promise.all([
-      a.callTool({ name: "list_tabs", arguments: {} }),
-      b.callTool({ name: "list_tabs", arguments: {} }),
+    const { status, json } = await rpc(d.port, { method: "list_tabs" });
+    expect(status).toBe(200);
+    expect(json.result.tabs).toHaveLength(2);
+    expect(json.result.tabs.map((t: { browser: string }) => t.browser).sort()).toEqual([
+      "Brave",
+      "Chrome",
     ]);
-    expect(JSON.stringify(ra.content)).toContain("https://x");
-    expect(JSON.stringify(rb.content)).toContain("https://x");
-    await Promise.all([a.close(), b.close()]);
+    a.close();
+    b.close();
+  });
+
+  it("POST /rpc routes params.browserId to the right browser", async () => {
+    const d = await boot();
+    const a = await fakeExtension(d.port, "Chrome");
+    const b = await fakeExtension(d.port, "Brave");
+    const { json } = await rpc(d.port, {
+      method: "eval_js",
+      params: { browserId: "b2", expression: "1" },
+    });
+    // browserId is routing-only: split off before the payload reaches the browser.
+    expect(json.result.value).toEqual({ echoed: { expression: "1" }, browser: "Brave" });
+    a.close();
+    b.close();
+  });
+
+  it("POST /rpc with several browsers and no browserId is a 502 naming the roster", async () => {
+    const d = await boot();
+    const a = await fakeExtension(d.port, "Chrome");
+    const b = await fakeExtension(d.port, "Brave");
+    const { status, json } = await rpc(d.port, { method: "eval_js", params: { expression: "1" } });
+    expect(status).toBe(502);
+    expect(json.error).toContain("b1 (Chrome)");
+    expect(json.error).toContain("b2 (Brave)");
+    a.close();
+    b.close();
+  });
+
+  it("POST /rpc bubbles browser-side errors as 502", async () => {
+    const d = await boot();
+    const ext = await fakeExtension(d.port);
+    const { status, json } = await rpc(d.port, { method: "bogus_method" });
+    expect(status).toBe(502);
+    expect(json.error).toContain("unknown method");
     ext.close();
   });
 
-  it("rejects /mcp requests with a foreign Host header (DNS rebinding)", async () => {
+  it("POST /rpc rejects malformed bodies with 400", async () => {
     const d = await boot();
-    const status = await forgedHostRequest({
-      port: d.port,
-      path: "/mcp",
+    for (const body of [{ params: {} }, { method: "" }, [], 42]) {
+      const { status } = await rpc(d.port, body);
+      expect(status, JSON.stringify(body)).toBe(400);
+    }
+    const raw = await fetch(`http://127.0.0.1:${d.port}/rpc`, {
       method: "POST",
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: {
-          protocolVersion: "2025-03-26",
-          capabilities: {},
-          clientInfo: { name: "evil", version: "0.0.0" },
-        },
-      }),
+      body: "not json",
     });
-    expect(status).toBeGreaterThanOrEqual(400);
+    expect(raw.status).toBe(400);
   });
 
-  it("rejects GET endpoints with a foreign Host header (DNS rebinding)", async () => {
+  it("POST /shutdown replies ok and fires onShutdown", async () => {
+    const onShutdown = vi.fn();
+    const d = await boot(onShutdown);
+    const res = await fetch(`http://127.0.0.1:${d.port}/shutdown`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+    await vi.waitFor(() => expect(onShutdown).toHaveBeenCalledOnce());
+  });
+
+  it("rejects every route on a foreign Host header (DNS rebinding)", async () => {
     const d = await boot();
-    for (const path of ["/health", "/browsers", "/tabs"]) {
-      expect(await forgedHostRequest({ port: d.port, path }), path).toBe(403);
+    expect(await forgedHostRequest({ port: d.port, path: "/health" })).toBe(403);
+    expect(
+      await forgedHostRequest({
+        port: d.port,
+        path: "/rpc",
+        method: "POST",
+        body: JSON.stringify({ method: "list_tabs" }),
+      }),
+    ).toBe(403);
+    expect(await forgedHostRequest({ port: d.port, path: "/shutdown", method: "POST" })).toBe(403);
+  });
+
+  it("404s unknown paths and the retired MCP-era endpoints", async () => {
+    const d = await boot();
+    for (const path of ["/nope", "/mcp", "/browsers", "/tabs"]) {
+      const res = await fetch(`http://127.0.0.1:${d.port}${path}`, { method: "POST" });
+      expect(res.status, path).toBe(404);
     }
   });
 
-  it("404s unknown paths", async () => {
+  it("GET /rpc is not a thing (POST only)", async () => {
     const d = await boot();
-    const res = await fetch(`http://127.0.0.1:${d.port}/nope`);
+    const res = await fetch(`http://127.0.0.1:${d.port}/rpc`);
     expect(res.status).toBe(404);
   });
 });

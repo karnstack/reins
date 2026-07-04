@@ -87,8 +87,8 @@ switch (command) {
   }
 
   case "serve": {
-    const { runServe } = await import("./serve.js");
-    await runServe({ stdio: rest.includes("--stdio") });
+    const { runDaemon } = await import("./serve.js");
+    await runDaemon();
     break;
   }
 

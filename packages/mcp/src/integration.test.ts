@@ -1,24 +1,18 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { BridgeHost } from "./bridge.js";
-import { createServer } from "./create-server.js";
+import { startDaemon } from "./daemon.js";
 
 const ORIGIN = "chrome-extension://standin";
-let host: BridgeHost | undefined;
+let daemon: Awaited<ReturnType<typeof startDaemon>> | undefined;
+let bridge: BridgeHost | undefined;
 let extension: WebSocket | undefined;
-let server: ReturnType<typeof createServer> | undefined;
-let client: Client | undefined;
 
 afterEach(async () => {
-  await client?.close();
-  await server?.close();
   extension?.close();
-  await host?.stop();
-  client = undefined;
-  server = undefined;
-  host = undefined;
+  await daemon?.close();
+  daemon = undefined;
+  bridge = undefined;
   extension = undefined;
 });
 
@@ -29,10 +23,7 @@ const METHOD_RESULTS: Record<string, unknown> = {
   close_tab: { ok: true },
   select_tab: { ok: true },
   navigate: { url: "https://example.com/" },
-  read_snapshot: {
-    content: "button OK [e1]",
-    refs: [{ ref: "e1", role: "button", name: "OK" }],
-  },
+  read_snapshot: { content: "e1: button OK", refs: [{ ref: "e1", role: "button", name: "OK" }] },
   click: { ok: true },
   type: { ok: true },
   screenshot: { data: "aGVsbG8=", mimeType: "image/png" },
@@ -40,13 +31,21 @@ const METHOD_RESULTS: Record<string, unknown> = {
   wait_for: { ok: true },
   read_console: { entries: [{ level: "error", text: "boom", timestamp: 1 }] },
   read_network: { entries: [{ method: "GET", url: "https://x", status: 200, timestamp: 1 }] },
+  press_key: { ok: true },
+  hover: { ok: true },
+  scroll: { ok: true },
+  fill: { ok: true },
+  select_option: { ok: true },
+  upload: { ok: true },
+  read_text: { text: "page text" },
+  resize: { ok: true },
+  handle_dialog: { ok: true },
+  cdp: { result: { frameId: "F1" } },
 };
 
 /** Stand-in extension: connects, authenticates, and answers any method via the lookup table. */
 function standInExtension(port: number): Promise<WebSocket> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
-    headers: { origin: ORIGIN },
-  });
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { origin: ORIGIN } });
   return new Promise((resolve, reject) => {
     ws.on("open", () => ws.send(JSON.stringify({ type: "hello", browser: "standin" })));
     ws.on("message", (data) => {
@@ -61,38 +60,35 @@ function standInExtension(port: number): Promise<WebSocket> {
   });
 }
 
-/** Wire up the full end-to-end harness; assigns module-level vars for afterEach teardown. */
-async function setupHarness(): Promise<Client> {
-  host = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: () => {} });
-  await host.listen(0);
-  extension = await standInExtension(host.port);
-  expect(host.paired).toBe(true);
-  server = createServer(host);
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverTransport);
-  client = new Client({ name: "e2e", version: "0.0.0" });
-  await client.connect(clientTransport);
-  return client;
+async function setupHarness(): Promise<number> {
+  bridge = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: () => {} });
+  daemon = await startDaemon({ port: 0, bridge, log: () => {} });
+  extension = await standInExtension(daemon.port);
+  expect(bridge.paired).toBe(true);
+  return daemon.port;
 }
 
-type MaybeContent = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
+async function rpc(port: number, method: string, params?: Record<string, unknown>) {
+  const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ method, params }),
+  });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { result: unknown }).result;
+}
 
 interface TestCase {
-  label: string;
-  tool: string;
-  args: Record<string, unknown>;
-  assert: (r: ToolResult) => void;
+  method: string;
+  params?: Record<string, unknown>;
+  expected: unknown;
 }
 
 const TABLE: TestCase[] = [
   {
-    label: "list_tabs",
-    tool: "list_tabs",
-    args: {},
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(JSON.parse(text)).toEqual([
+    method: "list_tabs",
+    expected: {
+      tabs: [
         {
           tabId: 1,
           title: "t",
@@ -101,113 +97,45 @@ const TABLE: TestCase[] = [
           browserId: "b1",
           browser: "standin",
         },
-      ]);
+      ],
     },
   },
+  { method: "open_tab", params: { url: "https://x" }, expected: { tabId: 7 } },
+  { method: "close_tab", params: { tabId: 1 }, expected: { ok: true } },
+  { method: "select_tab", params: { tabId: 1 }, expected: { ok: true } },
+  { method: "navigate", params: { to: "https://example.com" }, expected: { url: "https://example.com/" } },
   {
-    label: "open_tab",
-    tool: "open_tab",
-    args: { url: "https://x" },
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toBe("Opened tab 7");
-    },
+    method: "read_snapshot",
+    expected: { content: "e1: button OK", refs: [{ ref: "e1", role: "button", name: "OK" }] },
+  },
+  { method: "click", params: { ref: "e1" }, expected: { ok: true } },
+  { method: "type", params: { ref: "e1", text: "hi" }, expected: { ok: true } },
+  { method: "screenshot", expected: { data: "aGVsbG8=", mimeType: "image/png" } },
+  { method: "eval_js", params: { expression: "1" }, expected: { value: { answer: 42 } } },
+  { method: "wait_for", params: { ref: "e1" }, expected: { ok: true } },
+  {
+    method: "read_console",
+    expected: { entries: [{ level: "error", text: "boom", timestamp: 1 }] },
   },
   {
-    label: "close_tab",
-    tool: "close_tab",
-    args: { tabId: 1 },
-    assert: (r) => expect(r.isError).toBeFalsy(),
+    method: "read_network",
+    expected: { entries: [{ method: "GET", url: "https://x", status: 200, timestamp: 1 }] },
   },
-  {
-    label: "select_tab",
-    tool: "select_tab",
-    args: { tabId: 1 },
-    assert: (r) => expect(r.isError).toBeFalsy(),
-  },
-  {
-    label: "navigate",
-    tool: "navigate",
-    args: { to: "https://example.com" },
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toContain("https://example.com/");
-    },
-  },
-  {
-    label: "read_snapshot",
-    tool: "read_snapshot",
-    args: {},
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toBe("e1: button OK");
-    },
-  },
-  {
-    label: "click",
-    tool: "click",
-    args: { ref: "e1" },
-    assert: (r) => expect(r.isError).toBeFalsy(),
-  },
-  {
-    label: "type",
-    tool: "type",
-    args: { ref: "e1", text: "hi" },
-    assert: (r) => expect(r.isError).toBeFalsy(),
-  },
-  {
-    label: "screenshot",
-    tool: "screenshot",
-    args: {},
-    assert: (r) => {
-      const img = (r.content as MaybeContent)[0];
-      expect(img?.type).toBe("image");
-      expect(img?.data).toBe("aGVsbG8=");
-    },
-  },
-  {
-    label: "eval_js",
-    tool: "eval_js",
-    args: { expression: "1" },
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(JSON.parse(text)).toEqual({ answer: 42 });
-    },
-  },
-  {
-    label: "wait_for",
-    tool: "wait_for",
-    args: { ref: "e1" },
-    assert: (r) => expect(r.isError).toBeFalsy(),
-  },
-  {
-    label: "read_console",
-    tool: "read_console",
-    args: {},
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toContain("[error] boom");
-    },
-  },
-  {
-    label: "read_network",
-    tool: "read_network",
-    args: {},
-    assert: (r) => {
-      const text = (r.content as MaybeContent)[0]?.text ?? "";
-      expect(text).toContain("GET https://x -> 200");
-    },
-  },
+  { method: "press_key", params: { key: "Escape" }, expected: { ok: true } },
+  { method: "hover", params: { ref: "e1" }, expected: { ok: true } },
+  { method: "scroll", params: { to: "bottom" }, expected: { ok: true } },
+  { method: "fill", params: { ref: "e1", value: "x" }, expected: { ok: true } },
+  { method: "select_option", params: { ref: "e1", value: "IN" }, expected: { ok: true } },
+  { method: "upload", params: { ref: "e1", files: ["/tmp/a.pdf"] }, expected: { ok: true } },
+  { method: "read_text", expected: { text: "page text" } },
+  { method: "resize", params: { width: 1280, height: 800 }, expected: { ok: true } },
+  { method: "handle_dialog", params: { accept: true }, expected: { ok: true } },
+  { method: "cdp", params: { method: "Page.enable" }, expected: { result: { frameId: "F1" } } },
 ];
 
-describe("end-to-end bridge", () => {
-  it.each(TABLE)("routes $label through the WS bridge end-to-end", async ({
-    tool,
-    args,
-    assert: check,
-  }) => {
-    const c = await setupHarness();
-    const result = await c.callTool({ name: tool, arguments: args });
-    check(result);
+describe("end-to-end /rpc → WS bridge", () => {
+  it.each(TABLE)("routes $method end-to-end", async ({ method, params, expected }) => {
+    const port = await setupHarness();
+    expect(await rpc(port, method, params)).toEqual(expected);
   });
 });

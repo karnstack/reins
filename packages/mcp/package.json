@@ -40,7 +40,6 @@
     "prepack": "tsdown"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0",
     "ws": "8.21.0",
     "zod": "4.4.3"
   },

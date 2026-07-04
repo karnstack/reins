@@ -1,13 +1,11 @@
-import { randomUUID } from "node:crypto";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { BridgeHost } from "./bridge.js";
-import { createServer, listAllTabs } from "./create-server.js";
 import type { Log } from "./log.js";
+import { handleRpc, RpcBadRequest } from "./rpc.js";
 import { packageVersion } from "./version.js";
 
 export interface Daemon {
@@ -15,19 +13,44 @@ export interface Daemon {
   close(): Promise<void>;
 }
 
+const MAX_BODY_BYTES = 1024 * 1024;
+
+function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new RpcBadRequest("request body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "null"));
+      } catch {
+        reject(new RpcBadRequest("request body is not valid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
 /**
- * One HTTP server on 127.0.0.1: streamable-HTTP MCP at /mcp (session per
- * client), status GETs at /health /browsers /tabs, and the extension WS via
- * upgrade → bridge. Every route validates the Host header — a DNS-rebound
- * web page must reach none of this.
+ * One HTTP server on 127.0.0.1: POST /rpc (CLI → browser commands),
+ * GET /health, POST /shutdown, and the extension WS via upgrade → bridge.
+ * Every route validates the Host header — a DNS-rebound web page must reach
+ * none of this.
  */
 export async function startDaemon(opts: {
   port: number;
   bridge: BridgeHost;
   log: Log;
+  onShutdown?: () => void;
 }): Promise<Daemon> {
-  const sessions = new Map<string, StreamableHTTPServerTransport>();
-
   function allowedHosts(): string[] {
     const port = actualPort();
     return [`127.0.0.1:${port}`, `localhost:${port}`];
@@ -44,14 +67,6 @@ export async function startDaemon(opts: {
 
   const httpServer = createHttpServer((req, res) => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
-    if (path === "/mcp") {
-      // The SDK transport does its own Host validation (enableDnsRebindingProtection).
-      void handleMcp(req, res).catch((err) => {
-        opts.log(`reins: /mcp error: ${err instanceof Error ? err.message : String(err)}`);
-        if (!res.headersSent) res.writeHead(500).end();
-      });
-      return;
-    }
     if (!hostAllowed(req)) {
       sendJson(res, 403, { error: "forbidden" });
       return;
@@ -65,51 +80,24 @@ export async function startDaemon(opts: {
       });
       return;
     }
-    if (path === "/browsers") {
-      sendJson(res, 200, { browsers: opts.bridge.browsers });
+    if (path === "/rpc" && req.method === "POST") {
+      void readJsonBody(req)
+        .then((body) => handleRpc(opts.bridge, body))
+        .then((result) => sendJson(res, 200, { result }))
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          sendJson(res, err instanceof RpcBadRequest ? 400 : 502, { error: message });
+        });
       return;
     }
-    if (path === "/tabs") {
-      void listAllTabs(opts.bridge)
-        .then((tabs) => sendJson(res, 200, { tabs }))
-        .catch((err) =>
-          sendJson(res, 502, { error: err instanceof Error ? err.message : String(err) }),
-        );
+    if (path === "/shutdown" && req.method === "POST") {
+      opts.log("reins: shutdown requested over /shutdown");
+      sendJson(res, 200, { ok: true });
+      if (opts.onShutdown) setImmediate(opts.onShutdown);
       return;
     }
     res.writeHead(404).end();
   });
-
-  async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const sessionId = req.headers["mcp-session-id"];
-    const existing = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
-    if (existing) {
-      await existing.handleRequest(req, res);
-      return;
-    }
-    if (req.method !== "POST") {
-      sendJson(res, 400, { error: "unknown or missing mcp-session-id" });
-      return;
-    }
-    // New session: the SDK validates that the first POST is an initialize.
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      enableDnsRebindingProtection: true,
-      allowedHosts: allowedHosts(),
-      onsessioninitialized: (sid) => {
-        sessions.set(sid, transport);
-        opts.log(`reins: mcp session opened (${sid})`);
-      },
-    });
-    transport.onclose = () => {
-      if (transport.sessionId && sessions.delete(transport.sessionId)) {
-        opts.log(`reins: mcp session closed (${transport.sessionId})`);
-      }
-    };
-    const server = createServer(opts.bridge);
-    await server.connect(transport);
-    await transport.handleRequest(req, res);
-  }
 
   function actualPort(): number {
     const addr = httpServer.address();
@@ -122,13 +110,11 @@ export async function startDaemon(opts: {
     httpServer.once("error", reject);
     httpServer.listen(opts.port, "127.0.0.1", resolve);
   });
-  opts.log(`reins: daemon listening on http://127.0.0.1:${actualPort()} (mcp: /mcp)`);
+  opts.log(`reins: daemon listening on http://127.0.0.1:${actualPort()} (rpc: /rpc)`);
 
   return {
     port: actualPort(),
     close: async () => {
-      for (const t of sessions.values()) await t.close().catch(() => {});
-      sessions.clear();
       await opts.bridge.stop();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
     },
