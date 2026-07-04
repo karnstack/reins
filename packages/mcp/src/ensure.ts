@@ -84,7 +84,11 @@ export async function ensureDaemon(
  */
 export async function waitForBrowsers(
   port: number,
-  opts: { timeoutMs?: number; pollMs?: number; probe?: (port: number) => Promise<FoundDaemon | undefined> } = {},
+  opts: {
+    timeoutMs?: number;
+    pollMs?: number;
+    probe?: (port: number) => Promise<FoundDaemon | undefined>;
+  } = {},
 ): Promise<DaemonHealth> {
   const probe = opts.probe ?? probeHealth;
   const pollMs = opts.pollMs ?? 500;
@@ -93,9 +97,7 @@ export async function waitForBrowsers(
     const found = await probe(port);
     if (found && found.health.browsers.length > 0) return found.health;
     if (Date.now() >= deadline) {
-      throw new Error(
-        "no browser connected — is the reins extension installed? (`reins status`)",
-      );
+      throw new Error("no browser connected — is the reins extension installed? (`reins status`)");
     }
     await sleep(pollMs);
   }

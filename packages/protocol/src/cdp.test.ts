@@ -201,7 +201,9 @@ describe("page-control schemas", () => {
   it("cdp requires Domain.method format", () => {
     const p = CdpParams.parse({ method: "Page.captureScreenshot", params: { format: "png" } });
     expect(p.method).toBe("Page.captureScreenshot");
-    expect(() => CdpParams.parse({ method: "captureScreenshot" })).toThrow("expected Domain.method");
+    expect(() => CdpParams.parse({ method: "captureScreenshot" })).toThrow(
+      "expected Domain.method",
+    );
     expect(() => CdpParams.parse({ method: "Page.capture.Screenshot" })).toThrow();
   });
 });

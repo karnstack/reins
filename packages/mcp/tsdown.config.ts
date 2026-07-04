@@ -1,9 +1,9 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/serve.ts", "src/cli.ts", "src/create-server.ts", "src/bridge.ts", "src/config.ts"],
+  entry: ["src/cli.ts"],
   format: ["esm"],
-  dts: true,
+  dts: false,
   clean: true,
   // Emit .js/.d.ts (not .mjs/.d.mts) so the bin paths (dist/server.js,
   // dist/cli.js) resolve. Safe because the package is "type":"module".

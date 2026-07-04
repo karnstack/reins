@@ -71,7 +71,9 @@ describe("hover", () => {
 
   it("errors when the element is missing", async () => {
     stubChrome((method) => (method === "Runtime.evaluate" ? evalOk(null) : {}));
-    await expect(hover({ selector: "#gone", tabId: 1 })).rejects.toThrow("element not found: #gone");
+    await expect(hover({ selector: "#gone", tabId: 1 })).rejects.toThrow(
+      "element not found: #gone",
+    );
   });
 });
 

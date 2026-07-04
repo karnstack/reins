@@ -65,14 +65,12 @@ describe("lowerPortRival", () => {
   const ports = [8765, 8766, 8767, 8768];
 
   it("finds a live daemon on a lower port", async () => {
-    const probe = async (port: number) =>
-      port === 8765 ? { port, health: health() } : undefined;
+    const probe = async (port: number) => (port === 8765 ? { port, health: health() } : undefined);
     expect(await lowerPortRival(ports, 8767, probe)).toBe(8765);
   });
 
   it("ignores daemons on higher ports (they bow out, not us)", async () => {
-    const probe = async (port: number) =>
-      port === 8768 ? { port, health: health() } : undefined;
+    const probe = async (port: number) => (port === 8768 ? { port, health: health() } : undefined);
     expect(await lowerPortRival(ports, 8766, probe)).toBeUndefined();
   });
 

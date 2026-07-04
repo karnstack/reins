@@ -103,7 +103,11 @@ const TABLE: TestCase[] = [
   { method: "open_tab", params: { url: "https://x" }, expected: { tabId: 7 } },
   { method: "close_tab", params: { tabId: 1 }, expected: { ok: true } },
   { method: "select_tab", params: { tabId: 1 }, expected: { ok: true } },
-  { method: "navigate", params: { to: "https://example.com" }, expected: { url: "https://example.com/" } },
+  {
+    method: "navigate",
+    params: { to: "https://example.com" },
+    expected: { url: "https://example.com/" },
+  },
   {
     method: "read_snapshot",
     expected: { content: "e1: button OK", refs: [{ ref: "e1", role: "button", name: "OK" }] },

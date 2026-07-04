@@ -24,7 +24,9 @@ async function evaluate<T>(tabId: number, expression: string): Promise<T> {
   });
   if (res.exceptionDetails) {
     throw new Error(
-      res.exceptionDetails.exception?.description ?? res.exceptionDetails.text ?? "evaluation failed",
+      res.exceptionDetails.exception?.description ??
+        res.exceptionDetails.text ??
+        "evaluation failed",
     );
   }
   return res.result.value;

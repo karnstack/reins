@@ -4,16 +4,13 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   browsersText,
-  claudeInstallArgs,
-  codexSnippet,
   doctorReport,
   healthSummary,
   helpText,
-  installText,
   logsInfo,
-  mcpJsonSnippet,
   tabsText,
 } from "./cli-commands.js";
+import { TOOL_COMMANDS } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
 
 function cfg() {
@@ -27,54 +24,19 @@ const HEALTH = {
   browsers: [{ id: "b1", browser: "Chrome", connectedAt: 0 }],
 };
 
-describe("install snippets", () => {
-  it("claudeInstallArgs registers the HTTP endpoint at user scope", () => {
-    expect(claudeInstallArgs(8765).join(" ")).toBe(
-      "mcp add --transport http reins http://127.0.0.1:8765/mcp --scope user",
-    );
-  });
-
-  it("codexSnippet points at the /mcp URL and mentions the stdio fallback", () => {
-    expect(codexSnippet(8765)).toContain("http://127.0.0.1:8765/mcp");
-    expect(codexSnippet(8765)).toContain('"serve", "--stdio"');
-  });
-
-  it("mcpJsonSnippet parses and targets /mcp", () => {
-    const parsed = JSON.parse(mcpJsonSnippet(8766)) as {
-      mcpServers: { reins: { type: string; url: string } };
-    };
-    expect(parsed.mcpServers.reins.type).toBe("http");
-    expect(parsed.mcpServers.reins.url).toBe("http://127.0.0.1:8766/mcp");
-  });
-
-  it("installText mentions every client path", () => {
-    const text = installText(8765);
-    expect(text).toContain("claude");
-    expect(text).toContain("config.toml");
-    expect(text).toContain("mcpServers");
-  });
-});
-
 describe("helpText", () => {
-  it("lists the commands and version", () => {
-    const text = helpText("1.2.3");
+  it("lists every tool command, the management commands, and the version", () => {
+    const text = helpText("1.2.3", TOOL_COMMANDS);
     expect(text).toContain("1.2.3");
-    for (const cmd of [
-      "up",
-      "down",
-      "restart",
-      "serve",
-      "install",
-      "allow",
-      "browsers",
-      "tabs",
-      "status",
-      "doctor",
-      "logs",
-    ]) {
+    for (const name of Object.keys(TOOL_COMMANDS)) {
+      expect(text, name).toContain(name);
+    }
+    for (const cmd of ["browsers", "status", "allow", "kill", "doctor", "logs", "daemon"]) {
       expect(text).toContain(cmd);
     }
-    expect(text).not.toContain("pair");
+    for (const gone of ["reins up", "install claude", "--stdio", "restart"]) {
+      expect(text, gone).not.toContain(gone);
+    }
   });
 });
 
@@ -86,10 +48,10 @@ describe("healthSummary", () => {
     expect(s).toContain("Chrome");
   });
 
-  it("reports a stopped daemon with the fix", () => {
+  it("reports a stopped daemon and that it starts on demand", () => {
     const s = healthSummary(undefined, 8765);
     expect(s).toContain("not running");
-    expect(s).toContain("reins up");
+    expect(s).toContain("on demand");
   });
 });
 

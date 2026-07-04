@@ -94,13 +94,18 @@ function fakeExtension(port: number, browser = "Chrome"): Promise<WebSocket> {
   });
 }
 
-async function rpc(port: number, body: unknown): Promise<{ status: number; json: any }> {
+interface RpcReply {
+  status: number;
+  json: { result?: { tabs?: Array<{ browser: string }>; value?: unknown }; error?: string };
+}
+
+async function rpc(port: number, body: unknown): Promise<RpcReply> {
   const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  return { status: res.status, json: await res.json() };
+  return { status: res.status, json: (await res.json()) as RpcReply["json"] };
 }
 
 describe("daemon", () => {
@@ -127,11 +132,8 @@ describe("daemon", () => {
     const b = await fakeExtension(d.port, "Brave");
     const { status, json } = await rpc(d.port, { method: "list_tabs" });
     expect(status).toBe(200);
-    expect(json.result.tabs).toHaveLength(2);
-    expect(json.result.tabs.map((t: { browser: string }) => t.browser).sort()).toEqual([
-      "Brave",
-      "Chrome",
-    ]);
+    expect(json.result?.tabs).toHaveLength(2);
+    expect(json.result?.tabs?.map((t) => t.browser).sort()).toEqual(["Brave", "Chrome"]);
     a.close();
     b.close();
   });
@@ -145,7 +147,7 @@ describe("daemon", () => {
       params: { browserId: "b2", expression: "1" },
     });
     // browserId is routing-only: split off before the payload reaches the browser.
-    expect(json.result.value).toEqual({ echoed: { expression: "1" }, browser: "Brave" });
+    expect(json.result?.value).toEqual({ echoed: { expression: "1" }, browser: "Brave" });
     a.close();
     b.close();
   });

@@ -160,9 +160,13 @@ export const ScrollParams = z
     by: z.object({ dx: z.number(), dy: z.number() }).optional(),
     to: z.enum(["top", "bottom"]).optional(),
   })
-  .refine((v) => v.ref !== undefined || v.selector !== undefined || v.by !== undefined || v.to !== undefined, {
-    message: "scroll requires a ref, a selector, by, or to",
-  });
+  .refine(
+    (v) =>
+      v.ref !== undefined || v.selector !== undefined || v.by !== undefined || v.to !== undefined,
+    {
+      message: "scroll requires a ref, a selector, by, or to",
+    },
+  );
 export type ScrollParams = z.infer<typeof ScrollParams>;
 
 export const FillParams = z
