@@ -129,6 +129,125 @@ export const WaitForParams = z
   });
 export type WaitForParams = z.infer<typeof WaitForParams>;
 
+// ─── Page-control schemas ────────────────────────────────────────────────────
+
+export const PressKeyParams = z.object({
+  browserId,
+  tabId,
+  /** "[Meta+|Ctrl+|Alt+|Shift+]<Key>", e.g. "Escape", "Meta+A", "Shift+Tab". */
+  key: z.string().min(1),
+});
+export type PressKeyParams = z.infer<typeof PressKeyParams>;
+
+export const HoverParams = z
+  .object({
+    browserId,
+    tabId,
+    ref: z.string().optional(),
+    selector: z.string().optional(),
+  })
+  .refine((v) => v.ref !== undefined || v.selector !== undefined, {
+    message: "hover requires a ref or a selector",
+  });
+export type HoverParams = z.infer<typeof HoverParams>;
+
+export const ScrollParams = z
+  .object({
+    browserId,
+    tabId,
+    ref: z.string().optional(),
+    selector: z.string().optional(),
+    by: z.object({ dx: z.number(), dy: z.number() }).optional(),
+    to: z.enum(["top", "bottom"]).optional(),
+  })
+  .refine((v) => v.ref !== undefined || v.selector !== undefined || v.by !== undefined || v.to !== undefined, {
+    message: "scroll requires a ref, a selector, by, or to",
+  });
+export type ScrollParams = z.infer<typeof ScrollParams>;
+
+export const FillParams = z
+  .object({
+    browserId,
+    tabId,
+    ref: z.string().optional(),
+    selector: z.string().optional(),
+    value: z.string(),
+  })
+  .refine((v) => v.ref !== undefined || v.selector !== undefined, {
+    message: "fill requires a ref or a selector",
+  });
+export type FillParams = z.infer<typeof FillParams>;
+
+export const SelectOptionParams = z
+  .object({
+    browserId,
+    tabId,
+    ref: z.string().optional(),
+    selector: z.string().optional(),
+    value: z.string(),
+  })
+  .refine((v) => v.ref !== undefined || v.selector !== undefined, {
+    message: "select requires a ref or a selector",
+  });
+export type SelectOptionParams = z.infer<typeof SelectOptionParams>;
+
+export const UploadParams = z
+  .object({
+    browserId,
+    tabId,
+    ref: z.string().optional(),
+    selector: z.string().optional(),
+    /** Absolute paths on this machine (browser and daemon share it). */
+    files: z.array(z.string().min(1)).min(1),
+  })
+  .refine((v) => v.ref !== undefined || v.selector !== undefined, {
+    message: "upload requires a ref or a selector",
+  });
+export type UploadParams = z.infer<typeof UploadParams>;
+
+/** No ref/selector → whole page (document.body.innerText). */
+export const ReadTextParams = z.object({
+  browserId,
+  tabId,
+  ref: z.string().optional(),
+  selector: z.string().optional(),
+  maxChars: z.number().int().positive().optional(),
+});
+export type ReadTextParams = z.infer<typeof ReadTextParams>;
+
+export const ReadTextResult = z.object({ text: z.string() });
+export type ReadTextResult = z.infer<typeof ReadTextResult>;
+
+/** Resizes the tab's browser window (real resize, not CDP emulation). */
+export const ResizeParams = z.object({
+  browserId,
+  tabId,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+export type ResizeParams = z.infer<typeof ResizeParams>;
+
+/** Responds to the JavaScript dialog currently open on the tab. */
+export const DialogParams = z.object({
+  browserId,
+  tabId,
+  accept: z.boolean(),
+  promptText: z.string().optional(),
+});
+export type DialogParams = z.infer<typeof DialogParams>;
+
+/** Raw Chrome DevTools Protocol passthrough — the escape hatch. */
+export const CdpParams = z.object({
+  browserId,
+  tabId,
+  method: z.string().regex(/^[A-Za-z]+\.[A-Za-z]+$/, "expected Domain.method"),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
+export type CdpParams = z.infer<typeof CdpParams>;
+
+export const CdpResult = z.object({ result: z.unknown() });
+export type CdpResult = z.infer<typeof CdpResult>;
+
 // ─── M3 event-buffer schemas ─────────────────────────────────────────────────
 
 export const ConsoleEntry = z.object({

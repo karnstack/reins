@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  CdpParams,
   ClickParams,
   CloseTabParams,
   ConsoleEntry,
   ConsoleParams,
   ConsoleResult,
+  DialogParams,
   EvalParams,
   EvalResult,
+  FillParams,
+  HoverParams,
   NavigateParams,
   NetworkEntry,
   NetworkParams,
@@ -14,12 +18,18 @@ import {
   OkResult,
   OpenTabParams,
   OpenTabResult,
+  PressKeyParams,
+  ReadTextParams,
+  ResizeParams,
   ScreenshotParams,
   ScreenshotResult,
+  ScrollParams,
+  SelectOptionParams,
   SelectTabParams,
   SnapshotParams,
   SnapshotResult,
   TypeParams,
+  UploadParams,
   WaitForParams,
 } from "./cdp.js";
 
@@ -122,6 +132,77 @@ describe("cdp schemas", () => {
   it("WaitForParams accepts ref without selector", () => {
     const p = WaitForParams.parse({ ref: "e1" });
     expect(p.ref).toBe("e1");
+  });
+});
+
+describe("page-control schemas", () => {
+  it("press_key requires a non-empty key spec", () => {
+    expect(PressKeyParams.parse({ key: "Escape" }).key).toBe("Escape");
+    expect(PressKeyParams.parse({ key: "Meta+A", tabId: 3 }).tabId).toBe(3);
+    expect(() => PressKeyParams.parse({ key: "" })).toThrow();
+    expect(() => PressKeyParams.parse({})).toThrow();
+  });
+
+  it("hover requires a ref or a selector", () => {
+    expect(HoverParams.parse({ ref: "e1" }).ref).toBe("e1");
+    expect(HoverParams.parse({ selector: "#x" }).selector).toBe("#x");
+    expect(() => HoverParams.parse({})).toThrow("hover requires a ref or a selector");
+  });
+
+  it("scroll requires some target or motion", () => {
+    expect(ScrollParams.parse({ ref: "e2" }).ref).toBe("e2");
+    expect(ScrollParams.parse({ by: { dx: 0, dy: 600 } }).by).toEqual({ dx: 0, dy: 600 });
+    expect(ScrollParams.parse({ to: "bottom" }).to).toBe("bottom");
+    expect(() => ScrollParams.parse({})).toThrow("scroll requires a ref, a selector, by, or to");
+    expect(() => ScrollParams.parse({ to: "middle" })).toThrow();
+  });
+
+  it("fill requires a target and a value", () => {
+    expect(FillParams.parse({ ref: "e1", value: "x" }).value).toBe("x");
+    expect(() => FillParams.parse({ value: "x" })).toThrow("fill requires a ref or a selector");
+    expect(() => FillParams.parse({ ref: "e1" })).toThrow();
+  });
+
+  it("select requires a target and a value", () => {
+    expect(SelectOptionParams.parse({ selector: "select", value: "IN" }).value).toBe("IN");
+    expect(() => SelectOptionParams.parse({ value: "IN" })).toThrow(
+      "select requires a ref or a selector",
+    );
+  });
+
+  it("upload requires a target and at least one file", () => {
+    const p = UploadParams.parse({ ref: "e1", files: ["/tmp/a.pdf"] });
+    expect(p.files).toEqual(["/tmp/a.pdf"]);
+    expect(() => UploadParams.parse({ ref: "e1", files: [] })).toThrow();
+    expect(() => UploadParams.parse({ files: ["/tmp/a"] })).toThrow(
+      "upload requires a ref or a selector",
+    );
+  });
+
+  it("read_text works without a target (whole page)", () => {
+    expect(ReadTextParams.parse({}).ref).toBeUndefined();
+    expect(ReadTextParams.parse({ selector: "main", maxChars: 500 }).maxChars).toBe(500);
+    expect(() => ReadTextParams.parse({ maxChars: 0 })).toThrow();
+  });
+
+  it("resize requires positive integer dimensions", () => {
+    const p = ResizeParams.parse({ width: 1280, height: 800 });
+    expect(p.width).toBe(1280);
+    expect(() => ResizeParams.parse({ width: 1280 })).toThrow();
+    expect(() => ResizeParams.parse({ width: 0, height: 800 })).toThrow();
+  });
+
+  it("dialog requires accept and takes optional promptText", () => {
+    expect(DialogParams.parse({ accept: true }).accept).toBe(true);
+    expect(DialogParams.parse({ accept: false, promptText: "hi" }).promptText).toBe("hi");
+    expect(() => DialogParams.parse({})).toThrow();
+  });
+
+  it("cdp requires Domain.method format", () => {
+    const p = CdpParams.parse({ method: "Page.captureScreenshot", params: { format: "png" } });
+    expect(p.method).toBe("Page.captureScreenshot");
+    expect(() => CdpParams.parse({ method: "captureScreenshot" })).toThrow("expected Domain.method");
+    expect(() => CdpParams.parse({ method: "Page.capture.Screenshot" })).toThrow();
   });
 });
 
