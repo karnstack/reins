@@ -2,7 +2,7 @@
 
 _Last updated: 2026-07-04_
 
-reins is a browser extension that lets a **local** MCP daemon on your own
+reins is a browser extension that lets a **local** daemon on your own
 machine (installed by you, via the `@karnstack/reins` CLI) drive your
 browser. It is a developer tool; you install both halves yourself.
 
@@ -23,7 +23,7 @@ browser. It is a developer tool; you install both halves yourself.
   analytics, telemetry, tracking, or advertising of any kind.
 - No data is sold or shared with third parties.
 - Nothing is collected in the background: the extension only acts on explicit
-  commands from the MCP clients you connected to your local daemon.
+  commands sent through the reins CLI on your own machine.
 - The extension loads no remote code.
 
 ## Security

@@ -1,45 +1,45 @@
 # @karnstack/reins
 
-**Drive your real, logged-in browsers from your coding agent.**
+**Drive your real, logged-in browsers from any coding agent.**
 
-`reins` is a local MCP daemon + CLI: MCP clients (Claude Code, Codex,
-Cursor, …) connect to it over streamable HTTP on localhost, and it drives
-every Chromium browser on your machine that runs the
-[reins extension](https://github.com/karnstack/reins) — tabs, clicks, typing,
-screenshots, JS eval, console and network monitoring. No debug profile, no
-launch flags, no pairing tokens.
+`reins` is a CLI that controls every Chromium browser on your machine that
+runs the [reins extension](https://github.com/karnstack/reins) — tabs,
+clicks, typing, screenshots, JS eval, raw CDP, console and network
+monitoring. Real sessions, real logins: no debug profile, no launch flags,
+no MCP registration, no tokens. A small local daemon (auto-spawned by the
+CLI, bound to 127.0.0.1) does the plumbing.
 
 ## Setup (once)
 
 ```bash
 npm i -g @karnstack/reins
-reins up                 # daemon + autostart on login (macOS/Linux)
-reins install claude     # register with Claude Code
+npx skills add karnstack/reins   # teach your agent(s) the CLI
 # install the reins extension in your browser(s) → they connect on their own
 ```
 
-Check it: `reins status` (daemon + connected browsers), `reins tabs`
-(everything the daemon can reach).
+That's it — the daemon starts on demand with the first command.
 
 ## Commands
 
 ```
-up                      install + start the daemon (autostarts on login)
-down                    stop the daemon and remove it from autostart
-restart                 restart the daemon (e.g. after an upgrade)
-serve [--stdio]         run the server in the foreground (stdio for HTTP-less clients)
-install [claude|codex]  register the MCP endpoint with an agent
-allow <extension-id>    allow an unpacked/dev extension to connect
-browsers                list browsers connected to the daemon
-tabs [browserId]        list tabs the daemon can reach
-status / doctor / logs  health, diagnostics, ~/.reins/logs
+Tabs & pages   tabs · open <url> · close · focus · nav <url|back|forward|reload>
+Interaction    snapshot · click · type · fill · select · press · hover ·
+               scroll · upload · wait · dialog · resize
+Reading        text · screenshot · console · network
+Advanced       eval '<js>' · cdp <Domain.method> ['{json}'] · daemon
+Management     browsers · status · allow <id> · kill · doctor · logs · help
 ```
 
-## Multiple clients, multiple browsers
+The loop: `reins snapshot` lists interactive elements with refs
+(`e5: button "Submit"`) → `reins click --ref e5` → verify with `reins text`
+or `reins screenshot` (prints an image path). `reins help <command>` shows
+usage; `--json` gives raw results.
 
-One daemon serves any number of MCP clients and browsers at once. Tabs from
-`list_tabs` are tagged with a `browserId`; the agent passes it to target a
-specific browser when more than one is connected.
+## Multiple browsers
+
+One daemon serves every browser at once. Tabs from `reins tabs` are tagged
+with a browser id (`b1`, `b2`, …); pass `--browser <id>` when more than one
+is connected — reins errors with the roster instead of guessing.
 
 ## Security
 

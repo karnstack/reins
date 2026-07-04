@@ -1,19 +1,21 @@
 # Publishing reins
 
-Two artifacts ship from this repo:
+Three artifacts ship from this repo:
 
-1. **`@karnstack/reins`** — npm package (daemon + `reins` CLI)
+1. **`@karnstack/reins`** — npm package (CLI + daemon)
 2. **reins extension** — Chrome Web Store item
+3. **reins skill** — nothing to publish: `npx skills add karnstack/reins`
+   reads `skills/reins/SKILL.md` straight from the repo once it's public
 
-Versions live in `packages/mcp/package.json` and
+Versions live in `packages/cli/package.json` and
 `packages/extension/package.json` (the extension manifest reads its version
 from there). Keep them in lockstep.
 
-## Release flow (both artifacts)
+## Release flow (npm + extension)
 
 ```bash
 # 1. bump versions
-#    packages/mcp/package.json       "version": "0.3.0"
+#    packages/cli/package.json       "version": "0.3.0"
 #    packages/extension/package.json "version": "0.3.0"
 
 # 2. sanity check locally
@@ -37,12 +39,12 @@ The zip can also be produced locally with `pnpm zip` →
 ## npm notes
 
 - `@reins/protocol` is private; it is **bundled** into the package at build
-  time (`noExternal` in `packages/mcp/tsdown.config.ts`), so the published
+  time (`noExternal` in `packages/cli/tsdown.config.ts`), so the published
   package has no workspace dependencies.
 - Smoke-test the tarball before first-time publish:
 
   ```bash
-  cd packages/mcp && npm pack
+  cd packages/cli && npm pack
   npx -y ./karnstack-reins-*.tgz status
   ```
 
@@ -56,16 +58,16 @@ Per release: upload the zip from `pnpm zip`, then fill/refresh the listing.
 ### ⚠ After the FIRST store publish
 
 The store assigns the extension a permanent ID. Put it into
-`PUBLISHED_EXTENSION_IDS` in `packages/mcp/src/allowlist.ts` and ship a patch
+`PUBLISHED_EXTENSION_IDS` in `packages/cli/src/allowlist.ts` and ship a patch
 release of `@karnstack/reins` — until then, store-installed extensions can
 only connect after a manual `reins allow <id>`.
 
 ### Listing content
 
-- **Single purpose**: "Lets a local MCP daemon (installed by the user, e.g.
-  for Claude Code) drive the user's own browser: list/open tabs, navigate,
-  click, type, screenshot, and read console/network activity — all local,
-  user-initiated, and confined to 127.0.0.1."
+- **Single purpose**: "Lets a local daemon (installed by the user via the
+  reins CLI, e.g. for coding agents) drive the user's own browser: list/open
+  tabs, navigate, click, type, screenshot, and read console/network activity
+  — all local, user-initiated, and confined to 127.0.0.1."
 - **Category**: Developer Tools.
 - **Screenshots**: at least one 1280×800 (popover connected state + an agent
   driving a page is enough).
@@ -77,9 +79,9 @@ only connect after a manual `reins allow <id>`.
 | Permission | Justification |
 |---|---|
 | `debugger` | Core function: executes the user's agent commands (click, type, screenshot, read console/network) on tabs via the Chrome DevTools Protocol. Chrome shows its native debugging banner while attached. |
-| `tabs` | The `list_tabs` / `open_tab` / `select_tab` tools need tab IDs, titles, and URLs. |
+| `tabs` | The tabs/open/close/focus commands need tab IDs, titles, and URLs; resize needs the tab's window. |
 | `storage` | Stores the auto-connect setting, cached daemon port, and connection status on-device. |
-| `offscreen` | Hosts the persistent WebSocket to the user's local MCP daemon; MV3 service workers cannot hold long-lived sockets. |
+| `offscreen` | Hosts the persistent WebSocket to the user's local daemon; MV3 service workers cannot hold long-lived sockets. |
 
 ### Data-use disclosures (Privacy tab)
 
@@ -93,3 +95,9 @@ The `debugger` permission triggers manual review and an install-time warning;
 that is inherent to what reins does. The listing text above (local-only,
 user-installed daemon, kill switch, native debugging banner) is what
 reviewers look for. Expect a slower first review.
+
+## skills.sh
+
+No registration step: the leaderboard indexes repos as people install from
+them. Keep `skills/reins/SKILL.md` in sync with the CLI surface — it's the
+agent-facing manual.
