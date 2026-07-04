@@ -18,7 +18,8 @@
     "reins": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/cli/dist/cli.js",
     "zip": "turbo run zip",
     "changeset": "changeset",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "release": "changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",

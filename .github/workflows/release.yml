@@ -1,21 +1,28 @@
 name: release
 
-# Publish flow (see docs/RELEASING.md):
-#   1. `pnpm changeset` per change; `pnpm version-packages` to bump.
-#   2. Tag: git tag v<version> && git push --tags
-#   3. This workflow publishes @karnstack/reins to npm and attaches the extension
-#      zip to the GitHub release. Requires the NPM_TOKEN repo secret.
+# Fully automated, changeset-driven — no manual tags (see docs/RELEASING.md).
+#
+# Push changesets to main → this opens a "Version Packages" PR. Merge that PR →
+# this publishes @karnstack/reins to npm, tags + GitHub-releases it, and (once
+# the Chrome Web Store secrets exist) uploads the extension zip to the store.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-  contents: write
+  contents: write # create tags + GitHub releases
+  pull-requests: write # open the Version Packages PR
   id-token: write # npm provenance
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      # Web Store steps run only once these secrets are set (after the first
+      # manual store upload, which is what assigns the extension its ID).
+      HAS_CWS: ${{ secrets.CWS_REFRESH_TOKEN != '' && secrets.CWS_EXTENSION_ID != '' }}
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: jdx/mise-action@v4.2.0
@@ -24,18 +31,32 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      - run: pnpm zip
 
-      - name: Publish @karnstack/reins to npm
-        run: |
-          pnpm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
-          pnpm publish --filter @karnstack/reins --access public --no-git-checks
+      - name: Version or publish (changesets)
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
 
-      - name: Create GitHub release with extension zip
-        uses: softprops/action-gh-release@v2
+      - name: Package the extension
+        if: steps.changesets.outputs.published == 'true'
+        id: zip
+        run: |
+          pnpm zip
+          echo "path=$(ls packages/extension/release/*.zip)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload extension to the Chrome Web Store
+        if: steps.changesets.outputs.published == 'true' && env.HAS_CWS == 'true'
+        uses: mnao305/chrome-extension-upload@v5.0.0
         with:
-          files: packages/extension/release/*.zip
-          generate_release_notes: true
+          file-path: ${{ steps.zip.outputs.path }}
+          extension-id: ${{ secrets.CWS_EXTENSION_ID }}
+          client-id: ${{ secrets.CWS_CLIENT_ID }}
+          client-secret: ${{ secrets.CWS_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CWS_REFRESH_TOKEN }}
+          publish: true

@@ -1,75 +1,79 @@
 # Releasing reins
 
-Two artifacts ship together and share one version (kept in lockstep by
-changesets):
+Releases are **fully automated by changesets** — no manual `git tag`, no manual
+`npm publish`. You describe changes; merging a bot-generated PR ships them.
+
+Two artifacts share one version (kept in lockstep):
 
 1. **`@karnstack/reins`** — the npm package (CLI + daemon)
 2. **reins extension** — the Chrome Web Store item (version drives the manifest
    and the `pnpm zip` filename)
 
-`@reins/protocol` is private and bundled into the npm package; it is ignored by
-changesets and never published on its own.
+`@reins/protocol` is private and bundled into the npm package; changesets
+ignores it and it is never published on its own.
 
-## Versioning with changesets
+## The loop
 
-Every change that should appear in a release gets a changeset:
+1. **Describe each change** with a changeset and commit it alongside the code:
 
-```bash
-pnpm changeset
-```
+   ```bash
+   pnpm changeset
+   ```
 
-Pick the bump (`patch` / `minor` / `major`) and write a one-line summary.
-`@karnstack/reins` and `@reins/extension` are a **fixed** group — selecting one
-bumps both to the same version. Commit the generated `.changeset/*.md` file
-alongside your change.
+   Pick the bump (`patch` / `minor` / `major`) and a one-line summary.
+   `@karnstack/reins` and `@reins/extension` are a **fixed** group — one
+   changeset bumps both to the same version.
 
-## Cutting a release
+2. **Push to `main`.** The `release` workflow opens (or updates) a
+   **"Version Packages"** PR that applies the pending changesets: bumps
+   `package.json` versions and writes `CHANGELOG.md`.
 
-```bash
-# 1. consume changesets → bump package.json versions + write CHANGELOGs
-pnpm version-packages
-#    (both packages move to the same new version)
+3. **Merge the Version Packages PR.** That merge triggers the workflow's
+   publish path:
+   - publishes `@karnstack/reins` to npm (with provenance),
+   - creates the git tag + GitHub release automatically,
+   - if the Chrome Web Store secrets are set, builds the zip and uploads it to
+     the store.
 
-# 2. sanity check
-pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm zip
+That's it — no tagging by hand.
 
-# 3. commit the version bump, tag, push
-git commit -am "release: v<version>"
-git tag v<version>          # must match the new package version
-git push origin main --tags
-```
+## Required secrets (repo → Settings → Secrets → Actions)
 
-The `release` workflow (triggered by the `v*` tag) then:
+| Secret | For | Needed by |
+|---|---|---|
+| `NPM_TOKEN` | npm automation token, publish rights for `@karnstack` | first release |
+| `CWS_EXTENSION_ID` | the store-assigned extension ID | store auto-upload |
+| `CWS_CLIENT_ID` / `CWS_CLIENT_SECRET` / `CWS_REFRESH_TOKEN` | Chrome Web Store API OAuth | store auto-upload |
 
-- runs lint / typecheck / test / build / zip,
-- publishes `@karnstack/reins` to npm (needs the **`NPM_TOKEN`** repo secret —
-  an npm automation token with publish rights for the `@karnstack` scope, with
-  npm provenance enabled),
-- creates a GitHub release with `reins-extension-v<version>.zip` attached.
-
-Then upload that same zip to the Chrome Web Store — see
-[CHROME_WEB_STORE.md](CHROME_WEB_STORE.md).
+Until the four `CWS_*` secrets exist, the store step is skipped and everything
+else still runs. See [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) for how to get
+the OAuth credentials — and note the **first** store upload is manual (that is
+what assigns `CWS_EXTENSION_ID`).
 
 ## First release (0.1.0)
 
-The packages are seeded at **0.1.0**. For the very first release there is
-nothing to `version` — just tag it:
+The packages are seeded at **0.1.0** with no changesets. On the first push to
+`main` with this workflow in place, there is nothing to version, so the publish
+path runs immediately and `changeset publish` pushes `0.1.0` to npm (it only
+publishes versions not already on the registry). Steps for the first ship:
 
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm zip
-git tag v0.1.0
-git push origin main --tags
-```
-
-Before the first tag, make sure the **`NPM_TOKEN`** secret exists and the repo
-is public (the extension's privacy-policy URL points at `docs/PRIVACY.md` on
-GitHub).
+1. Make the repo public and add `NPM_TOKEN`.
+2. Land this workflow on `main` → `@karnstack/reins@0.1.0` publishes; the tag +
+   GitHub release appear automatically.
+3. Manually upload `packages/extension/release/reins-extension-v0.1.0.zip` to
+   the Chrome Web Store (see [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md)); the
+   store assigns the extension ID.
+4. Put that ID in `PUBLISHED_EXTENSION_IDS` (`packages/cli/src/allowlist.ts`),
+   add the four `CWS_*` secrets, and `pnpm changeset` a patch — from then on,
+   every release ships to npm **and** the store automatically.
 
 ## npm notes
 
 - `@reins/protocol` is bundled (`noExternal` in `packages/cli/tsdown.config.ts`),
   so the published package has no workspace dependencies.
-- Smoke-test the tarball before the first publish:
+- npm auth in CI comes from `.npmrc` (`_authToken=${NPM_TOKEN}`), substituted
+  from the secret at publish time.
+- Smoke-test the tarball once before the first publish:
 
   ```bash
   cd packages/cli && npm pack

@@ -62,13 +62,27 @@ The store assigns the extension a **permanent ID**. Put it into
 release of `@karnstack/reins`. Until then, store-installed extensions connect
 only after a manual `reins allow <id>`.
 
-## Updating (later releases)
+## Automating later releases (Chrome Web Store API)
 
-1. Bump the version (see [RELEASING.md](RELEASING.md) — changesets keeps the
-   CLI and extension versions in lockstep).
-2. `pnpm zip` to rebuild the artifact.
-3. Dashboard → the reins item → **Package** → upload the new zip → **Submit
-   for review**.
+After the first manual publish, releases upload to the store automatically
+from CI (see [RELEASING.md](RELEASING.md)). One-time OAuth setup:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → new project →
+   **enable the "Chrome Web Store API"**.
+2. **OAuth consent screen** → External → add your Google account as a test user.
+3. **Credentials** → Create **OAuth client ID** → type **Desktop app** → note
+   the **client ID** and **client secret**.
+4. Get a **refresh token** for that client (the
+   [`chrome-webstore-upload` "how to generate credentials" guide](https://github.com/fregante/chrome-webstore-upload/blob/main/How%20to%20generate%20Google%20API%20keys.md)
+   walks through the one-time OAuth exchange).
+5. Add these repo secrets (Settings → Secrets → Actions):
+   - `CWS_EXTENSION_ID` — the ID the store assigned this item
+   - `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`
+
+From then on, merging a "Version Packages" PR ships to npm **and** uploads +
+submits the new zip to the store. To publish a store update by hand instead:
+`pnpm zip`, then Dashboard → the reins item → **Package** → upload → **Submit
+for review**.
 
 ## Review expectations
 
