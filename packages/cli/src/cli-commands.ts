@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserInfo, Tab } from "@reins/protocol";
 import type { ToolCommand } from "./commands.js";
@@ -139,13 +139,16 @@ export interface LogsInfo {
   tail: string[];
 }
 
-/** Locate the newest log file and its last `lines` lines. */
+/** Locate the newest log file (by mtime — filenames span naming eras) and
+ *  its last `lines` lines. */
 export function logsInfo(dir: string, lines = 20): LogsInfo {
   let files: string[];
   try {
     files = readdirSync(dir)
       .filter((f) => f.endsWith(".log"))
-      .sort();
+      .map((f) => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
+      .sort((a, b) => a.mtime - b.mtime)
+      .map(({ f }) => f);
   } catch {
     return { dir, tail: [] };
   }

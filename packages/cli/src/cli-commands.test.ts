@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -100,8 +100,11 @@ describe("logsInfo", () => {
   it("tails the newest log file", () => {
     const dir = mkdtempSync(join(tmpdir(), "reins-logs-"));
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "daemon-2026-01-01.log"), "old\n");
     writeFileSync(join(dir, "daemon-2026-01-02.log"), "one\ntwo\nthree\n");
+    // A leftover file from the old naming era sorts later alphabetically but
+    // is older by mtime — mtime must win.
+    writeFileSync(join(dir, "mcp-2026-01-01.log"), "old\n");
+    utimesSync(join(dir, "mcp-2026-01-01.log"), new Date(0), new Date(0));
     const info = logsInfo(dir, 2);
     expect(info.latest).toContain("daemon-2026-01-02.log");
     expect(info.tail).toEqual(["two", "three"]);
