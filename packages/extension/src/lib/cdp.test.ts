@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
-import { __resetDebugSessions, initDebugSessionListeners, withDebugger } from "./cdp.js";
+import { __resetDebugSessions, cdpClick, initDebugSessionListeners, withDebugger } from "./cdp.js";
 
 let onDetach: ((source: { tabId?: number }) => void) | undefined;
 
@@ -81,5 +81,47 @@ describe("withDebugger session", () => {
     onDetach?.({ tabId: 7 }); // tab closed / DevTools opened
     await withDebugger(7, async () => "b");
     expect(attach).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("cdpClick", () => {
+  /** chrome stub that resolves the element center and records mouse events. */
+  function stubClickChrome(center: { x: number; y: number } | null = { x: 10, y: 20 }) {
+    const events: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("chrome", {
+      debugger: {
+        attach: vi.fn(async () => {}),
+        detach: vi.fn(async () => {}),
+        onDetach: { addListener: () => {} },
+        sendCommand: vi.fn(async (_t: unknown, method: string, params: Record<string, unknown>) => {
+          if (method === "Runtime.evaluate") return { result: { value: center } };
+          if (method === "Input.dispatchMouseEvent") events.push(params);
+          return {};
+        }),
+      },
+    });
+    initDebugSessionListeners();
+    return events;
+  }
+
+  it("moves, presses with the left-button bitmask, then releases", async () => {
+    const events = stubClickChrome();
+    await cdpClick({ tabId: 7, ref: "e1", button: "left", clickCount: 1 });
+    expect(events.map((e) => e.type)).toEqual(["mouseMoved", "mousePressed", "mouseReleased"]);
+    expect(events[1]).toMatchObject({ button: "left", buttons: 1, clickCount: 1, x: 10, y: 20 });
+    expect(events[2]).toMatchObject({ buttons: 0 });
+  });
+
+  it("uses the right-button bitmask for a right click", async () => {
+    const events = stubClickChrome();
+    await cdpClick({ tabId: 7, ref: "e1", button: "right", clickCount: 1 });
+    expect(events[1]).toMatchObject({ button: "right", buttons: 2 });
+  });
+
+  it("throws when the element is not found", async () => {
+    stubClickChrome(null);
+    await expect(
+      cdpClick({ tabId: 7, selector: "#gone", button: "left", clickCount: 1 }),
+    ).rejects.toThrow("element not found: #gone");
   });
 });

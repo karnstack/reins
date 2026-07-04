@@ -36,7 +36,17 @@ async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
       if (isMonitored(tabId)) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt >= maxTries || !TRANSIENT_ATTACH.test(msg)) {
-        throw new Error(`attach tab ${tabId} failed after ${attempt} tries: ${msg}`);
+        let who = "";
+        try {
+          const targets = await chrome.debugger.getTargets();
+          const t = targets.find((x) => x.tabId === tabId);
+          who = t
+            ? ` [target: attached=${t.attached} type=${t.type} url=${t.url}]`
+            : " [target: NOT FOUND in getTargets]";
+        } catch {
+          // ignore diagnostics failure
+        }
+        throw new Error(`attach tab ${tabId} failed after ${attempt} tries: ${msg}${who}`);
       }
       await new Promise<void>((r) => setTimeout(r, 50 * attempt));
     }
@@ -213,9 +223,22 @@ export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
     );
     if (!result.value) throw new Error(`element not found: ${css}`);
     const { x, y } = result.value;
+    // CDP synthesizes a real click only when the pressed-button bitmask is set
+    // (button alone isn't enough — the target never sees a `click`). Move the
+    // pointer first so hit-testing lands on the element under (x, y).
+    const buttonBit = params.button === "right" ? 2 : params.button === "middle" ? 4 : 1;
     const base = { x, y, button: params.button, clickCount: params.clickCount };
-    await send(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", ...base });
-    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", ...base });
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y, buttons: 0 });
+    await send(tabId, "Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      ...base,
+      buttons: buttonBit,
+    });
+    await send(tabId, "Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      ...base,
+      buttons: 0,
+    });
     return { ok: true };
   });
 }
