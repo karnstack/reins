@@ -35,29 +35,100 @@ async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
       // A monitor may have grabbed the session mid-race; the caller reuses it.
       if (isMonitored(tabId)) throw err;
       const msg = err instanceof Error ? err.message : String(err);
-      if (attempt >= maxTries || !TRANSIENT_ATTACH.test(msg)) throw err;
+      if (attempt >= maxTries || !TRANSIENT_ATTACH.test(msg)) {
+        throw new Error(`attach tab ${tabId} failed after ${attempt} tries: ${msg}`);
+      }
       await new Promise<void>((r) => setTimeout(r, 50 * attempt));
     }
   }
 }
 
+// One shared debugger session per tab, reused across back-to-back commands and
+// released after a short idle. Attaching/detaching on every single command is
+// what caused the flaky "different extension" races (Chromium hasn't finished
+// releasing the debuggee before the next attach lands); keeping the session
+// warm removes the churn entirely — the model browser-automation tools use.
+interface DebugSession {
+  attach: Promise<void>;
+  inflight: number;
+  idleTimer?: ReturnType<typeof setTimeout>;
+}
+
+const SESSIONS = new Map<number, DebugSession>();
+const IDLE_DETACH_MS = 4000;
+
+// Purge our cache whenever a tab detaches for any reason — tab closed, DevTools
+// opened, crash, or the monitor adopting the session.
+export function initDebugSessionListeners(): void {
+  chrome.debugger.onDetach.addListener((source) => {
+    const tabId = source.tabId;
+    if (tabId === undefined) return;
+    const session = SESSIONS.get(tabId);
+    if (session?.idleTimer) clearTimeout(session.idleTimer);
+    SESSIONS.delete(tabId);
+  });
+}
+
+// Register at import in the extension; a no-op in unit tests where `chrome` is
+// stubbed per-case (those call initDebugSessionListeners() after stubbing).
+try {
+  initDebugSessionListeners();
+} catch {
+  // `chrome` not available yet — fine.
+}
+
+function releaseAfterIdle(tabId: number, session: DebugSession): void {
+  if (session.idleTimer) clearTimeout(session.idleTimer);
+  session.idleTimer = setTimeout(() => {
+    if (SESSIONS.get(tabId) !== session || session.inflight > 0) return;
+    SESSIONS.delete(tabId);
+    // If the monitor adopted the tab meanwhile, leave it attached for monitoring.
+    if (!isMonitored(tabId)) void chrome.debugger.detach({ tabId }).catch(() => {});
+  }, IDLE_DETACH_MS);
+}
+
 export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
-  // Chrome allows one debugger session per tab. If the monitor (read_console /
-  // read_network) already holds it, reuse that session — and leave it attached
-  // afterwards so monitoring continues.
+  // If the monitor (read_console / read_network) holds this tab, reuse its
+  // persistent session untouched.
   if (isMonitored(tabId)) return fn();
+
+  let session = SESSIONS.get(tabId);
+  if (!session) {
+    // Share one attach promise so concurrent commands never double-attach.
+    session = { attach: attachWithRetry(tabId), inflight: 0 };
+    SESSIONS.set(tabId, session);
+  } else if (session.idleTimer) {
+    clearTimeout(session.idleTimer);
+    session.idleTimer = undefined;
+  }
+
+  session.inflight++;
   try {
-    await attachWithRetry(tabId);
+    await session.attach;
   } catch (err) {
-    // Lost a race with a monitor attach; its session serves our commands too.
+    session.inflight--;
+    if (SESSIONS.get(tabId) === session) SESSIONS.delete(tabId);
+    // A monitor may have grabbed the session mid-race; its session serves us too.
     if (isMonitored(tabId)) return fn();
     throw err;
   }
+
   try {
     return await fn();
   } finally {
-    await chrome.debugger.detach({ tabId }).catch(() => {});
+    session.inflight--;
+    if (session.inflight === 0 && SESSIONS.get(tabId) === session) {
+      releaseAfterIdle(tabId, session);
+    }
   }
+}
+
+/** Test-only: drop all cached debugger sessions + timers between cases. */
+export function __resetDebugSessions(): void {
+  for (const session of SESSIONS.values()) {
+    if (session.idleTimer) clearTimeout(session.idleTimer);
+  }
+  SESSIONS.clear();
 }
 
 // chrome.debugger.sendCommand returns Promise<object|undefined> (loosely typed).

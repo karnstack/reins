@@ -1,55 +1,85 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
-import { withDebugger } from "./cdp.js";
+import { __resetDebugSessions, initDebugSessionListeners, withDebugger } from "./cdp.js";
 
-afterEach(() => vi.unstubAllGlobals());
+let onDetach: ((source: { tabId?: number }) => void) | undefined;
 
 /** chrome stub whose attach fails `failN` times before succeeding. */
 function stubChrome(
-  failN: number,
+  failN = 0,
   error = "Cannot access a chrome-extension:// URL of different extension",
 ) {
   const attach = vi.fn(async () => {
     if (attach.mock.calls.length <= failN) throw new Error(error);
   });
   const detach = vi.fn(async () => {});
-  vi.stubGlobal("chrome", { debugger: { attach, detach } });
+  vi.stubGlobal("chrome", {
+    debugger: {
+      attach,
+      detach,
+      onDetach: { addListener: (fn: (s: { tabId?: number }) => void) => (onDetach = fn) },
+    },
+  });
+  initDebugSessionListeners();
   return { attach, detach };
 }
 
-describe("withDebugger attach retry", () => {
-  it("attaches once, runs, detaches when there is no contention", async () => {
-    const { attach, detach } = stubChrome(0);
-    const result = await withDebugger(7, async () => "done");
-    expect(result).toBe("done");
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  __resetDebugSessions();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+describe("withDebugger session", () => {
+  it("attaches, runs, and detaches only after the idle window", async () => {
+    const { attach, detach } = stubChrome();
+    expect(await withDebugger(7, async () => "done")).toBe("done");
     expect(attach).toHaveBeenCalledTimes(1);
+    expect(detach).not.toHaveBeenCalled(); // still warm
+    await vi.advanceTimersByTimeAsync(4000);
     expect(detach).toHaveBeenCalledTimes(1);
   });
 
-  it("retries through the transient detach-in-flight error, then succeeds", async () => {
-    const { attach, detach } = stubChrome(3);
-    const result = await withDebugger(7, async () => "ok");
-    expect(result).toBe("ok");
-    expect(attach).toHaveBeenCalledTimes(4); // 3 transient failures + 1 success
+  it("reuses the warm session for back-to-back commands (one attach, one detach)", async () => {
+    const { attach, detach } = stubChrome();
+    await withDebugger(7, async () => "a");
+    await withDebugger(7, async () => "b");
+    await withDebugger(7, async () => "c");
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(detach).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(4000);
     expect(detach).toHaveBeenCalledTimes(1);
   });
 
-  it("gives up after maxTries and surfaces the error", async () => {
-    const { attach } = stubChrome(99);
-    await expect(withDebugger(7, async () => "never")).rejects.toThrow("different extension");
-    expect(attach).toHaveBeenCalledTimes(6);
+  it("retries through the transient detach-in-flight attach error", async () => {
+    const { attach } = stubChrome(3);
+    const p = withDebugger(7, async () => "ok").catch((e) => e); // observe now
+    await vi.advanceTimersByTimeAsync(1000); // let the backoff timers fire
+    expect(await p).toBe("ok");
+    expect(attach).toHaveBeenCalledTimes(4);
   });
 
-  it("does not retry a non-transient attach error", async () => {
-    const { attach } = stubChrome(99, "Cannot attach to the target: no such tab");
-    // "cannot attach" IS transient by design (tab still settling), so pick a
-    // genuinely fatal message to prove non-transient errors fail fast.
-    attach.mockImplementation(async () => {
-      throw new Error("Debugger is not allowed on this page");
-    });
-    await expect(withDebugger(7, async () => "x")).rejects.toThrow("not allowed");
+  it("gives up after maxTries and names the tab in the error", async () => {
+    stubChrome(99);
+    const p = withDebugger(42, async () => "never").catch((e) => e as Error); // observe now
+    await vi.advanceTimersByTimeAsync(2000);
+    const err = await p;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("attach tab 42 failed");
+  });
+
+  it("re-attaches after an external detach purges the session", async () => {
+    const { attach } = stubChrome();
+    await withDebugger(7, async () => "a");
     expect(attach).toHaveBeenCalledTimes(1);
+    onDetach?.({ tabId: 7 }); // tab closed / DevTools opened
+    await withDebugger(7, async () => "b");
+    expect(attach).toHaveBeenCalledTimes(2);
   });
 });

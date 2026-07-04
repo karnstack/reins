@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // cdp.ts (imported by page-actions) checks the monitor before attaching.
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
+import { __resetDebugSessions } from "./cdp.js";
 import {
   cdpRaw,
   fill,
@@ -41,7 +42,10 @@ function stubChrome(respond: (method: string, params?: Record<string, unknown>) 
 
 const evalOk = (value: unknown) => ({ result: { value } });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  __resetDebugSessions();
+  vi.unstubAllGlobals();
+});
 
 describe("pressKey", () => {
   it("dispatches keyDown+keyUp with parsed key and modifiers", async () => {
