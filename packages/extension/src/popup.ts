@@ -1,5 +1,6 @@
 import "./popup.css";
 import { clearPairing, loadPairing, savePairing } from "./lib/pairing.js";
+import { normalizeStatus } from "./lib/status.js";
 
 type Status = "idle" | "connecting" | "connected" | "error";
 
@@ -17,7 +18,13 @@ const STATUS_LABELS: Record<Status, string> = {
   error: "Auth failed",
 };
 
-function setStatus(status: Status, label = STATUS_LABELS[status]): void {
+/** Idle means "not connected": label depends on whether a pairing is saved. */
+function labelFor(status: Status): string {
+  if (status === "idle") return tokenInput.value.trim() ? "Paired" : "Not paired";
+  return STATUS_LABELS[status];
+}
+
+function setStatus(status: Status, label = labelFor(status)): void {
   statusEl.className = `reins__status reins__status--${status}`;
   statusLabel.textContent = label;
 }
@@ -31,18 +38,37 @@ function notifyBackground(type: string): void {
   }
 }
 
+/** Ask the worker for the live connection status; falls back to idle. */
+async function queryStatus(): Promise<Status> {
+  try {
+    const res = (await chrome.runtime.sendMessage({ type: "reins:status" })) as
+      | { status?: unknown }
+      | undefined;
+    return normalizeStatus(res?.status);
+  } catch {
+    return "idle";
+  }
+}
+
 async function refresh(): Promise<void> {
   const pairing = await loadPairing();
   if (pairing) {
     urlInput.value = pairing.url;
     tokenInput.value = pairing.token;
     disconnectBtn.hidden = false;
-    setStatus("idle", "Paired");
+    setStatus(await queryStatus());
   } else {
     disconnectBtn.hidden = true;
     setStatus("idle");
   }
 }
+
+// Live-update the pill when the worker/offscreen reports a status change.
+chrome.runtime.onMessage.addListener((msg: unknown) => {
+  if (!msg || typeof msg !== "object") return;
+  const message = msg as Record<string, unknown>;
+  if (message.type === "reins:status-update") setStatus(normalizeStatus(message.status));
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
