@@ -3,6 +3,7 @@ import type {
   OkResult,
   OpenTabParams,
   OpenTabResult,
+  ResizeParams,
   SelectTabParams,
   Tab,
 } from "@reins/protocol";
@@ -35,5 +36,20 @@ export async function closeTab({ tabId }: CloseTabParams): Promise<OkResult> {
 /** Handle the `select_tab` bridge method using chrome.tabs. */
 export async function selectTab({ tabId }: SelectTabParams): Promise<OkResult> {
   await chrome.tabs.update(tabId, { active: true });
+  return { ok: true };
+}
+
+/** Handle the `resize` bridge method: resize the tab's real window
+ *  (CDP emulation overrides would reset when the debugger detaches). */
+export async function resizeWindow(params: ResizeParams): Promise<OkResult> {
+  let tabId = params.tabId;
+  if (tabId === undefined) {
+    const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (active?.id === undefined) throw new Error("no active tab");
+    tabId = active.id;
+  }
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.windowId === undefined) throw new Error(`tab ${tabId} has no window`);
+  await chrome.windows.update(tab.windowId, { width: params.width, height: params.height });
   return { ok: true };
 }

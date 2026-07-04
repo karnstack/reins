@@ -8,7 +8,18 @@ import {
   cdpWaitFor,
 } from "./cdp.js";
 import { readConsole, readNetwork } from "./monitor.js";
-import { closeTab, listTabs, openTab, selectTab } from "./tab-handler.js";
+import {
+  cdpRaw,
+  fill,
+  handleDialog,
+  hover,
+  pressKey,
+  readText,
+  scroll,
+  selectOption,
+  upload,
+} from "./page-actions.js";
+import { closeTab, listTabs, openTab, resizeWindow, selectTab } from "./tab-handler.js";
 
 /**
  * Route an incoming bridge method name to the appropriate browser handler.
@@ -42,6 +53,26 @@ export async function dispatchMethod(method: string, params: unknown): Promise<u
       return readConsole(params as Parameters<typeof readConsole>[0]);
     case "read_network":
       return readNetwork(params as Parameters<typeof readNetwork>[0]);
+    case "press_key":
+      return pressKey(params as Parameters<typeof pressKey>[0]);
+    case "hover":
+      return hover(params as Parameters<typeof hover>[0]);
+    case "scroll":
+      return scroll(params as Parameters<typeof scroll>[0]);
+    case "fill":
+      return fill(params as Parameters<typeof fill>[0]);
+    case "select_option":
+      return selectOption(params as Parameters<typeof selectOption>[0]);
+    case "upload":
+      return upload(params as Parameters<typeof upload>[0]);
+    case "read_text":
+      return readText(params as Parameters<typeof readText>[0]);
+    case "resize":
+      return resizeWindow(params as Parameters<typeof resizeWindow>[0]);
+    case "handle_dialog":
+      return handleDialog(params as Parameters<typeof handleDialog>[0]);
+    case "cdp":
+      return cdpRaw(params as Parameters<typeof cdpRaw>[0]);
     default:
       throw new Error(`unknown method: ${method}`);
   }

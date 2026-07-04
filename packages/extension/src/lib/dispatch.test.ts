@@ -20,6 +20,18 @@ vi.mock("./cdp.js", () => ({
   cdpWaitFor: vi.fn(async () => ({ ok: true })),
 }));
 
+vi.mock("./page-actions.js", () => ({
+  pressKey: vi.fn(async () => ({ ok: true })),
+  hover: vi.fn(async () => ({ ok: true })),
+  scroll: vi.fn(async () => ({ ok: true })),
+  fill: vi.fn(async () => ({ ok: true })),
+  selectOption: vi.fn(async () => ({ ok: true })),
+  upload: vi.fn(async () => ({ ok: true })),
+  readText: vi.fn(async () => ({ text: "body text" })),
+  handleDialog: vi.fn(async () => ({ ok: true })),
+  cdpRaw: vi.fn(async () => ({ result: { frameId: "F1" } })),
+}));
+
 import { dispatchMethod } from "./dispatch.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -92,6 +104,34 @@ describe("dispatchMethod routing (chrome.tabs)", () => {
     const result = await dispatchMethod("select_tab", { tabId: 7 });
     expect(update).toHaveBeenCalledWith(7, { active: true });
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("dispatchMethod routing (page-actions)", () => {
+  it.each([
+    ["press_key", { key: "Escape" }, { ok: true }],
+    ["hover", { ref: "e1" }, { ok: true }],
+    ["scroll", { to: "bottom" }, { ok: true }],
+    ["fill", { ref: "e1", value: "x" }, { ok: true }],
+    ["select_option", { ref: "e1", value: "IN" }, { ok: true }],
+    ["upload", { ref: "e1", files: ["/tmp/a"] }, { ok: true }],
+    ["read_text", {}, { text: "body text" }],
+    ["handle_dialog", { accept: true }, { ok: true }],
+    ["cdp", { method: "Page.enable" }, { result: { frameId: "F1" } }],
+  ] as const)("routes %s", async (method, params, expected) => {
+    expect(await dispatchMethod(method, params)).toEqual(expected);
+  });
+
+  it("routes resize to chrome.windows.update", async () => {
+    const update = vi.fn(async () => ({}));
+    vi.stubGlobal("chrome", {
+      tabs: { get: async () => ({ id: 5, windowId: 3 }) },
+      windows: { update },
+    });
+    expect(await dispatchMethod("resize", { tabId: 5, width: 1280, height: 800 })).toEqual({
+      ok: true,
+    });
+    expect(update).toHaveBeenCalledWith(3, { width: 1280, height: 800 });
   });
 });
 

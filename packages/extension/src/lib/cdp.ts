@@ -11,14 +11,14 @@ import { isMonitored } from "./monitor.js";
 
 const PROTOCOL = "1.3";
 
-async function resolveTabId(tabId?: number): Promise<number> {
+export async function resolveTabId(tabId?: number): Promise<number> {
   if (typeof tabId === "number") return tabId;
   const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (active?.id === undefined) throw new Error("no active tab");
   return active.id;
 }
 
-async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
   // Chrome allows one debugger session per tab. If the monitor (read_console /
   // read_network) already holds it, reuse that session — and leave it attached
   // afterwards so monitoring continues.
@@ -39,7 +39,7 @@ async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> 
 
 // chrome.debugger.sendCommand returns Promise<object|undefined> (loosely typed).
 // We go through `unknown` first so TypeScript accepts the narrowing to T.
-function send<T = unknown>(
+export function send<T = unknown>(
   tabId: number,
   method: string,
   params?: Record<string, unknown>,
@@ -98,7 +98,7 @@ export async function cdpSnapshot(
   });
 }
 
-function selectorFor(ref?: string, selector?: string): string {
+export function selectorFor(ref?: string, selector?: string): string {
   if (selector) return selector;
   if (ref) return `[data-reins-ref="${ref}"]`;
   throw new Error("requires a ref or selector");
