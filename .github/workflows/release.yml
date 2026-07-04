@@ -3,7 +3,7 @@ name: release
 # Publish flow (see docs/PUBLISHING.md):
 #   1. Bump versions (packages/mcp + packages/extension package.json).
 #   2. Tag: git tag v0.1.0 && git push --tags
-#   3. This workflow publishes reins-mcp to npm and attaches the extension
+#   3. This workflow publishes @karnstack/reins to npm and attaches the extension
 #      zip to the GitHub release. Requires the NPM_TOKEN repo secret.
 on:
   push:
@@ -26,10 +26,10 @@ jobs:
       - run: pnpm build
       - run: pnpm zip
 
-      - name: Publish reins-mcp to npm
+      - name: Publish @karnstack/reins to npm
         run: |
           pnpm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
-          pnpm publish --filter reins-mcp --access public --no-git-checks
+          pnpm publish --filter @karnstack/reins --access public --no-git-checks
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"

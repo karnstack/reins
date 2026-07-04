@@ -1,7 +1,7 @@
 {
-  "name": "reins-mcp",
-  "version": "0.1.0",
-  "description": "MCP server that drives your real, logged-in browser through the reins Chrome extension.",
+  "name": "@karnstack/reins",
+  "version": "0.2.0",
+  "description": "One CLI for reins: a local MCP daemon that drives your real, logged-in browsers through the reins extension.",
   "type": "module",
   "license": "MIT",
   "repository": {

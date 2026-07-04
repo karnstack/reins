@@ -1,67 +1,51 @@
-# reins-mcp
+# @karnstack/reins
 
-**Drive your real, logged-in browser from an MCP client.**
+**Drive your real, logged-in browsers from your coding agent.**
 
-`reins-mcp` is the server half of [reins](https://github.com/karnstack/reins):
-an MCP (stdio) server that exposes browser tools — `list_tabs`, `navigate`,
-`click`, `type`, `screenshot`, `eval_js`, `read_console`, `read_network`, and
-more — and relays them over a localhost WebSocket to the reins Chrome
-extension running in your everyday browser. No separate debug profile, no
-launch flags.
+`reins` is a local MCP daemon + CLI: MCP clients (Claude Code, Codex,
+Cursor, …) connect to it over streamable HTTP on localhost, and it drives
+every Chromium browser on your machine that runs the
+[reins extension](https://github.com/karnstack/reins) — tabs, clicks, typing,
+screenshots, JS eval, console and network monitoring. No debug profile, no
+launch flags, no pairing tokens.
 
-## Install
-
-**Claude Code** (one command):
+## Setup (once)
 
 ```bash
-npx -y --package=reins-mcp reins install claude
+npm i -g @karnstack/reins
+reins up                 # daemon + autostart on login (macOS/Linux)
+reins install claude     # register with Claude Code
+# install the reins extension in your browser(s) → they connect on their own
 ```
 
-or manually:
+Check it: `reins status` (daemon + connected browsers), `reins tabs`
+(everything the daemon can reach).
 
-```bash
-claude mcp add reins --scope user -- npx -y reins-mcp
-```
-
-**Codex** (`~/.codex/config.toml`):
-
-```toml
-[mcp_servers.reins]
-command = "npx"
-args = ["-y", "reins-mcp"]
-```
-
-**Any other MCP client** (JSON config):
-
-```json
-{ "mcpServers": { "reins": { "command": "npx", "args": ["-y", "reins-mcp"] } } }
-```
-
-## Pair the browser
-
-1. Install the **reins** extension (Chrome Web Store, or load unpacked from
-   the [repo](https://github.com/karnstack/reins)).
-2. Print the pairing details:
-
-   ```bash
-   npx -y --package=reins-mcp reins pair
-   ```
-
-3. Click the reins toolbar icon, paste the URL + token, hit **Connect**.
-
-## CLI
+## Commands
 
 ```
-reins install [claude|codex]  register the MCP server with an agent
-reins pair                    print the WebSocket URL + token
-reins status                  config, port, server up/down
-reins doctor                  diagnostic checks
-reins logs                    show ~/.reins/logs location + recent lines
+up                      install + start the daemon (autostarts on login)
+down                    stop the daemon and remove it from autostart
+restart                 restart the daemon (e.g. after an upgrade)
+serve [--stdio]         run the server in the foreground (stdio for HTTP-less clients)
+install [claude|codex]  register the MCP endpoint with an agent
+allow <extension-id>    allow an unpacked/dev extension to connect
+browsers                list browsers connected to the daemon
+tabs [browserId]        list tabs the daemon can reach
+status / doctor / logs  health, diagnostics, ~/.reins/logs
 ```
 
-The server starts automatically with your MCP client and logs to
-`~/.reins/logs/mcp-<date>.log`. Pairing material lives in `~/.reins` (token
-file mode 0600). The WebSocket binds `127.0.0.1` only and requires both the
-pairing token and a `chrome-extension://` origin.
+## Multiple clients, multiple browsers
+
+One daemon serves any number of MCP clients and browsers at once. Tabs from
+`list_tabs` are tagged with a `browserId`; the agent passes it to target a
+specific browser when more than one is connected.
+
+## Security
+
+Everything binds `127.0.0.1`. All endpoints validate the `Host` header
+(DNS-rebinding protection), and the extension WebSocket only accepts exact
+allowlisted `chrome-extension://<id>` origins — an identity browsers stamp
+themselves and pages can't forge. Nothing ever leaves your machine.
 
 MIT © [karnstack](https://github.com/karnstack/reins)

@@ -13,6 +13,7 @@
 ## Global Constraints
 
 - Bind `127.0.0.1` only; default port 8765; `REINS_PORT` overrides.
+- **Amendment (multi-browser, approved mid-build):** the bridge holds N concurrent browser connections (ids `b1`, `b2`, …; no 4002 replacement). All tools take optional `browserId`; ambiguity is an error listing live browsers; `list_tabs` aggregates + tags. Daemon adds Host-validated GET `/browsers` and `/tabs`; CLI adds `reins browsers` / `reins tabs`. Extension sends a real browser name in hello. Executed inline as adjustments to Tasks 2/4/7/8 plus a protocol schema pass.
 - **Amendment (port auto-discovery, approved mid-build):** candidate ports are 8765–8774 (`DEFAULT_PORT`/`PORT_RANGE` exported from `@reins/protocol`). Server side: sticky port from `~/.reins/port`, walk candidates when busy, record the bound port; `REINS_PORT` = exact, no walk. Extension: WS hello→welcome probe across candidates, last-good port first, rescan after the bridge client gives up (3 failed reconnects). CLI `install`/`status` discover the live port via `/health`. Tasks 4, 5, 7, 8 are adjusted accordingly during inline execution.
 - No tokens anywhere: no bearer on `/mcp`, no pairing token on the WS. `~/.reins/token` is no longer read or written.
 - WS origin check is **exact** ID match (`chrome-extension://<id>`), never prefix match.

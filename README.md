@@ -2,30 +2,50 @@
 
 **Take the reins of your real browser from your coding agent.**
 
-reins lets an MCP client (Claude Code, Codex, …) drive your actual, logged-in
-Chromium browser — Chrome, Dia, Brave, Edge, Arc — through a Manifest V3
-extension. No separate debug profile, no launch flags: you pair your everyday
-browser once and your agent can read and act on the pages you're already
-signed into.
+reins lets MCP clients (Claude Code, Codex, Cursor, …) drive your actual,
+logged-in Chromium browsers — Chrome, Dia, Brave, Edge, Arc — through a
+Manifest V3 extension. No separate debug profile, no launch flags, no pairing
+tokens: install the CLI once, add the extension, and every browser on your
+machine that runs it becomes drivable.
 
 ## How it works
 
 ```
-Claude Code / Codex
-   │  MCP (stdio)
-   ▼
-reins-mcp ── localhost WebSocket (token + origin authed) ── reins extension ── chrome.debugger (CDP) ── your tabs
+Claude Code ─┐  MCP (streamable HTTP, one session each)
+Codex        ├──► /mcp ─┐
+Cursor …    ─┘          │   reins daemon (127.0.0.1, launchd/systemd)
+                        ├── localhost WebSocket (extension-ID pinned) ◄── reins extension(s)
+   reins CLI ──► /health└─▸                                                 │ chrome.debugger (CDP)
+                /browsers /tabs                                             ▼ your tabs
 ```
 
-The MCP server hosts a localhost WebSocket; the extension connects out to it
-(no inbound port on the browser), authenticates with a pairing token, and runs
-commands via the Chrome DevTools Protocol from inside an offscreen document.
+One daemon serves any number of MCP clients **and** any number of browsers
+concurrently. The extension finds the daemon on its own (localhost port
+discovery) and authenticates by its unforgeable `chrome-extension://<id>`
+origin — pinned to an exact allowlist, no tokens to paste.
+
+## Install
+
+```bash
+npm i -g @karnstack/reins
+reins up                 # start the daemon + autostart on login (macOS/Linux)
+reins install claude     # register the MCP endpoint with Claude Code
+# then install the reins extension (Chrome Web Store) → it connects on its own
+```
+
+That's the whole setup. `reins status`, `reins browsers`, `reins tabs`, and
+`reins logs` show what the daemon sees; logs live in `~/.reins/logs/`.
+
+Other clients: `reins install` prints Codex TOML and generic JSON snippets.
+Clients without streamable-HTTP support can run `npx -y @karnstack/reins
+serve --stdio` instead (also the Windows path — no service management there
+yet).
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `list_tabs` | List open tabs (id, title, url, active) |
+| `list_tabs` | List tabs across **all** connected browsers (tagged `browserId`) |
 | `open_tab` / `close_tab` / `select_tab` | Open, close, and focus tabs |
 | `navigate` | Go to a URL, or `back` / `forward` / `reload` |
 | `read_snapshot` | Snapshot interactive/labelled elements, each with a `ref` |
@@ -37,27 +57,10 @@ commands via the Chrome DevTools Protocol from inside an offscreen document.
 | `read_console` | Read recent console messages (level, text) for a tab |
 | `read_network` | Read recent network requests (method, url, status) for a tab |
 
-`read_console` / `read_network` start a persistent monitor on first use, so they
-capture events from that point on. The per-call tools detect a monitored tab
-and reuse its debugger session, so a monitored tab stays drivable.
-
-## Install (users)
-
-```bash
-# 1. register the MCP server with Claude Code
-npx -y --package=reins-mcp reins install claude
-#    (Codex/other clients: npx -y --package=reins-mcp reins install)
-
-# 2. install the reins extension (Chrome Web Store, or a release zip via
-#    chrome://extensions → Load unpacked)
-
-# 3. pair the browser: print the URL + token, paste into the extension popup
-npx -y --package=reins-mcp reins pair
-```
-
-The server starts automatically with your MCP client, logs to
-`~/.reins/logs/`, and shuts down with it. `reins status`, `reins doctor`, and
-`reins logs` help when something looks off.
+Every tool takes an optional `browserId` (from `list_tabs`) — required only
+when several browsers are connected, so the agent never guesses which browser
+to drive. `read_console` / `read_network` start a persistent monitor on first
+use; monitored tabs stay drivable (the per-call tools reuse the session).
 
 ## Develop
 
@@ -67,34 +70,39 @@ pnpm install
 pnpm dev            # watch-build all packages (extension → dist/)
 pnpm test           # protocol + mcp + extension unit/integration tests
 pnpm lint && pnpm typecheck && pnpm build
-pnpm mcp            # build + run the MCP server on stdio (Ctrl-C to stop)
-pnpm reins pair     # build + run any CLI command (status, doctor, logs, …)
+pnpm mcp            # build + run the daemon in the foreground (Ctrl-C stops)
+pnpm reins status   # build + run any CLI command (tabs, doctor, logs, …)
 pnpm zip            # package the extension for the Chrome Web Store
 ```
 
-Local walkthrough (load unpacked, pair, try tools): **[docs/RUNNING.md](docs/RUNNING.md)**.
-Release process (npm + Chrome Web Store): **[docs/PUBLISHING.md](docs/PUBLISHING.md)**.
+Local walkthrough (load unpacked, allow the dev ID, drive tabs):
+**[docs/RUNNING.md](docs/RUNNING.md)**. Release process:
+**[docs/PUBLISHING.md](docs/PUBLISHING.md)**.
 
 ## Packages
 
-- `packages/protocol` — shared zod bridge + tool schemas (`@reins/protocol`, private, bundled into reins-mcp)
-- `packages/mcp` — MCP server + `reins` CLI (published to npm as [`reins-mcp`](https://www.npmjs.com/package/reins-mcp))
+- `packages/protocol` — shared zod frames + tool schemas + port constants (`@reins/protocol`, private, bundled)
+- `packages/mcp` — daemon + CLI, published as [`@karnstack/reins`](https://www.npmjs.com/package/@karnstack/reins) (bin: `reins`)
 - `packages/extension` — MV3 extension (Vite + crxjs)
 
 ## Security
 
-- The WebSocket binds `127.0.0.1` only and requires both a pairing token and a
-  `chrome-extension://` origin; a bad token is rejected without an infinite
-  retry loop.
-- `chrome.debugger` shows the native "browser is being debugged" banner while a
-  command runs; the popup's **Disconnect** button is the kill switch.
-- Pairing material lives in `~/.reins` (token file mode `0600`).
-- The extension collects nothing and talks to nothing but your local server —
+- Everything binds `127.0.0.1` — nothing is reachable from the network.
+- `/mcp` and the status endpoints validate the `Host` header (DNS-rebinding
+  protection), so web pages can't reach the daemon even via rebound DNS.
+- The extension WebSocket is accepted only from exact allowlisted
+  `chrome-extension://<id>` origins — browsers stamp that header themselves,
+  so pages and other extensions can't forge it. Dev builds are added with
+  `reins allow <id>`.
+- `chrome.debugger` shows the native "is being debugged" banner while a
+  command runs; the popup's **Disconnect** toggle is the kill switch.
+- The extension collects nothing and talks to nothing but your local daemon —
   see [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Design
 
-See [`docs/superpowers/specs/2026-06-28-reins-design.md`](docs/superpowers/specs/2026-06-28-reins-design.md).
+- [`docs/superpowers/specs/2026-06-28-reins-design.md`](docs/superpowers/specs/2026-06-28-reins-design.md) — bridge protocol + tools
+- [`docs/superpowers/specs/2026-07-04-reins-daemon-design.md`](docs/superpowers/specs/2026-07-04-reins-daemon-design.md) — daemon, discovery, multi-browser
 
 ## License
 

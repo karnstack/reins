@@ -2,7 +2,7 @@
 
 Two artifacts ship from this repo:
 
-1. **`reins-mcp`** — npm package (MCP server + `reins` CLI)
+1. **`@karnstack/reins`** — npm package (daemon + `reins` CLI)
 2. **reins extension** — Chrome Web Store item
 
 Versions live in `packages/mcp/package.json` and
@@ -13,22 +13,22 @@ from there). Keep them in lockstep.
 
 ```bash
 # 1. bump versions
-#    packages/mcp/package.json      "version": "0.2.0"
-#    packages/extension/package.json "version": "0.2.0"
+#    packages/mcp/package.json       "version": "0.3.0"
+#    packages/extension/package.json "version": "0.3.0"
 
 # 2. sanity check locally
 pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm zip
 
 # 3. tag and push
-git commit -am "release: v0.2.0"
-git tag v0.2.0
+git commit -am "release: v0.3.0"
+git tag v0.3.0
 git push origin main --tags
 ```
 
 The `release` workflow then:
 
-- publishes `reins-mcp` to npm (needs the **`NPM_TOKEN`** repo secret — an
-  npm automation token with publish rights),
+- publishes `@karnstack/reins` to npm (needs the **`NPM_TOKEN`** repo secret —
+  an npm automation token with publish rights for the @karnstack scope),
 - creates a GitHub release with `reins-extension-v<version>.zip` attached.
 
 The zip can also be produced locally with `pnpm zip` →
@@ -36,14 +36,14 @@ The zip can also be produced locally with `pnpm zip` →
 
 ## npm notes
 
-- `@reins/protocol` is private; it is **bundled** into `reins-mcp` at build
+- `@reins/protocol` is private; it is **bundled** into the package at build
   time (`noExternal` in `packages/mcp/tsdown.config.ts`), so the published
   package has no workspace dependencies.
 - Smoke-test the tarball before first-time publish:
 
   ```bash
   cd packages/mcp && npm pack
-  npx -y ./reins-mcp-*.tgz --help   # runs dist/server.js — Ctrl-C to exit
+  npx -y ./karnstack-reins-*.tgz status
   ```
 
 ## Chrome Web Store submission
@@ -53,13 +53,22 @@ One-time setup: register as a Chrome Web Store developer
 
 Per release: upload the zip from `pnpm zip`, then fill/refresh the listing.
 
+### ⚠ After the FIRST store publish
+
+The store assigns the extension a permanent ID. Put it into
+`PUBLISHED_EXTENSION_IDS` in `packages/mcp/src/allowlist.ts` and ship a patch
+release of `@karnstack/reins` — until then, store-installed extensions can
+only connect after a manual `reins allow <id>`.
+
 ### Listing content
 
-- **Single purpose**: "Lets a local MCP client (e.g. Claude Code) drive the
-  user's own browser: list/open tabs, navigate, click, type, screenshot, and
-  read console/network activity — all via a user-initiated local pairing."
+- **Single purpose**: "Lets a local MCP daemon (installed by the user, e.g.
+  for Claude Code) drive the user's own browser: list/open tabs, navigate,
+  click, type, screenshot, and read console/network activity — all local,
+  user-initiated, and confined to 127.0.0.1."
 - **Category**: Developer Tools.
-- **Screenshots**: at least one 1280×800 (popup + a paired session is enough).
+- **Screenshots**: at least one 1280×800 (popover connected state + an agent
+  driving a page is enough).
 - **Privacy policy URL**:
   `https://github.com/karnstack/reins/blob/main/docs/PRIVACY.md`
 
@@ -69,8 +78,8 @@ Per release: upload the zip from `pnpm zip`, then fill/refresh the listing.
 |---|---|
 | `debugger` | Core function: executes the user's agent commands (click, type, screenshot, read console/network) on tabs via the Chrome DevTools Protocol. Chrome shows its native debugging banner while attached. |
 | `tabs` | The `list_tabs` / `open_tab` / `select_tab` tools need tab IDs, titles, and URLs. |
-| `storage` | Stores the local pairing (server URL + token) and connection status on-device. |
-| `offscreen` | Hosts the persistent WebSocket to the user's local MCP server; MV3 service workers cannot hold long-lived sockets. |
+| `storage` | Stores the auto-connect setting, cached daemon port, and connection status on-device. |
+| `offscreen` | Hosts the persistent WebSocket to the user's local MCP daemon; MV3 service workers cannot hold long-lived sockets. |
 
 ### Data-use disclosures (Privacy tab)
 
@@ -82,5 +91,5 @@ Per release: upload the zip from `pnpm zip`, then fill/refresh the listing.
 
 The `debugger` permission triggers manual review and an install-time warning;
 that is inherent to what reins does. The listing text above (local-only,
-user-initiated pairing, kill switch, native debugging banner) is what
+user-installed daemon, kill switch, native debugging banner) is what
 reviewers look for. Expect a slower first review.

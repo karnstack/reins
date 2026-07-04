@@ -173,11 +173,36 @@ The port is no longer a fixed contract:
 - **Known limitation**: MCP clients hold a baked URL. If the daemon drifts to
   a new port, re-run `reins install <client>`; stickiness makes drift rare.
 
+## Multi-browser (added 2026-07-04, approved — core to the architecture)
+
+One daemon serves **any number of browsers on the machine** concurrently
+(Chrome + Brave + Dia each running the extension = three live connections).
+
+- **Bridge**: keeps a map of connected browsers (`b1`, `b2`, … assigned per
+  connection; entry removed on close — reconnect gets a fresh id). Each entry
+  records the `browser` name from the hello frame. `paired` = at least one
+  connected. Replace-on-reconnect (4002) is gone.
+- **Routing**: every tool gains an optional `browserId` param. Resolution:
+  explicit id → that browser (unknown id = error naming the live ones);
+  omitted + exactly one browser → it; omitted + zero → "no browser
+  connected"; omitted + several → error listing connected browsers so the
+  agent can retry with `browserId`. Deterministic — never guess a browser.
+- **`list_tabs`**: with `browserId` filters to that browser; without it
+  aggregates across all browsers, each tab tagged `browserId` + `browser`.
+- **Daemon endpoints** (all localhost + Host-validated, GET):
+  `/browsers` → connected browsers; `/tabs` → the aggregated tab list.
+- **CLI**: `reins browsers` and `reins tabs [browserId]` render those
+  endpoints — visibility into what the daemon can reach.
+- **Extension**: sends its real browser name in `hello.browser` (via
+  `navigator.userAgentData` brands, falling back to `"browser"`). Otherwise
+  unchanged — one connection per running browser.
+- **Host validation everywhere**: `/health`, `/browsers`, `/tabs` get the
+  same Host allowlist as `/mcp` (a DNS-rebound page must not read tab URLs).
+
 ## Out of scope (v1)
 
 - Windows service management (stdio mode is the Windows path).
 - TLS / non-localhost access / remote MCP.
-- Multiple simultaneously paired browsers (last-connected wins, as today).
 - Auto-update of the daemon.
 
 ## Migration / renames

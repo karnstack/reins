@@ -1,16 +1,15 @@
-# Running reins locally
+# Running reins locally (from source)
 
-reins lets an MCP client (Claude Code, Codex) drive your real, logged-in
-Chromium browser. It has two halves:
+reins has two halves:
 
-- **`reins-mcp`** — a stdio MCP server that hosts a localhost WebSocket and
-  exposes the browser tools.
-- **the extension** — an MV3 extension that connects to that WebSocket and
-  executes commands in your browser.
+- **the daemon** (`reins serve`) — hosts the MCP endpoint (streamable HTTP)
+  and the extension WebSocket on one localhost port.
+- **the extension** — an MV3 extension that discovers the daemon and executes
+  commands in your browser.
 
-> Just want to use it? See the **Install** section of the
-> [README](../README.md) — `npx -y --package=reins-mcp reins install claude`.
-> This document is the from-source walkthrough.
+> Just want to use it? `npm i -g @karnstack/reins && reins up && reins
+> install claude`, then install the extension from the Chrome Web Store.
+> This document is the from-source developer walkthrough.
 
 ## 1. Prerequisites & build
 
@@ -21,75 +20,71 @@ pnpm build            # builds all three packages
 ```
 
 This produces:
-- `packages/mcp/dist/server.js` — the MCP server
-- `packages/mcp/dist/cli.js` — the `reins` CLI
+- `packages/mcp/dist/cli.js` — the `reins` CLI (daemon = `reins serve`)
 - `packages/extension/dist/` — the loadable unpacked extension
 
 While iterating, `pnpm dev` watch-builds all packages instead.
 
-## 2. Register the MCP server with your agent
-
-**Claude Code:**
-
-```bash
-claude mcp add reins -- node "$(pwd)/packages/mcp/dist/server.js"
-```
-
-**Codex** (`~/.codex/config.toml`):
-
-```toml
-[mcp_servers.reins]
-command = "node"
-args = ["/absolute/path/to/reins/packages/mcp/dist/server.js"]
-```
-
-On first start the server creates `~/.reins/{token,port}` (token is 32 random
-bytes, file mode 0600), binds `ws://127.0.0.1:8765`, and logs to
-`~/.reins/logs/mcp-<date>.log`.
-
-## 3. Load the extension
+## 2. Load the extension and allow its dev ID
 
 1. Open `chrome://extensions` (or `dia://extensions` etc.).
-2. Enable **Developer mode**.
-3. **Load unpacked** → select `packages/extension/dist`.
-
-## 4. Pair the browser
-
-Print the pairing details:
+2. Enable **Developer mode** → **Load unpacked** → select `packages/extension/dist`.
+3. Copy the extension's **ID** from the card, then:
 
 ```bash
-pnpm reins pair
-# WebSocket URL : ws://127.0.0.1:8765
-# Token        : <token>
+pnpm reins allow <that-id>
 ```
 
-Click the reins toolbar icon, paste the **URL** and **token**, and hit
-**Connect**. The status pill turns green ("Connected") once the extension
-authenticates.
+(Unpacked builds get a per-machine ID; the published store build is
+allowlisted out of the box.)
 
-(`pnpm reins doctor` checks the config; `pnpm reins status` shows the port and
-whether a server is running; `pnpm reins logs` tails the server log.)
+## 3. Start the daemon
+
+```bash
+pnpm mcp              # foreground daemon; Ctrl-C stops it
+# or: node packages/mcp/dist/cli.js up   (background service + autostart)
+```
+
+The daemon picks a port automatically (8765, walking to 8774 if busy),
+records it in `~/.reins/port`, and logs to `~/.reins/logs/mcp-<date>.log`.
+The extension scans the same range and connects on its own — the toolbar
+popover turns green and shows the daemon version, port, and this browser's
+id (e.g. `b1 (Chrome)`).
+
+## 4. Register with your agent
+
+```bash
+node packages/mcp/dist/cli.js install claude
+# or by hand:
+claude mcp add --transport http reins http://127.0.0.1:8765/mcp --scope user
+```
+
+`reins install` discovers the live port automatically. Codex / other
+clients: `reins install` prints the snippets. stdio fallback:
+`node packages/mcp/dist/cli.js serve --stdio` (don't run it while the daemon
+holds the same port — the CLI will tell you).
 
 ## 5. Try it
 
-Ask your agent to call the `list_tabs` tool — it returns the live tabs of your
-paired browser (`tabId`, `title`, `url`, `active`).
+```bash
+node packages/mcp/dist/cli.js status     # daemon + connected browsers
+node packages/mcp/dist/cli.js tabs      # every tab the daemon can reach
+```
 
-## Security notes
-
-- The server binds `127.0.0.1` only; the extension must present the pairing
-  token and a `chrome-extension://` origin.
-- A bad token closes the connection (no infinite retry) and surfaces an
-  "Auth failed" status in the popup.
-- `chrome.debugger` shows the native "being debugged" banner while attached.
-  The popup's **Disconnect** is the kill switch.
+Then ask your agent to call `list_tabs` — tabs come back tagged with
+`browserId` per connected browser; the other tools take that `browserId` when
+more than one browser is connected.
 
 ## Troubleshooting
 
-- **Port already in use:** another `reins-mcp` is running (the default port is
-  fixed at 8765 — one MCP client at a time). Stop the other client or override
-  with `REINS_PORT`. Stale servers no longer linger: the server exits when its
-  MCP client disconnects.
-- **Popup says "Auth failed":** re-run `pnpm reins pair` and paste the current
-  token (the token rotates only if `~/.reins/token` is deleted/regenerated).
-- **Something else:** `pnpm reins logs` shows the server's recent log lines.
+- **Popover stays "Disconnected":** daemon not running (`reins status`), or
+  the dev extension ID isn't allowlisted (`reins allow <id>`, then
+  `reins restart`).
+- **Port collisions:** none, normally — the daemon walks 8765–8774 and the
+  extension + CLI discover it. `REINS_PORT=<port>` pins an exact port for
+  everything (no walking); the popover's Advanced section can pin the
+  extension too.
+- **Agent config points at a stale port:** ports are sticky across restarts,
+  but if the daemon had to move, re-run `reins install claude`.
+  `reins doctor` shows what's reachable.
+- **Anything else:** `reins logs` tails the newest server log.
