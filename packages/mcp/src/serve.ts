@@ -2,7 +2,20 @@ import { loadAllowedOrigins } from "./allowlist.js";
 import { BridgeHost } from "./bridge.js";
 import { candidatePorts, loadOrCreateConfig, recordPort } from "./config.js";
 import { type Daemon, startDaemon } from "./daemon.js";
+import { type FoundDaemon, probeHealth } from "./ensure.js";
 import { createLogger, type Log } from "./log.js";
+
+/** First live daemon on a lower candidate port than ours, if any. Two racing
+ *  CLI spawns can bind different candidates; the lower port deterministically
+ *  wins and the higher one bows out. */
+export async function lowerPortRival(
+  ports: number[],
+  ownPort: number,
+  probe: (port: number) => Promise<FoundDaemon | undefined> = probeHealth,
+): Promise<number | undefined> {
+  const rivals = await Promise.all(ports.filter((p) => p < ownPort).map((p) => probe(p)));
+  return rivals.find((r) => r !== undefined)?.port;
+}
 
 function isAddrInUse(err: unknown): boolean {
   return (err as NodeJS.ErrnoException | undefined)?.code === "EADDRINUSE";
@@ -59,6 +72,12 @@ export async function runDaemon(): Promise<void> {
       `reins: failed to start (tried port${ports.length > 1 ? "s" : ""} ${ports.join(", ")}): ${msg}. Is another reins daemon running? (\`reins status\`)`,
     );
     process.exit(1);
+  }
+  const rival = await lowerPortRival(ports, daemon.port);
+  if (rival !== undefined) {
+    log(`reins: another daemon already runs on port ${rival} — exiting (it wins)`);
+    await daemon.close();
+    process.exit(0);
   }
   recordPort(config.dir, daemon.port);
   process.on("SIGINT", () => void shutdown("SIGINT", () => daemon.close()));
