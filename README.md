@@ -71,8 +71,9 @@ pnpm zip            # package the extension for the Chrome Web Store
 ```
 
 Local walkthrough (load unpacked, allow the dev ID, drive tabs):
-**[docs/RUNNING.md](docs/RUNNING.md)**. Release process:
-**[docs/PUBLISHING.md](docs/PUBLISHING.md)**.
+**[docs/RUNNING.md](docs/RUNNING.md)**. Releasing:
+**[docs/RELEASING.md](docs/RELEASING.md)** ·
+Chrome Web Store: **[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)**.
 
 ## Packages
 

@@ -16,10 +16,13 @@
     "dev": "turbo run dev",
     "daemon": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/cli/dist/cli.js daemon",
     "reins": "turbo run build --filter=@karnstack/reins --output-logs=errors-only && node packages/cli/dist/cli.js",
-    "zip": "turbo run zip"
+    "zip": "turbo run zip",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",
+    "@changesets/cli": "2.31.0",
     "turbo": "2.10.0",
     "typescript": "6.0.3"
   }

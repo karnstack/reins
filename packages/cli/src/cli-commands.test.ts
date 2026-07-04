@@ -19,7 +19,7 @@ function cfg() {
 
 const HEALTH = {
   ok: true,
-  version: "0.2.0",
+  version: "0.1.0",
   paired: true,
   browsers: [{ id: "b1", browser: "Chrome", connectedAt: 0 }],
 };
@@ -44,7 +44,7 @@ describe("healthSummary", () => {
   it("reports a running daemon with its browsers", () => {
     const s = healthSummary(HEALTH, 8765);
     expect(s).toContain("running");
-    expect(s).toContain("0.2.0");
+    expect(s).toContain("0.1.0");
     expect(s).toContain("Chrome");
   });
 
