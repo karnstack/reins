@@ -33,7 +33,10 @@ export class BridgeHost implements BridgePort {
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       const wss = new WebSocketServer({ host: "127.0.0.1", port: this.#requestedPort });
-      wss.on("listening", () => resolve());
+      wss.on("listening", () => {
+        process.stderr.write(`reins-mcp: bridge listening on 127.0.0.1:${this.port}\n`);
+        resolve();
+      });
       wss.on("error", (err) => {
         // Don't retain a server that never bound (e.g. EADDRINUSE) — avoids a leak on retry.
         this.#wss = undefined;
@@ -55,7 +58,9 @@ export class BridgeHost implements BridgePort {
   }
 
   #onConnection(ws: WebSocket, origin: string | undefined): void {
+    process.stderr.write(`reins-mcp: connection from origin=${origin}\n`);
     if (!origin?.startsWith(this.#originPrefix)) {
+      process.stderr.write(`reins-mcp: rejected: origin not allowed (${origin})\n`);
       ws.close(4003, "origin not allowed");
       return;
     }
@@ -68,11 +73,15 @@ export class BridgeHost implements BridgePort {
         if (hello.success && hello.data.token === this.#token) {
           authed = true;
           if (this.#client && this.#client !== ws && this.#client.readyState === WebSocket.OPEN) {
+            process.stderr.write("reins-mcp: client replaced by new connection\n");
             this.#client.close(4002, "replaced by a new connection");
           }
           this.#client = ws;
+          const browser = hello.data.browser;
+          process.stderr.write(`reins-mcp: authed${browser ? ` (browser=${browser})` : ""}\n`);
           ws.send(JSON.stringify(WelcomeFrame.parse({ type: "welcome", server: "reins" })));
         } else {
+          process.stderr.write("reins-mcp: rejected: bad token\n");
           ws.close(4001, "bad token");
         }
         return;
@@ -82,7 +91,8 @@ export class BridgeHost implements BridgePort {
         this.#settle(response.data.id, response.data);
       }
     });
-    ws.on("close", () => {
+    ws.on("close", (code) => {
+      process.stderr.write(`reins-mcp: connection closed (code=${code})\n`);
       if (this.#client === ws) {
         this.#client = undefined;
         // Spec §7: fail fast — don't leave in-flight requests hanging to timeout.
