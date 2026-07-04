@@ -13,6 +13,7 @@
 ## Global Constraints
 
 - Bind `127.0.0.1` only; default port 8765; `REINS_PORT` overrides.
+- **Amendment (port auto-discovery, approved mid-build):** candidate ports are 8765–8774 (`DEFAULT_PORT`/`PORT_RANGE` exported from `@reins/protocol`). Server side: sticky port from `~/.reins/port`, walk candidates when busy, record the bound port; `REINS_PORT` = exact, no walk. Extension: WS hello→welcome probe across candidates, last-good port first, rescan after the bridge client gives up (3 failed reconnects). CLI `install`/`status` discover the live port via `/health`. Tasks 4, 5, 7, 8 are adjusted accordingly during inline execution.
 - No tokens anywhere: no bearer on `/mcp`, no pairing token on the WS. `~/.reins/token` is no longer read or written.
 - WS origin check is **exact** ID match (`chrome-extension://<id>`), never prefix match.
 - Package `@karnstack/reins` v0.2.0, single bin `reins`; `reins-mcp` bin and package name retired. Extension version 0.2.0.

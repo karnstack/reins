@@ -152,6 +152,27 @@ logs/daemon.err.log   crash/stderr capture from the service manager
 - Manual (documented in RUNNING.md): `reins up` on macOS, extension unpacked
   + `reins allow`, green pill, drive from Claude Code.
 
+## Port auto-discovery (added 2026-07-04, approved)
+
+The port is no longer a fixed contract:
+
+- **Shared constants** (in `@reins/protocol`): `DEFAULT_PORT = 8765`,
+  `PORT_RANGE = 10` → candidate ports 8765–8774.
+- **Daemon (and stdio bridge)**: sticky port selection — prefer the port
+  recorded in `~/.reins/port` (if in no-conflict shape), else walk the
+  candidate range and bind the first free port; record the bound port.
+  `REINS_PORT` forces an exact port (no walk, fail hard if busy).
+- **Extension**: probes candidates over WS (hello → welcome within a short
+  timeout identifies a real reins server; no extra permissions needed),
+  trying the last-good port first (cached in `chrome.storage.local`). The
+  bridge client gives up after a few reconnect attempts on a dead port and
+  triggers a rescan.
+- **CLI**: `reins install` locates the live daemon via `GET /health` across
+  the candidates and bakes the found URL into the client config; `reins
+  status`/`doctor` report the discovered port.
+- **Known limitation**: MCP clients hold a baked URL. If the daemon drifts to
+  a new port, re-run `reins install <client>`; stickiness makes drift rare.
+
 ## Out of scope (v1)
 
 - Windows service management (stdio mode is the Windows path).
