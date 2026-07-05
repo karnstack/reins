@@ -25,13 +25,12 @@ offscreen document, popup, and icons — upload it as-is.
 
 1. Dashboard → **Add new item** → drag in the zip → upload.
 2. **Store listing** tab:
-   - **Description**: what reins does — drive your real, logged-in browser
-     from a coding agent via the reins CLI; everything local.
+   - **Description**: paste the copy from
+     [Store listing description](#store-listing-description-paste-ready) below
+     (well under the 16k-character field limit).
    - **Category**: *Developer Tools*.
-   - **Language**, and a store icon (128×128 is in the zip).
-   - **Screenshots**: at least one **1280×800** (or 640×400) PNG. The store
-     will not publish without one. A good shot: the toolbar popover in its
-     connected state next to an agent driving a page.
+   - **Language**, and the graphic assets (see
+     [Graphic assets](#graphic-assets) below).
 3. **Privacy** tab:
    - **Single purpose**: "Lets a local daemon (installed by the user via the
      reins CLI, e.g. for coding agents) drive the user's own browser —
@@ -54,6 +53,81 @@ offscreen document, popup, and icons — upload it as-is.
 4. **Distribution**: Public — or Unlisted first if you want to test the store
    install privately before going public.
 5. **Submit for review.**
+
+## Graphic assets
+
+The **Graphic assets** section of the listing form. Ready-made, branded assets
+live in [`packages/extension/store-assets/`](../packages/extension/store-assets)
+(regenerate with `python3 packages/extension/store-assets/generate.py`).
+
+| Slot | Required | Size | Format | Use |
+|---|---|---|---|---|
+| **Store icon** | ✅ | 128×128 | PNG | `packages/extension/icons/icon-128.png` |
+| **Screenshots** (≤5) | ✅ (≥1) | 1280×800 or 640×400 | JPEG / 24-bit PNG, no alpha | `store-assets/screenshot-1280x800.png` |
+| **Small promo tile** | optional | 440×280 | JPEG / 24-bit PNG, no alpha | `store-assets/small-tile-440x280.png` |
+| **Marquee promo tile** | optional | 1400×560 | JPEG / 24-bit PNG, no alpha | `store-assets/marquee-1400x560.png` |
+| Global promo video | optional | — | YouTube URL | skip |
+
+The generated screenshot is a **branded hero** — enough to submit. For a
+stronger listing, add real captures too (up to 5): the toolbar popover in its
+connected state, and an agent driving a page. Capture at exactly 1280×800 (or
+640×400) with no alpha channel.
+
+## Store listing description (paste-ready)
+
+Copy everything between the rules into the **Description** field. It is ~2.6k
+characters — well under the store's 16,000-character limit.
+
+---
+
+**Take the reins of your real, logged-in browser from your coding agent.**
+
+reins lets AI coding agents — Claude Code, Cursor, Codex, GitHub Copilot, and any tool with a shell — drive the actual Chromium browser you already use, with all your sessions and logins intact. No separate automation profile, no launch flags, no signing in again. Your agent lists tabs, opens pages, clicks, types, fills forms, scrolls, screenshots, reads the page, runs JavaScript, and inspects console and network activity — right in your everyday browser.
+
+Everything stays on your machine. The extension talks only to a small companion program running locally on 127.0.0.1. Nothing is ever sent to a remote server, and no page data leaves your computer.
+
+## How it works
+
+reins has two halves you install yourself:
+
+1. This extension — connects to a local companion daemon over a WebSocket bound to 127.0.0.1.
+2. The reins CLI (@karnstack/reins, installed from npm) — runs that daemon, which your coding agent controls with simple commands.
+
+Once both are in place, the extension discovers the daemon on its own and the toolbar popover turns green. From then on, your agent drives the browser through the CLI.
+
+## What your agent can do
+
+- Tabs — list, open, close, and focus tabs across every connected browser
+- Navigate — go to a URL, or back / forward / reload
+- Inspect — snapshot the page's interactive elements, read visible text, capture screenshots
+- Interact — click, type, fill inputs, choose dropdown options, hover, scroll, press keys, upload files
+- Debug — read recent console messages and network requests for a tab
+- Advanced — evaluate JavaScript and issue raw Chrome DevTools Protocol commands
+
+## Privacy & security
+
+- Local only. Page content and tab data are read via the Chrome DevTools Protocol only when your local daemon asks, and are sent only to that daemon on 127.0.0.1.
+- No tracking. No analytics, no telemetry, no advertising. Nothing is collected for the developer, sold, or shared with third parties.
+- No remote code. All code ships inside the extension.
+- You stay in control. Chrome shows its native "is being debugged" banner whenever the extension is attached to a tab, and the popup's Disconnect button cuts the connection instantly.
+- Trusted connections only. The daemon accepts the extension solely from allowlisted chrome-extension:// origins on 127.0.0.1 — an identity web pages cannot forge.
+
+## Permissions, and why
+
+- debugger — runs your agent's commands (click, type, screenshot, read console/network) on tabs via the Chrome DevTools Protocol. Chrome shows its native debugging banner while attached.
+- tabs — list, open, close, and focus tabs, and resize the tab's window.
+- storage — stores the auto-connect setting, cached daemon port, and connection status on your device.
+- offscreen — hosts the persistent WebSocket to your local daemon; MV3 service workers can't hold long-lived connections.
+
+## Requirements
+
+reins is a developer tool. The extension needs the reins CLI installed on your machine to connect to:
+
+    npm i -g @karnstack/reins
+
+It's open source. Learn more, see the docs, or file an issue at https://github.com/karnstack/reins
+
+---
 
 ## ⚠ After the first approval
 

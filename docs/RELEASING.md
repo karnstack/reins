@@ -71,8 +71,10 @@ publishes versions not already on the registry). Steps for the first ship:
 
 - `@reins/protocol` is bundled (`noExternal` in `packages/cli/tsdown.config.ts`),
   so the published package has no workspace dependencies.
-- npm auth in CI comes from `.npmrc` (`_authToken=${NPM_TOKEN}`), substituted
-  from the secret at publish time.
+- npm auth in CI is handled by the changesets action: given the `NPM_TOKEN`
+  env var, it writes a user `~/.npmrc` before publishing. (A token line in the
+  committed `.npmrc` would be ignored — pnpm won't expand env vars in
+  project-file credentials.)
 - Smoke-test the tarball once before the first publish:
 
   ```bash
