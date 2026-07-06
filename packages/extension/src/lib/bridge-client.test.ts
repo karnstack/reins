@@ -100,7 +100,11 @@ function makeClient(
     browser: "test",
     dispatch: async () => ({}),
     createSocket: nodeSocketFactory,
-    probeTimeoutMs: 250,
+    // Production default. A short probe window is a flake hazard on loaded CI
+    // runners: if the timer fires before the welcome frame is processed, the
+    // client abandons a socket the server already accepted. Tests that need
+    // fast probe turnover override this per-test.
+    probeTimeoutMs: 1500,
     ...over,
   });
 }
@@ -153,6 +157,8 @@ describe("BridgeClient", () => {
         if (s === "connecting") cycles += 1;
       },
       schedule: (fn) => setTimeout(fn, 5),
+      // Short probe so two full scan cycles fit well inside the waitFor window.
+      probeTimeoutMs: 250,
     });
     client.start();
     // At least two full scan cycles run without a connection — the client
@@ -163,14 +169,21 @@ describe("BridgeClient", () => {
 
   it("dispatches a request and replies with the result", async () => {
     harness = await startServer();
+    let status = "";
     client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       dispatch: async (method) => (method === "list_tabs" ? { tabs: [{ tabId: 1 }] } : {}),
+      onStatus: (s) => {
+        status = s;
+      },
     });
     client.start();
-    await waitFor(() => harness?.current() !== undefined);
+    // Wait for the client to adopt the socket, not just for the server to see
+    // hello — a probe timeout between the two abandons the socket and the
+    // request below would go to a connection the client no longer serves.
+    await waitFor(() => status === "connected");
 
     const response = await new Promise<Record<string, unknown>>((resolve) => {
-      // biome-ignore lint/style/noNonNullAssertion: harness and current() are confirmed non-null by waitFor
+      // biome-ignore lint/style/noNonNullAssertion: connected implies the server accepted hello, so current() is set
       const ws = harness!.current()!;
       ws.on("message", (d: RawData) => {
         const m = JSON.parse(d.toString());
@@ -183,16 +196,20 @@ describe("BridgeClient", () => {
 
   it("replies ok:false when the dispatcher throws", async () => {
     harness = await startServer();
+    let status = "";
     client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       dispatch: async () => {
         throw new Error("boom");
       },
+      onStatus: (s) => {
+        status = s;
+      },
     });
     client.start();
-    await waitFor(() => harness?.current() !== undefined);
+    await waitFor(() => status === "connected");
 
     const response = await new Promise<Record<string, unknown>>((resolve) => {
-      // biome-ignore lint/style/noNonNullAssertion: harness and current() are confirmed non-null by waitFor
+      // biome-ignore lint/style/noNonNullAssertion: connected implies the server accepted hello, so current() is set
       const ws = harness!.current()!;
       ws.on("message", (d: RawData) => {
         const m = JSON.parse(d.toString());
@@ -203,6 +220,51 @@ describe("BridgeClient", () => {
     expect(response.ok).toBe(false);
     expect((response.error as { message: string }).message).toBe("boom");
     expect((response.error as { code: string }).code).toBe("HANDLER_ERROR");
+  });
+
+  it("abandons a probe whose welcome arrives late, then adopts the retry", async () => {
+    // Regression for a CI flake: on a stalled runner the probe timer can fire
+    // after the server accepted hello but before welcome is processed. The
+    // client must drop that socket and succeed on the next cycle.
+    let hellos = 0;
+    let live: WebSocket | undefined;
+    harness = await startServer();
+    harness.server.removeAllListeners("connection");
+    harness.server.on("connection", (ws) => {
+      ws.on("message", (data: RawData) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === "hello") {
+          hellos += 1;
+          live = ws;
+          const delay = hellos === 1 ? 200 : 0; // first welcome misses the 50ms probe
+          setTimeout(() => ws.send(JSON.stringify({ type: "welcome", server: "reins" })), delay);
+        }
+      });
+    });
+
+    let status = "";
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
+      dispatch: async () => ({ pong: true }),
+      onStatus: (s) => {
+        status = s;
+      },
+      probeTimeoutMs: 50,
+      schedule: (fn) => setTimeout(fn, 5),
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+    expect(hellos).toBeGreaterThanOrEqual(2);
+
+    const response = await new Promise<Record<string, unknown>>((resolve) => {
+      // biome-ignore lint/style/noNonNullAssertion: connected implies a live socket
+      const ws = live!;
+      ws.on("message", (d: RawData) => {
+        const m = JSON.parse(d.toString());
+        if (m.type === "response") resolve(m);
+      });
+      ws.send(JSON.stringify({ type: "request", id: "r-late", method: "ping", params: {} }));
+    });
+    expect(response).toMatchObject({ id: "r-late", ok: true, result: { pong: true } });
   });
 
   it("does not produce an unhandled rejection when the socket drops mid-dispatch", async () => {
@@ -216,6 +278,7 @@ describe("BridgeClient", () => {
     let dispatchCalled = false;
     // Latch: true once "disconnected" has been observed (avoids racing with fast reconnect).
     let sawDisconnected = false;
+    let sawConnected = false;
 
     client = makeClient([`ws://127.0.0.1:${harness.port}`], {
       dispatch: async () => {
@@ -223,13 +286,14 @@ describe("BridgeClient", () => {
         return dispatchInflight;
       },
       onStatus: (s) => {
+        if (s === "connected") sawConnected = true;
         if (s === "disconnected") sawDisconnected = true;
       },
       schedule: (fn) => setTimeout(fn, 5),
     });
     client.start();
 
-    await waitFor(() => harness?.current() !== undefined);
+    await waitFor(() => sawConnected);
     harness
       .current()
       ?.send(JSON.stringify({ type: "request", id: "r-drop", method: "slow", params: {} }));
