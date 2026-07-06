@@ -1,13 +1,44 @@
 ---
 name: reins
-description: Control the user's real, logged-in browser from the shell — list tabs, click, type, screenshot, read pages, run JS and raw CDP — via the reins CLI. Use when asked to interact with, test, or scrape a live webpage in the user's browser.
+description: Drive the user's real, logged-in browser from the shell via the reins CLI. Because it's their actual browser, every site is already authenticated — so you can scrape behind logins, read cookies/tokens/localStorage, watch and replay live API traffic, call a site's own API as the signed-in user, and click/type/screenshot. Use whenever asked to interact with, test, scrape, extract data from, or automate a live webpage or authenticated site in the user's browser.
 ---
 
 # reins — drive the user's real browser
 
 reins is a CLI that controls the user's actual browsers (Chrome, Brave, Edge,
 Arc, Dia, …) through a browser extension. Real sessions, real logins — no
-separate automation profile. Everything runs locally on 127.0.0.1.
+separate automation profile, no login flows, no API keys. Everything runs
+locally on 127.0.0.1.
+
+## Your superpower
+
+You are not in a sandboxed headless browser. You are in **the user's own
+browser, already signed in to everything they use** — Gmail, GitHub, their
+bank, their company's internal dashboards, the SaaS tools behind SSO. Every
+cookie, session, and auth token the user has is live in the tab you're driving.
+Anything the user can see or do while logged in, you can see or do
+programmatically. That changes what's possible:
+
+- **Scrape behind logins.** Read fully-rendered, authenticated pages (`text`,
+  `snapshot`, `eval`) and paginate by driving the real UI. No login wall, no
+  bot detection you'd hit from a fresh browser — you *are* their browser.
+- **Read tokens and storage.** `eval` runs in the page's own origin, so
+  `localStorage`, `sessionStorage`, and non-`httpOnly` cookies are one call
+  away. `httpOnly` cookies that JavaScript can't touch are still reachable via
+  `cdp` (see below).
+- **Watch live API traffic.** `network` surfaces every request a page fires
+  (method, URL, status) — reverse-engineer an app's private API by watching it
+  work.
+- **Call that API as the user.** Once you know an endpoint, `eval` a
+  credentialed `fetch` and get JSON straight from the backend — skip the DOM
+  entirely, with the user's session doing the auth for you.
+- **Automate authenticated flows.** Fill forms, submit, upload, navigate
+  multi-step wizards — end to end, as the logged-in user.
+
+Use this power in the user's interest. These are their real credentials and
+sessions; extracted tokens and cookies are live secrets. Pull only what the
+task needs, and don't paste secrets anywhere they'd persist or leak beyond
+where the user asked them to go.
 
 ## Check it works (once per session)
 
@@ -52,13 +83,56 @@ resize          --width 1280 --height 800
 text            visible page (or element) text
 screenshot      [--full] [--out path]     prints the image file path
 console         [--level error] recent console messages
-network         [--url pattern] recent requests
-eval            'document.title' [--await]   JS in the page
+network         [--url pattern] recent requests (method/URL/status only)
+eval            'document.title' [--await]   JS in the page's own origin
 cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
 ```
 
 Every command takes `--tab <id>` (default: the active tab) and `--json`
 (raw result). `reins help <command>` shows exact usage.
+
+## Recipes for the powerful stuff
+
+`eval` executes in the page's **main world / real origin**, so it sees the same
+`document`, `localStorage`, cookies, and session as the user. `--await` unwraps
+a returned promise (needed for `fetch`). Quote the expression for your shell.
+
+**Dump auth tokens / app state from storage:**
+```bash
+reins eval 'JSON.stringify(localStorage)' --tab 12
+reins eval 'JSON.stringify(sessionStorage)' --tab 12
+reins eval 'document.cookie' --tab 12          # non-httpOnly cookies only
+```
+
+**Read cookies JavaScript can't — including `httpOnly` session cookies —** via
+raw CDP:
+```bash
+reins cdp Network.getAllCookies --tab 12
+reins cdp Network.getCookies '{"urls":["https://app.example.com"]}' --tab 12
+```
+
+**Discover a private API, then call it as the logged-in user.** Watch traffic
+while the page does the thing you want, then replay the endpoint with the
+session's own credentials:
+```bash
+reins network --url api --tab 12                       # find the endpoint
+reins eval 'fetch("/api/v2/orders?limit=100", {credentials:"include"})
+              .then(r => r.json())' --await --tab 12   # get JSON directly
+```
+This bypasses pagination scraping entirely — you're hitting the backend the
+same way the app does, authenticated by the user's live session.
+
+**Scrape a rendered, authenticated list** (structured extraction beats reading
+prose text):
+```bash
+reins eval '[...document.querySelectorAll("tr.row")]
+              .map(r => ({id:r.dataset.id, name:r.querySelector(".name").textContent}))' --tab 12
+```
+
+**Grab a full response body for a specific captured request** (headers, JSON,
+auth bearer tokens in flight) — enable the Network domain, then fetch by
+requestId from `Network.getResponseBody`; for most cases the credentialed
+`fetch` recipe above is simpler.
 
 ## Multiple browsers
 
@@ -68,14 +142,20 @@ otherwise, never guess. `reins browsers` shows who's connected.
 
 ## Escape hatches
 
-- `reins eval` runs arbitrary JS in the page and prints the value.
-- `reins cdp` calls any CDP method — cookies, geolocation, PDF, tracing:
-  `reins cdp Network.clearBrowserCookies --tab 12`. Caveat: `Emulation.*`
+- `reins eval` runs arbitrary JS in the page and prints the value (add
+  `--await` for promises).
+- `reins cdp` calls any CDP method — cookies, storage, geolocation, PDF,
+  tracing, emulation: `reins cdp Network.clearBrowserCookies --tab 12`. It's an
+  unrestricted passthrough to the full DevTools Protocol. Caveat: `Emulation.*`
   overrides reset when the command's debugger session detaches; for lasting
   viewport changes use `reins resize`.
 
 ## Gotchas
 
+- **`network` and `console` capture metadata from their first use on a tab
+  onward** — no replay of past events, and `network` records method/URL/status
+  only, *not* headers or bodies. For bodies, headers, or in-flight tokens, use
+  the `eval` credentialed-`fetch` recipe or `cdp`.
 - A native JS dialog (alert/confirm/prompt) freezes the page's renderer.
   `reins dialog --accept`/`--dismiss` can answer one only if reins was already
   driving that tab when it opened; a dialog that appeared on its own can't be
@@ -85,10 +165,10 @@ otherwise, never guess. `reins browsers` shows who's connected.
   `dblclick`; for a true double-click use `reins eval 'el.dispatchEvent(...)'`.
 - `type` sends real keystrokes (triggers autocomplete etc.); `fill` sets the
   value in one step and fires input/change — prefer it for forms.
-- `console`/`network` only capture from their first use on a tab onward.
 - Errors like `element not found` usually mean a stale ref — `snapshot` again.
 - "another debugger is already attached" means another tool holds the tab
   (DevTools, the Claude-in-Chrome extension, or an AI browser's own agent).
   Chrome allows one debugger per tab — close the other tool or run reins in a
   dedicated browser/profile.
+- Driving a tab shows the native "is being debugged" banner; that's expected.
 - Deeper diagnostics: `reins doctor`, `reins logs`.
