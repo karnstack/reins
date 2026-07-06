@@ -50,6 +50,9 @@ npx skills add karnstack/reins   # the skill, into your agent(s) of choice
 # then install the reins extension (Chrome Web Store) → it connects on its own
 ```
 
+No store access, or store version unavailable? `reins extension` installs it
+via Load unpacked instead — see [docs/SIDELOAD.md](docs/SIDELOAD.md).
+
 That's the whole setup — no daemon to start, nothing to register per agent.
 `reins status`, `reins browsers`, `reins tabs`, and `reins logs` show what's
 connected; logs live in `~/.reins/logs/`.

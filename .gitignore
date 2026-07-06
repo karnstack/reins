@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/
+packages/cli/extension/
 .turbo/
 coverage/
 *.log

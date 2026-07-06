@@ -100,6 +100,16 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "extension": {
+      const { bundledExtensionDir, extractExtension, sideloadInstructions } = await import(
+        "./sideload.js"
+      );
+      const target = join(loadOrCreateConfig().dir, "extension");
+      extractExtension(bundledExtensionDir(), target);
+      console.log(sideloadInstructions(target));
+      break;
+    }
+
     case "allow": {
       const id = rest[0];
       if (!id) throw new UsageError("usage: reins allow <extension-id>");

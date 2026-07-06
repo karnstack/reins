@@ -1,0 +1,5 @@
+{
+  "comment": "Public key pinning the sideloaded extension's id (docs/SIDELOAD.md). Injected into the bundled build's manifest by scripts/bundle-extension.mjs; NOT a secret and NOT in the Chrome Web Store zip. The id is sha256 of this key — changing either breaks every sideload install.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlraY/YotrMuDAZPAETOPX4Rbw/pLlpeM9ERUi8fZjdsFA5VTvnLPkddm9pvdgI9lP2dDeGPb1yrPYdGvLe+I9oQcAR2XlYNhp8RjkAk3ZeMblGiPj22j+QLbs6V0jbz6ZuVmmXOXRrqAek62njzitboaqSdJCrUlWuIu/ssIwuzNnMUN9x8gdsiVCOLJhXVj1vyZGTeloNvsi6d8hpCm4y9AdCmqgENzjuMn8oN44V2qNFcd6YtCAa9VGg9LdeNjlL8TLRKu0jviIDpbPGKBkb+9Nom4tQWIk7HOwFFooTGH6e9ScwkAf4+WZ92ZvtPiSzY1+l9z/pP4y80tmL4RRwIDAQAB",
+  "id": "hacilcdhjdenpalnghcnapjfkjdeodhg"
+}
