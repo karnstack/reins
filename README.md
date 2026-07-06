@@ -1,6 +1,24 @@
-# reins
+<p align="center">
+  <img src="packages/extension/icons/icon.svg" width="96" alt="reins logo">
+</p>
 
-**Take the reins of your real browser from any coding agent.**
+<h1 align="center">reins</h1>
+
+<p align="center"><strong>Take the reins of your real browser from any coding agent.</strong></p>
+
+<p align="center">
+  <a href="https://reins.karnstack.com">reins.karnstack.com</a> ·
+  <a href="https://reins.karnstack.com/docs">docs</a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@karnstack/reins"><img src="https://img.shields.io/npm/v/%40karnstack%2Freins" alt="npm"></a>
+  <a href="https://github.com/karnstack/reins/actions/workflows/ci.yml"><img src="https://github.com/karnstack/reins/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
+  <!-- Chrome Web Store badge once the extension ID exists:
+  <a href="https://chromewebstore.google.com/detail/EXTENSION_ID"><img src="https://img.shields.io/chrome-web-store/v/EXTENSION_ID" alt="Chrome Web Store"></a>
+  -->
+</p>
 
 reins gives agents (Claude Code, Cursor, Codex, Copilot, … — anything with a
 shell) full control of your actual, logged-in Chromium browsers — Chrome,
