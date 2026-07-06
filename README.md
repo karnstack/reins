@@ -80,6 +80,7 @@ Chrome Web Store: **[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)**.
 - `packages/protocol` — shared zod frames + method schemas + port constants (`@reins/protocol`, private, bundled)
 - `packages/cli` — CLI + daemon, published as [`@karnstack/reins`](https://www.npmjs.com/package/@karnstack/reins) (bin: `reins`)
 - `packages/extension` — MV3 extension (Vite + crxjs)
+- `packages/web` — landing page + docs at [reins.karnstack.com](https://reins.karnstack.com) (TanStack Start, prerendered, Cloudflare)
 - `skills/reins` — the agent skill (`npx skills add karnstack/reins`)
 
 ## Security

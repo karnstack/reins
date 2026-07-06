@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="16" y1="6" x2="110" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C83FF"/>
+      <stop offset="1" stop-color="#6D28D9"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="64" y1="4" x2="64" y2="74" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="124" height="124" rx="30" fill="url(#bg)"/>
+  <rect x="2" y="2" width="124" height="124" rx="30" fill="url(#sheen)"/>
+  <!-- reins: a spline held at two control grips -->
+  <path d="M42 42 C 42 80, 86 48, 86 86" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"/>
+  <circle cx="42" cy="42" r="13" fill="#FFFFFF"/>
+  <circle cx="86" cy="86" r="13" fill="#FFFFFF"/>
+</svg>
