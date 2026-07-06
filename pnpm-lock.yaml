@@ -30,6 +30,9 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@reins/extension':
+        specifier: workspace:*
+        version: link:../extension
       '@reins/protocol':
         specifier: workspace:*
         version: link:../protocol

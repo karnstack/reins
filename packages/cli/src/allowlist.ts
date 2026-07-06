@@ -1,9 +1,14 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { SIDELOAD_EXTENSION_ID } from "./sideload.js";
 
 /** Chrome Web Store id(s) of the published reins extension.
  *  Empty until the first store publish — docs/PUBLISHING.md has the step. */
 export const PUBLISHED_EXTENSION_IDS: readonly string[] = [];
+
+/** Ids trusted without an allow-file entry: the store build(s) plus the
+ *  key-pinned sideload build (`reins extension` — docs/SIDELOAD.md). */
+const BUILTIN_IDS: readonly string[] = [...PUBLISHED_EXTENSION_IDS, SIDELOAD_EXTENSION_ID];
 
 const ID_RE = /^[a-p]{32}$/;
 
@@ -13,7 +18,7 @@ function filePath(dir: string): string {
 
 /** All WS origins the bridge accepts: built-ins + ~/.reins/allowed-extensions. */
 export function loadAllowedOrigins(dir: string): Set<string> {
-  const ids = new Set(PUBLISHED_EXTENSION_IDS);
+  const ids = new Set(BUILTIN_IDS);
   try {
     for (const line of readFileSync(filePath(dir), "utf8").split("\n")) {
       const id = line.trim();

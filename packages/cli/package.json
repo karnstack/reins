@@ -24,7 +24,9 @@
     "reins": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "extension",
+    "sideload-key.json"
   ],
   "engines": {
     "node": ">=20"
@@ -33,17 +35,18 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/bundle-extension.mjs",
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepack": "tsdown"
+    "prepack": "tsdown && node scripts/bundle-extension.mjs"
   },
   "dependencies": {
     "ws": "8.21.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@reins/extension": "workspace:*",
     "@reins/protocol": "workspace:*",
     "@types/node": "26.0.1",
     "@types/ws": "8.18.1",
