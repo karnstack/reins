@@ -11,6 +11,7 @@ import {
 import { CopyCommand } from "@/components/copy-command";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { StoreReviewBadge } from "@/components/store-review-badge";
 import { Output, Prompt, Terminal } from "@/components/terminal";
 import { Button } from "@/components/ui/button";
 
@@ -23,13 +24,13 @@ const FEATURES = [
     icon: AppWindow,
     title: "Every tab, every browser",
     description:
-      "List, open, focus, and close tabs across Chrome, Brave, Edge, Arc, and Dia — one daemon serves every connected browser.",
+      "List, open, focus, and close tabs across Chrome, Brave, Edge, Arc, and Dia. One daemon serves every connected browser.",
   },
   {
     icon: MousePointerClick,
     title: "Real interaction",
     description:
-      "Click, type, fill, select, hover, scroll, press keys, and upload files — addressed by stable element refs, not brittle selectors.",
+      "Click, type, fill, select, hover, scroll, press keys, and upload files, all addressed by stable element refs, not brittle selectors.",
   },
   {
     icon: ScanSearch,
@@ -53,14 +54,14 @@ const FEATURES = [
     icon: KeyRound,
     title: "Your sessions intact",
     description:
-      "It is your real profile — logins, cookies, and state included. No separate automation browser to babysit.",
+      "It is your real profile, with logins, cookies, and state included. No separate automation browser to babysit.",
   },
 ];
 
 const SECURITY_POINTS = [
-  "Everything binds 127.0.0.1 — nothing is reachable from the network.",
+  "Everything binds 127.0.0.1; nothing is reachable from the network.",
   "Host-header validation blocks DNS rebinding, so web pages can't reach the daemon.",
-  "Only allowlisted chrome-extension:// origins may connect — an identity pages can't forge.",
+  "Only allowlisted chrome-extension:// origins may connect, an identity pages can't forge.",
   "Chrome shows its native debugging banner whenever the extension is attached.",
   "The popup's Disconnect toggle severs the connection instantly.",
 ];
@@ -77,7 +78,7 @@ function LandingPage() {
                 Take the reins of your real browser
               </h1>
               <p className="mt-6 max-w-[48ch] text-lg text-pretty text-muted-foreground">
-                reins lets coding agents — Claude Code, Cursor, Codex, anything with a shell — drive
+                reins lets coding agents (Claude Code, Cursor, Codex, anything with a shell) drive
                 the logged-in browser you already use. No debug profile, no launch flags, no MCP
                 server to register.
               </p>
@@ -124,18 +125,21 @@ function LandingPage() {
                 <p className="font-mono text-sm text-muted-foreground">01</p>
                 <h3 className="mt-2 font-semibold">Install the CLI</h3>
                 <p className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                  The daemon ships inside and starts on demand — any command spawns it.
+                  The daemon ships inside and starts on demand; any command spawns it.
                 </p>
                 <CopyCommand command="npm i -g @karnstack/reins" className="mt-4" />
               </li>
               <li>
                 <p className="font-mono text-sm text-muted-foreground">02</p>
                 <h3 className="mt-2 font-semibold">Add the extension</h3>
+                <div className="mt-2">
+                  <StoreReviewBadge />
+                </div>
                 <p className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                  It discovers the daemon on its own and the toolbar icon turns green when
-                  connected.
+                  Until the store listing lands, one command stages it for Load unpacked. It
+                  discovers the daemon on its own and the toolbar icon turns green when connected.
                 </p>
-                <CopyCommand command="reins status" className="mt-4" />
+                <CopyCommand command="reins extension" className="mt-4" />
               </li>
               <li>
                 <p className="font-mono text-sm text-muted-foreground">03</p>
@@ -184,8 +188,8 @@ function LandingPage() {
                 Local by design
               </h2>
               <p className="mt-4 max-w-[56ch] text-pretty text-muted-foreground">
-                reins has no cloud half. The extension talks to one thing — your own daemon on
-                127.0.0.1 — and collects nothing, for anyone. The whole stack is open source and
+                reins has no cloud half. The extension talks to one thing, your own daemon on
+                127.0.0.1, and collects nothing, for anyone. The whole stack is open source and
                 auditable.
               </p>
               <p className="mt-4 text-sm">
@@ -220,7 +224,7 @@ function LandingPage() {
               Hand your agent the reins
             </h2>
             <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-muted-foreground">
-              Two installs and a skill — your agent is driving your browser in under a minute.
+              Two installs and a skill: your agent is driving your browser in under a minute.
             </p>
             <div className="mt-8 flex justify-center">
               <CopyCommand command="npm i -g @karnstack/reins" />

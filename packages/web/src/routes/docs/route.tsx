@@ -12,6 +12,7 @@ export const Route = createFileRoute("/docs")({
 
 const NAV = [
   { to: "/docs", label: "Getting started", exact: true },
+  { to: "/docs/sideload", label: "Install without the store", exact: false },
   { to: "/docs/commands", label: "Commands", exact: false },
   { to: "/docs/architecture", label: "Architecture", exact: false },
   { to: "/docs/security", label: "Security", exact: false },

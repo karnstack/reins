@@ -13,6 +13,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as DocsRouteRouteImport } from './routes/docs/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
+import { Route as DocsSideloadRouteImport } from './routes/docs/sideload'
 import { Route as DocsSecurityRouteImport } from './routes/docs/security'
 import { Route as DocsFaqRouteImport } from './routes/docs/faq'
 import { Route as DocsCommandsRouteImport } from './routes/docs/commands'
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const DocsIndexRoute = DocsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => DocsRouteRoute,
+} as any)
+const DocsSideloadRoute = DocsSideloadRouteImport.update({
+  id: '/sideload',
+  path: '/sideload',
   getParentRoute: () => DocsRouteRoute,
 } as any)
 const DocsSecurityRoute = DocsSecurityRouteImport.update({
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/faq': typeof DocsFaqRoute
   '/docs/security': typeof DocsSecurityRoute
+  '/docs/sideload': typeof DocsSideloadRoute
   '/docs/': typeof DocsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/faq': typeof DocsFaqRoute
   '/docs/security': typeof DocsSecurityRoute
+  '/docs/sideload': typeof DocsSideloadRoute
   '/docs': typeof DocsIndexRoute
 }
 export interface FileRoutesById {
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/faq': typeof DocsFaqRoute
   '/docs/security': typeof DocsSecurityRoute
+  '/docs/sideload': typeof DocsSideloadRoute
   '/docs/': typeof DocsIndexRoute
 }
 export interface FileRouteTypes {
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/docs/commands'
     | '/docs/faq'
     | '/docs/security'
+    | '/docs/sideload'
     | '/docs/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/docs/commands'
     | '/docs/faq'
     | '/docs/security'
+    | '/docs/sideload'
     | '/docs'
   id:
     | '__root__'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/docs/commands'
     | '/docs/faq'
     | '/docs/security'
+    | '/docs/sideload'
     | '/docs/'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsIndexRouteImport
       parentRoute: typeof DocsRouteRoute
     }
+    '/docs/sideload': {
+      id: '/docs/sideload'
+      path: '/sideload'
+      fullPath: '/docs/sideload'
+      preLoaderRoute: typeof DocsSideloadRouteImport
+      parentRoute: typeof DocsRouteRoute
+    }
     '/docs/security': {
       id: '/docs/security'
       path: '/security'
@@ -193,6 +212,7 @@ interface DocsRouteRouteChildren {
   DocsCommandsRoute: typeof DocsCommandsRoute
   DocsFaqRoute: typeof DocsFaqRoute
   DocsSecurityRoute: typeof DocsSecurityRoute
+  DocsSideloadRoute: typeof DocsSideloadRoute
   DocsIndexRoute: typeof DocsIndexRoute
 }
 
@@ -201,6 +221,7 @@ const DocsRouteRouteChildren: DocsRouteRouteChildren = {
   DocsCommandsRoute: DocsCommandsRoute,
   DocsFaqRoute: DocsFaqRoute,
   DocsSecurityRoute: DocsSecurityRoute,
+  DocsSideloadRoute: DocsSideloadRoute,
   DocsIndexRoute: DocsIndexRoute,
 }
 

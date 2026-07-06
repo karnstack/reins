@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/accordion";
 
 export const Route = createFileRoute("/docs/faq")({
-  head: () => ({ meta: [{ title: "FAQ — reins" }] }),
+  head: () => ({ meta: [{ title: "FAQ · reins" }] }),
   component: FaqPage,
 });
 
@@ -15,12 +15,12 @@ const FAQS = [
   {
     question: "Is anything ever sent to a remote server?",
     answer:
-      "No. The extension talks to exactly one thing: the reins daemon on 127.0.0.1 on your machine. There is no analytics, no telemetry, and no remote code — nothing leaves your computer.",
+      "No. The extension talks to exactly one thing: the reins daemon on 127.0.0.1 on your machine. There is no analytics, no telemetry, and no remote code. Nothing leaves your computer.",
   },
   {
     question: "Which browsers work?",
     answer:
-      "Any Chromium browser that supports Manifest V3 extensions: Chrome, Brave, Edge, Arc, and Dia are all known to work. Install the extension in each browser you want agents to reach — one daemon serves them all.",
+      "Any Chromium browser that supports Manifest V3 extensions: Chrome, Brave, Edge, Arc, and Dia are all known to work. Install the extension in each browser you want agents to reach; one daemon serves them all.",
   },
   {
     question: "Which agents work?",
@@ -30,7 +30,7 @@ const FAQS = [
   {
     question: 'Why does Chrome show an "is being debugged" banner?',
     answer:
-      "reins executes commands through chrome.debugger — the same Chrome DevTools Protocol that powers DevTools. Chrome shows its native banner whenever a debugger is attached. That is deliberate transparency: you always know when an agent is acting on a tab.",
+      "reins executes commands through chrome.debugger, the same Chrome DevTools Protocol that powers DevTools. Chrome shows its native banner whenever a debugger is attached. That is deliberate transparency: you always know when an agent is acting on a tab.",
   },
   {
     question: "Do I need to run or configure the daemon?",
@@ -40,12 +40,17 @@ const FAQS = [
   {
     question: "How is this different from an MCP browser server?",
     answer:
-      "There is nothing to register per agent. reins is a plain CLI, so any tool that can run shell commands can drive the browser — and it drives your real, logged-in profile rather than a separate automation browser.",
+      "There is nothing to register per agent. reins is a plain CLI, so any tool that can run shell commands can drive the browser. And it drives your real, logged-in profile rather than a separate automation browser.",
   },
   {
     question: "How do I stop an agent mid-flight?",
     answer:
-      "Click the reins toolbar icon and hit Disconnect — the connection is severed instantly. reins kill stops the daemon entirely.",
+      "Click the reins toolbar icon and hit Disconnect; the connection is severed instantly. reins kill stops the daemon entirely.",
+  },
+  {
+    question: "Can I install the extension without the Chrome Web Store?",
+    answer:
+      "Yes. reins extension stages the bundled extension for Chrome's Load unpacked, with no reins allow step. The npm package carries a full copy, so it works even while the store listing is in review. The docs page Install without the store has the walkthrough.",
   },
   {
     question: "Does reins work with unpacked dev builds of the extension?",
