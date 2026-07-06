@@ -1,0 +1,16 @@
+# @karnstack/reins
+
+## 0.2.0
+
+### Minor Changes
+
+- f6b30a4: New `reins extension` command: install the extension without the Chrome Web
+  Store. The npm package now bundles the extension build with a key-pinned,
+  pre-allowlisted id — `reins extension` stages it at `~/.reins/extension` for
+  Chrome's Load unpacked, no `reins allow` step. See docs/SIDELOAD.md.
+
+### Patch Changes
+
+- 9e4242a: Docs: split release/Chrome Web Store guides, add the store listing description
+  and ready-made branded graphic assets (icon, screenshot, promo tiles), and
+  clean up stale MCP-era wording. No runtime changes.
