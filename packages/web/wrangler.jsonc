@@ -1,0 +1,19 @@
+// Cloudflare Workers static-assets deploy for the reins site.
+// First deploy: `pnpm --filter @reins/web build && pnpm --filter @reins/web deploy`
+// then attach the reins.karnstack.com custom domain to the worker (Dashboard →
+// Workers → reins-web → Settings → Domains & Routes), or keep the route below.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reins-web",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    {
+      "pattern": "reins.karnstack.com",
+      "custom_domain": true
+    }
+  ]
+}
