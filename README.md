@@ -81,19 +81,21 @@ wrap.
 ## How it compares
 
 [agent-browser](https://github.com/vercel-labs/agent-browser) and
-[dev3000](https://github.com/vercel-labs/dev3000) (both Vercel Labs) live in
-the same neighborhood — CLI-first browser tooling for coding agents — but
-start from a different place: they launch and manage a browser for the
-agent, while reins hands the agent the browser you already have open.
+[dev3000](https://github.com/vercel-labs/dev3000) (Vercel Labs) and
+[playwright-mcp](https://github.com/microsoft/playwright-mcp) (Microsoft)
+live in the same neighborhood — browser tooling for coding agents — but
+start from a different place: by default they launch and manage a browser
+for the agent, while reins hands the agent the browser you already have
+open.
 
-|  | reins | agent-browser | dev3000 |
-| --- | --- | --- | --- |
-| Built for | driving the browser you already use | general-purpose automation for agents | debugging your local dev server |
-| Browser | your real, running browsers — Chrome, Brave, Edge, Arc, Dia, all at once | its own Chrome for Testing it launches | its own monitored Chrome it launches |
-| Logged-in sessions | always — it *is* your profile | opt-in: reuse a profile's login state or attach to a running Chrome | per-project profile that persists between runs |
-| Attaches via | MV3 extension + `chrome.debugger` — no launch flags, no open debug port | CDP from the outside | CDP from the outside |
-| Agent interface | CLI + skill; nothing to register per agent | CLI, plus an optional MCP server | CLI + MCP server + unified timeline log |
-| Extras | raw CDP escape hatch (`reins cdp`) | HAR recording, request mocking, React tree, web vitals | server+browser timeline, error replay, `d3k fix` |
+|  | reins | agent-browser | dev3000 | playwright-mcp |
+| --- | --- | --- | --- | --- |
+| Built for | driving the browser you already use | general-purpose automation for agents | debugging your local dev server | browser automation as an MCP server |
+| Browser | your real, running browsers — Chrome, Brave, Edge, Arc, Dia, all at once | its own Chrome for Testing it launches | its own monitored Chrome it launches | its own Playwright-managed browser — Chromium, Firefox, WebKit |
+| Logged-in sessions | always — it *is* your profile | opt-in: reuse a profile's login state or attach to a running Chrome | per-project profile that persists between runs | its own persistent profile; real Chrome/Edge tabs via opt-in extension or CDP |
+| Attaches via | MV3 extension + `chrome.debugger` — no launch flags, no open debug port | CDP from the outside | CDP from the outside | Playwright launch; opt-in extension or CDP endpoint |
+| Agent interface | CLI + skill; nothing to register per agent | CLI, plus an optional MCP server | CLI + MCP server + unified timeline log | MCP server (stdio/HTTP), registered per client |
+| Extras | raw CDP escape hatch (`reins cdp`) | HAR recording, request mocking, React tree, web vitals | server+browser timeline, error replay, `d3k fix` | isolated contexts, device emulation, vision/PDF caps, traces |
 
 **vs agent-browser** — agent-browser is a fast, general automation CLI that
 owns its browser: it launches Chrome for Testing by default and reaches your
@@ -111,6 +113,16 @@ network, and screenshots into one timeline an AI can debug from. It's
 dev-loop observability, not general browser control. They compose: dev3000
 watches the app you're building, reins drives the rest of your browser —
 dashboards, docs, the third-party service you're integrating.
+
+**vs playwright-mcp** — the closest comparison: its extension mode can also
+drive existing tabs in your real browser (Chrome and Edge only). The
+defaults differ. playwright-mcp launches a Playwright-managed browser with
+its own persistent profile, and everything flows through an MCP server you
+register in each client; reins is a plain CLI, so any agent with a shell
+drives your everyday browsers with no per-agent setup, and one daemon
+serves them all at once. Pick playwright-mcp for cross-engine coverage
+(Firefox, WebKit), device emulation, or clean-room isolated sessions; pick
+reins when the point is acting as you in the browser you live in.
 
 ## Develop
 
