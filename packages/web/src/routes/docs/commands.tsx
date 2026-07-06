@@ -3,7 +3,7 @@ import { Fragment } from "react";
 import { CodeBlock } from "@/components/code-block";
 
 export const Route = createFileRoute("/docs/commands")({
-  head: () => ({ meta: [{ title: "Commands — reins" }] }),
+  head: () => ({ meta: [{ title: "Commands · reins" }] }),
   component: CommandsPage,
 });
 
@@ -29,7 +29,7 @@ const GROUPS: Array<{ title: string; intro?: string; commands: Command[] }> = [
     commands: [
       {
         usage: "reins snapshot [--tab <id>] [--max-chars <n>]",
-        summary: "List interactive elements with refs — the refs feed click, type, and friends.",
+        summary: "List interactive elements with refs; the refs feed click, type, and friends.",
       },
       {
         usage: "reins click (--ref <e#> | --selector <css>) [--button right|middle] [--count 2]",
@@ -41,7 +41,7 @@ const GROUPS: Array<{ title: string; intro?: string; commands: Command[] }> = [
       },
       {
         usage: 'reins fill (--ref <e#> | --selector <css>) --value "…"',
-        summary: "Set an input's value directly — faster than type.",
+        summary: "Set an input's value directly, faster than type.",
       },
       {
         usage: 'reins select (--ref <e#> | --selector <css>) --value "…"',
@@ -53,7 +53,7 @@ const GROUPS: Array<{ title: string; intro?: string; commands: Command[] }> = [
       },
       {
         usage: "reins hover (--ref <e#> | --selector <css>)",
-        summary: "Hover an element — menus, tooltips.",
+        summary: "Hover an element for menus and tooltips.",
       },
       {
         usage: 'reins scroll [--ref <e#> | --selector <css> | --by "dx,dy" | --to top|bottom]',
@@ -108,7 +108,7 @@ const GROUPS: Array<{ title: string; intro?: string; commands: Command[] }> = [
       {
         usage: "reins cdp <Domain.method> ['<json-params>'] [--tab <id>]",
         summary:
-          "Raw Chrome DevTools Protocol call — the escape hatch for cookies, geolocation, PDF, tracing, and everything else the curated commands don't wrap.",
+          "Raw Chrome DevTools Protocol call: the escape hatch for cookies, geolocation, PDF, tracing, and everything else the curated commands don't wrap.",
       },
       {
         usage: "reins daemon",
@@ -121,6 +121,11 @@ const GROUPS: Array<{ title: string; intro?: string; commands: Command[] }> = [
     commands: [
       { usage: "reins browsers", summary: "List browsers connected to the daemon." },
       { usage: "reins status", summary: "Daemon state, port, and connected browsers." },
+      {
+        usage: "reins extension",
+        summary:
+          "Stage the bundled extension for install without the Chrome Web Store (Load unpacked).",
+      },
       { usage: "reins allow <id>", summary: "Allow an unpacked/dev extension to connect." },
       { usage: "reins kill", summary: "Stop the background daemon." },
       { usage: "reins doctor", summary: "Run diagnostic checks." },
@@ -135,10 +140,10 @@ function CommandsPage() {
     <article className="prose max-w-[70ch]">
       <h1>Commands</h1>
       <p>
-        The CLI is the whole interface — agents shell out to it, and so can you. Every command
+        The CLI is the whole interface: agents shell out to it, and so can you. Every command
         accepts <code>--tab &lt;id&gt;</code> (defaults to the active tab),{" "}
-        <code>--browser &lt;id&gt;</code> (only needed when several browsers are connected — ids
-        come from <code>reins tabs</code>), and <code>--json</code> for raw results.
+        <code>--browser &lt;id&gt;</code> (only needed when several browsers are connected; ids come
+        from <code>reins tabs</code>), and <code>--json</code> for raw results.
       </p>
       {GROUPS.map((group) => (
         <Fragment key={group.title}>

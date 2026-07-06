@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/code-block";
+import { StoreReviewBadge } from "@/components/store-review-badge";
 
 export const Route = createFileRoute("/docs/")({
-  head: () => ({ meta: [{ title: "Getting started — reins" }] }),
+  head: () => ({ meta: [{ title: "Getting started · reins" }] }),
   component: GettingStarted,
 });
 
@@ -11,8 +12,8 @@ function GettingStarted() {
     <article className="prose max-w-[70ch]">
       <h1>Getting started</h1>
       <p>
-        reins gives coding agents — Claude Code, Cursor, Codex, Copilot, anything with a shell —
-        full control of your actual, logged-in Chromium browser through a CLI and a Manifest V3
+        reins gives coding agents (Claude Code, Cursor, Codex, Copilot, anything with a shell) full
+        control of your actual, logged-in Chromium browser through a CLI and a Manifest V3
         extension. This page takes you from nothing to an agent driving a tab.
       </p>
 
@@ -26,10 +27,20 @@ function GettingStarted() {
 
       <h2>2. Add the extension</h2>
       <p>
-        Install the reins extension from the Chrome Web Store in every Chromium browser you want
-        agents to reach — Chrome, Brave, Edge, Arc, and Dia all work. The extension finds the daemon
-        on its own through localhost port discovery; when the toolbar popover turns green, it is
-        connected.
+        <StoreReviewBadge />
+      </p>
+      <p>
+        The Chrome Web Store listing is under review. Until it is approved, install the extension
+        straight from the CLI; the npm package carries a full copy:
+      </p>
+      <CodeBlock code="reins extension" />
+      <p>
+        That stages the extension at <code>~/.reins/extension</code> and prints the Load-unpacked
+        steps. The full walkthrough is on <Link to="/docs/sideload">Install without the store</Link>
+        . Once the listing is live, the store install works in every Chromium browser you want
+        agents to reach: Chrome, Brave, Edge, Arc, and Dia all work. Either way the extension finds
+        the daemon on its own through localhost port discovery; when the toolbar popover turns
+        green, it is connected.
       </p>
       <p>Working from a dev build instead? Load the unpacked extension and allow its ID once:</p>
       <CodeBlock code="reins allow <extension-id>" />
@@ -38,7 +49,7 @@ function GettingStarted() {
       <CodeBlock code="npx skills add karnstack/reins" />
       <p>
         The skill teaches agents the command set and the loop below. Agents without skill support
-        can run <code>reins help</code> — the CLI is self-describing.
+        can run <code>reins help</code>; the CLI is self-describing.
       </p>
 
       <h2>4. Verify</h2>
@@ -56,7 +67,7 @@ reins doctor   # diagnostic checks when something looks off`}
   e7: button "Sign in"
 reins type --ref e3 --text "you@work.dev"
 reins click --ref e7                # act by ref
-reins text                          # verify — or reins screenshot`}
+reins text                          # verify, or reins screenshot`}
       />
       <p>
         Every command accepts <code>--tab &lt;id&gt;</code> (defaults to the active tab),{" "}

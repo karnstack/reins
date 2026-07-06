@@ -2,14 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment } from "react";
 
 export const Route = createFileRoute("/docs/architecture")({
-  head: () => ({ meta: [{ title: "Architecture — reins" }] }),
+  head: () => ({ meta: [{ title: "Architecture · reins" }] }),
   component: ArchitecturePage,
 });
 
 const FLOW: Array<{ name: string; detail: string; via?: string }> = [
   {
     name: "Your agent",
-    detail: "Claude Code, Cursor, Codex — anything with a shell",
+    detail: "Claude Code, Cursor, Codex, anything with a shell",
   },
   {
     via: "shells out",
@@ -24,7 +24,7 @@ const FLOW: Array<{ name: string; detail: string; via?: string }> = [
   {
     via: "WebSocket · allowlisted chrome-extension:// origins",
     name: "reins extension",
-    detail: "MV3 — an offscreen document holds the socket",
+    detail: "MV3; an offscreen document holds the socket",
   },
   {
     via: "chrome.debugger · Chrome DevTools Protocol",
@@ -74,7 +74,7 @@ function ArchitecturePage() {
         The CLI is the entire interface: <code>reins tabs</code>, <code>reins click</code>,{" "}
         <code>reins screenshot</code>, and the rest of the{" "}
         <Link to="/docs/commands">command set</Link>. Agents use it because they already have a
-        shell — no MCP server to register, no per-agent setup. A skill (
+        shell: no MCP server to register, no per-agent setup. A skill (
         <code>npx skills add karnstack/reins</code>) teaches agents the loop.
       </p>
 
@@ -89,29 +89,29 @@ function ArchitecturePage() {
       <h2>The extension</h2>
       <p>
         A Manifest V3 extension. Its service worker executes commands against tabs through{" "}
-        <code>chrome.debugger</code> — the Chrome DevTools Protocol — and an offscreen document
-        holds the persistent WebSocket to the daemon, because MV3 service workers are suspended when
-        idle and can't keep long-lived sockets.
+        <code>chrome.debugger</code> (the Chrome DevTools Protocol), and an offscreen document holds
+        the persistent WebSocket to the daemon, because MV3 service workers are suspended when idle
+        and can't keep long-lived sockets.
       </p>
       <p>
         The extension discovers the daemon by probing a small set of candidate localhost ports and
-        authenticates itself by its <code>chrome-extension://&lt;id&gt;</code> origin — a header the
+        authenticates itself by its <code>chrome-extension://&lt;id&gt;</code> origin, a header the
         browser stamps itself, which web pages and other extensions cannot forge.
       </p>
 
       <h2>Multiple browsers</h2>
       <p>
-        Install the extension in several Chromium browsers — Chrome, Brave, Edge, Arc, Dia — and
-        each connects to the same daemon. <code>reins tabs</code> lists every tab with a browser id;
-        pass <code>--browser &lt;id&gt;</code> only when more than one browser is connected. reins
-        never guesses which browser you meant.
+        Install the extension in several Chromium browsers (Chrome, Brave, Edge, Arc, Dia) and each
+        connects to the same daemon. <code>reins tabs</code> lists every tab with a browser id; pass{" "}
+        <code>--browser &lt;id&gt;</code> only when more than one browser is connected. reins never
+        guesses which browser you meant.
       </p>
 
       <h2>Element refs</h2>
       <p>
         <code>reins snapshot</code> assigns stable refs (<code>e5: button "Submit"</code>) to
         interactive elements. Commands act by ref, which survives page repaints better than
-        hand-written selectors — and a CSS <code>--selector</code> fallback exists for everything
+        hand-written selectors, and a CSS <code>--selector</code> fallback exists for everything
         else.
       </p>
     </article>

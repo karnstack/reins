@@ -3,7 +3,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 export const Route = createFileRoute("/privacy")({
-  head: () => ({ meta: [{ title: "Privacy policy — reins" }] }),
+  head: () => ({ meta: [{ title: "Privacy policy · reins" }] }),
   component: PrivacyPage,
 });
 
@@ -16,8 +16,8 @@ function PrivacyPage() {
           <h1>Privacy policy</h1>
           <p>Last updated: July 4, 2026</p>
           <p>
-            reins is a browser extension that lets a local daemon on your own machine — installed by
-            you, via the <code>@karnstack/reins</code> CLI — drive your browser. It is a developer
+            reins is a browser extension that lets a local daemon on your own machine (installed by
+            you, via the <code>@karnstack/reins</code> CLI) drive your browser. It is a developer
             tool; you install both halves yourself.
           </p>
 

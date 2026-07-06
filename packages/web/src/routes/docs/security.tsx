@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/docs/security")({
-  head: () => ({ meta: [{ title: "Security — reins" }] }),
+  head: () => ({ meta: [{ title: "Security · reins" }] }),
   component: SecurityPage,
 });
 
@@ -11,15 +11,15 @@ function SecurityPage() {
       <h1>Security</h1>
       <p>
         A tool that drives your logged-in browser deserves a paranoid design. reins keeps the attack
-        surface small by having no cloud half at all — the pieces only ever talk to each other, on
+        surface small by having no cloud half at all: the pieces only ever talk to each other, on
         your machine.
       </p>
 
       <h2>Network surface</h2>
       <ul>
         <li>
-          Everything binds <code>127.0.0.1</code> — neither the daemon nor the extension is
-          reachable from the network.
+          Everything binds <code>127.0.0.1</code>; neither the daemon nor the extension is reachable
+          from the network.
         </li>
         <li>
           <code>/rpc</code> and the other daemon endpoints validate the <code>Host</code> header, so
@@ -27,8 +27,8 @@ function SecurityPage() {
         </li>
         <li>
           The daemon accepts extension WebSocket connections only from exact allowlisted{" "}
-          <code>chrome-extension://&lt;id&gt;</code> origins. Browsers stamp that header themselves
-          — pages and other extensions can't forge it. Dev builds are added explicitly with{" "}
+          <code>chrome-extension://&lt;id&gt;</code> origins. Browsers stamp that header themselves;
+          pages and other extensions can't forge it. Dev builds are added explicitly with{" "}
           <code>reins allow &lt;id&gt;</code>.
         </li>
       </ul>
@@ -37,7 +37,7 @@ function SecurityPage() {
       <ul>
         <li>
           Chrome shows its native "is being debugged" banner whenever the extension is attached to a
-          tab — you always know when an agent is acting.
+          tab, so you always know when an agent is acting.
         </li>
         <li>The toolbar popup's Disconnect toggle severs the daemon connection instantly.</li>
         <li>
@@ -54,8 +54,8 @@ function SecurityPage() {
         </li>
         <li>No analytics, no telemetry, no tracking, no remote servers, no remote code.</li>
         <li>
-          The only stored state is the extension's own settings — auto-connect, cached daemon port,
-          connection status — kept in <code>chrome.storage</code> on your device.
+          The only stored state is the extension's own settings (auto-connect, cached daemon port,
+          connection status), kept in <code>chrome.storage</code> on your device.
         </li>
       </ul>
       <p>
