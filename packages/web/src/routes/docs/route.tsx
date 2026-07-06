@@ -16,6 +16,7 @@ const NAV = [
   { to: "/docs/commands", label: "Commands", exact: false },
   { to: "/docs/architecture", label: "Architecture", exact: false },
   { to: "/docs/security", label: "Security", exact: false },
+  { to: "/docs/comparison", label: "How it compares", exact: false },
   { to: "/docs/faq", label: "FAQ", exact: false },
 ] as const;
 

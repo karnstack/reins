@@ -16,6 +16,7 @@ import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as DocsSideloadRouteImport } from './routes/docs/sideload'
 import { Route as DocsSecurityRouteImport } from './routes/docs/security'
 import { Route as DocsFaqRouteImport } from './routes/docs/faq'
+import { Route as DocsComparisonRouteImport } from './routes/docs/comparison'
 import { Route as DocsCommandsRouteImport } from './routes/docs/commands'
 import { Route as DocsArchitectureRouteImport } from './routes/docs/architecture'
 
@@ -54,6 +55,11 @@ const DocsFaqRoute = DocsFaqRouteImport.update({
   path: '/faq',
   getParentRoute: () => DocsRouteRoute,
 } as any)
+const DocsComparisonRoute = DocsComparisonRouteImport.update({
+  id: '/comparison',
+  path: '/comparison',
+  getParentRoute: () => DocsRouteRoute,
+} as any)
 const DocsCommandsRoute = DocsCommandsRouteImport.update({
   id: '/commands',
   path: '/commands',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/docs/architecture': typeof DocsArchitectureRoute
   '/docs/commands': typeof DocsCommandsRoute
+  '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/docs/architecture': typeof DocsArchitectureRoute
   '/docs/commands': typeof DocsCommandsRoute
+  '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/docs/architecture': typeof DocsArchitectureRoute
   '/docs/commands': typeof DocsCommandsRoute
+  '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/docs/architecture'
     | '/docs/commands'
+    | '/docs/comparison'
     | '/docs/faq'
     | '/docs/security'
     | '/docs/sideload'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/docs/architecture'
     | '/docs/commands'
+    | '/docs/comparison'
     | '/docs/faq'
     | '/docs/security'
     | '/docs/sideload'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/docs/architecture'
     | '/docs/commands'
+    | '/docs/comparison'
     | '/docs/faq'
     | '/docs/security'
     | '/docs/sideload'
@@ -190,6 +202,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsFaqRouteImport
       parentRoute: typeof DocsRouteRoute
     }
+    '/docs/comparison': {
+      id: '/docs/comparison'
+      path: '/comparison'
+      fullPath: '/docs/comparison'
+      preLoaderRoute: typeof DocsComparisonRouteImport
+      parentRoute: typeof DocsRouteRoute
+    }
     '/docs/commands': {
       id: '/docs/commands'
       path: '/commands'
@@ -210,6 +229,7 @@ declare module '@tanstack/react-router' {
 interface DocsRouteRouteChildren {
   DocsArchitectureRoute: typeof DocsArchitectureRoute
   DocsCommandsRoute: typeof DocsCommandsRoute
+  DocsComparisonRoute: typeof DocsComparisonRoute
   DocsFaqRoute: typeof DocsFaqRoute
   DocsSecurityRoute: typeof DocsSecurityRoute
   DocsSideloadRoute: typeof DocsSideloadRoute
@@ -219,6 +239,7 @@ interface DocsRouteRouteChildren {
 const DocsRouteRouteChildren: DocsRouteRouteChildren = {
   DocsArchitectureRoute: DocsArchitectureRoute,
   DocsCommandsRoute: DocsCommandsRoute,
+  DocsComparisonRoute: DocsComparisonRoute,
   DocsFaqRoute: DocsFaqRoute,
   DocsSecurityRoute: DocsSecurityRoute,
   DocsSideloadRoute: DocsSideloadRoute,
