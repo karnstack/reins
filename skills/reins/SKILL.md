@@ -48,7 +48,8 @@ reins status
 
 - `daemon : not running` is fine — the daemon starts on demand.
 - `browser: none connected` → the user needs the reins extension installed
-  (Chrome Web Store, or `reins allow <id>` for an unpacked dev build).
+  ([Chrome Web Store](https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo),
+  or `reins allow <id>` for an unpacked dev build).
 - `command not found: reins` → `npm i -g @karnstack/reins`.
 
 ## Core loop

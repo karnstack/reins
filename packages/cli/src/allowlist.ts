@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { SIDELOAD_EXTENSION_ID } from "./sideload.js";
 
 /** Chrome Web Store id(s) of the published reins extension.
- *  Empty until the first store publish — docs/PUBLISHING.md has the step. */
-export const PUBLISHED_EXTENSION_IDS: readonly string[] = [];
+ *  https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo */
+export const PUBLISHED_EXTENSION_IDS: readonly string[] = ["hnjcfgochepemjndccfblpmfmlblkofo"];
 
 /** Ids trusted without an allow-file entry: the store build(s) plus the
  *  key-pinned sideload build (`reins extension` — docs/SIDELOAD.md). */

@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/code-block";
-import { StoreReviewBadge } from "@/components/store-review-badge";
 
 export const Route = createFileRoute("/docs/sideload")({
   head: () => ({ meta: [{ title: "Install without the store · reins" }] }),
@@ -12,13 +11,17 @@ function SideloadPage() {
     <article className="prose max-w-[70ch]">
       <h1>Install without the store</h1>
       <p>
-        <StoreReviewBadge />
-      </p>
-      <p>
-        The npm package carries a full copy of the reins extension. While the Chrome Web Store
-        listing is in review (and any time you would rather skip the store), one command stages it
-        for Chrome's <strong>Load unpacked</strong>. No repo checkout, no build, no{" "}
-        <code>reins allow</code>.
+        The npm package carries a full copy of the reins extension. If you cannot (or would rather
+        not) install from the{" "}
+        <a
+          href="https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Chrome Web Store
+        </a>
+        , one command stages it for Chrome's <strong>Load unpacked</strong>. No repo checkout, no
+        build, no <code>reins allow</code>.
       </p>
 
       <h2>Install</h2>

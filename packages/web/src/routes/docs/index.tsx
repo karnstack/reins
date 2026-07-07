@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/code-block";
-import { StoreReviewBadge } from "@/components/store-review-badge";
+
+const CHROME_WEB_STORE_URL =
+  "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
 
 export const Route = createFileRoute("/docs/")({
   head: () => ({ meta: [{ title: "Getting started · reins" }] }),
@@ -27,20 +29,18 @@ function GettingStarted() {
 
       <h2>2. Add the extension</h2>
       <p>
-        <StoreReviewBadge />
+        Install the{" "}
+        <a href={CHROME_WEB_STORE_URL} target="_blank" rel="noreferrer">
+          reins extension from the Chrome Web Store
+        </a>{" "}
+        in every Chromium browser you want agents to reach: Chrome, Brave, Edge, Arc, and Dia all
+        work. The extension finds the daemon on its own through localhost port discovery; when the
+        toolbar popover turns green, it is connected.
       </p>
       <p>
-        The Chrome Web Store listing is under review. Until it is approved, install the extension
-        straight from the CLI; the npm package carries a full copy:
-      </p>
-      <CodeBlock code="reins extension" />
-      <p>
-        That stages the extension at <code>~/.reins/extension</code> and prints the Load-unpacked
-        steps. The full walkthrough is on <Link to="/docs/sideload">Install without the store</Link>
-        . Once the listing is live, the store install works in every Chromium browser you want
-        agents to reach: Chrome, Brave, Edge, Arc, and Dia all work. Either way the extension finds
-        the daemon on its own through localhost port discovery; when the toolbar popover turns
-        green, it is connected.
+        Prefer to skip the store? <code>reins extension</code> stages the bundled copy for Chrome's
+        Load unpacked; the walkthrough is on{" "}
+        <Link to="/docs/sideload">Install without the store</Link>.
       </p>
       <p>Working from a dev build instead? Load the unpacked extension and allow its ID once:</p>
       <CodeBlock code="reins allow <extension-id>" />
