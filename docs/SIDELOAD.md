@@ -1,8 +1,10 @@
 # Installing the extension without the Chrome Web Store
 
 The npm package carries a full copy of the reins extension. If you can't (or
-don't want to) install from the store, `reins extension` stages it for
-Chrome's **Load unpacked** — no repo checkout, no build, no `reins allow`.
+don't want to) install from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo),
+`reins extension` stages it for Chrome's **Load unpacked** — no repo checkout,
+no build, no `reins allow`.
 
 ```bash
 npm i -g @karnstack/reins

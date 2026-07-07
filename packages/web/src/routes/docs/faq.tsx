@@ -50,7 +50,7 @@ const FAQS = [
   {
     question: "Can I install the extension without the Chrome Web Store?",
     answer:
-      "Yes. reins extension stages the bundled extension for Chrome's Load unpacked, with no reins allow step. The npm package carries a full copy, so it works even while the store listing is in review. The docs page Install without the store has the walkthrough.",
+      "Yes. reins extension stages the bundled extension for Chrome's Load unpacked, with no reins allow step. The npm package carries a full copy, so it works with no store access at all. The docs page Install without the store has the walkthrough.",
   },
   {
     question: "Does reins work with unpacked dev builds of the extension?",

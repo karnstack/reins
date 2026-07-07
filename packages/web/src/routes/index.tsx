@@ -11,9 +11,11 @@ import {
 import { CopyCommand } from "@/components/copy-command";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { StoreReviewBadge } from "@/components/store-review-badge";
 import { Output, Prompt, Terminal } from "@/components/terminal";
 import { Button } from "@/components/ui/button";
+
+const CHROME_WEB_STORE_URL =
+  "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -132,14 +134,15 @@ function LandingPage() {
               <li>
                 <p className="font-mono text-sm text-muted-foreground">02</p>
                 <h3 className="mt-2 font-semibold">Add the extension</h3>
-                <div className="mt-2">
-                  <StoreReviewBadge />
-                </div>
                 <p className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                  Until the store listing lands, one command stages it for Load unpacked. It
+                  Install it from the Chrome Web Store in every browser you want agents to reach. It
                   discovers the daemon on its own and the toolbar icon turns green when connected.
                 </p>
-                <CopyCommand command="reins extension" className="mt-4" />
+                <Button asChild variant="outline" className="mt-4">
+                  <a href={CHROME_WEB_STORE_URL} target="_blank" rel="noreferrer">
+                    Get the extension
+                  </a>
+                </Button>
               </li>
               <li>
                 <p className="font-mono text-sm text-muted-foreground">03</p>

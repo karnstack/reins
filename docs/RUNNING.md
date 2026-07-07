@@ -9,8 +9,9 @@ reins has two halves:
   commands in your browser.
 
 > Just want to use it? `npm i -g @karnstack/reins`, install the extension
-> from the Chrome Web Store, and `npx skills add karnstack/reins` for your
-> agent. This document is the from-source developer walkthrough.
+> from the [Chrome Web Store](https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo),
+> and `npx skills add karnstack/reins` for your agent. This document is the
+> from-source developer walkthrough.
 
 ## 1. Prerequisites & build
 

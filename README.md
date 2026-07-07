@@ -15,9 +15,7 @@
   <a href="https://www.npmjs.com/package/@karnstack/reins"><img src="https://img.shields.io/npm/v/%40karnstack%2Freins" alt="npm"></a>
   <a href="https://github.com/karnstack/reins/actions/workflows/ci.yml"><img src="https://github.com/karnstack/reins/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
-  <!-- Chrome Web Store badge once the extension ID exists:
-  <a href="https://chromewebstore.google.com/detail/EXTENSION_ID"><img src="https://img.shields.io/chrome-web-store/v/EXTENSION_ID" alt="Chrome Web Store"></a>
-  -->
+  <a href="https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo"><img src="https://img.shields.io/chrome-web-store/v/hnjcfgochepemjndccfblpmfmlblkofo" alt="Chrome Web Store"></a>
 </p>
 
 reins gives agents (Claude Code, Cursor, Codex, Copilot, … — anything with a
@@ -47,8 +45,11 @@ agent ── shell ──► reins CLI ── HTTP /rpc ──► reins daemon �
 ```bash
 npm i -g @karnstack/reins        # the CLI (daemon included, starts on demand)
 npx skills add karnstack/reins   # the skill, into your agent(s) of choice
-# then install the reins extension (Chrome Web Store) → it connects on its own
+# then install the reins extension → it connects on its own
 ```
+
+Extension: **[Chrome Web Store](https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo)**
+— install it in every Chromium browser you want agents to reach.
 
 No store access, or store version unavailable? `reins extension` installs it
 via Load unpacked instead — see [docs/SIDELOAD.md](docs/SIDELOAD.md).
