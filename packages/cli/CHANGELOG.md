@@ -1,5 +1,11 @@
 # @karnstack/reins
 
+## 0.2.1
+
+### Patch Changes
+
+- 6885954: Trust the published Chrome Web Store extension (`hnjcfgochepemjndccfblpmfmlblkofo`) out of the box — store installs connect without `reins allow`.
+
 ## 0.2.0
 
 ### Minor Changes
