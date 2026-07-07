@@ -50,8 +50,36 @@ jobs:
           pnpm zip
           echo "path=$(ls packages/extension/release/*.zip)" >> "$GITHUB_OUTPUT"
 
-      - name: Upload extension to the Chrome Web Store
+      # The extension is `linked` (not `fixed`) to the CLI, so CLI-only
+      # releases leave its version untouched. Re-uploading a version the store
+      # already has would fail the API call — and every upload triggers manual
+      # review (debugger permission), so skip when there is nothing new.
+      - name: Check whether the store needs this version
         if: steps.changesets.outputs.published == 'true' && env.HAS_CWS == 'true'
+        id: store
+        env:
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          local=$(jq -r .version packages/extension/package.json)
+          token=$(curl -sf https://oauth2.googleapis.com/token \
+            -d "client_id=${CWS_CLIENT_ID}&client_secret=${CWS_CLIENT_SECRET}&refresh_token=${CWS_REFRESH_TOKEN}&grant_type=refresh_token" \
+            | jq -r .access_token)
+          store=$(curl -sf -H "Authorization: Bearer ${token}" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}?projection=DRAFT" \
+            | jq -r .crxVersion)
+          echo "extension v${local} locally, v${store} on the store"
+          if [ "$local" = "$store" ]; then
+            echo "store is current — skipping upload"
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload extension to the Chrome Web Store
+        if: steps.store.outputs.upload == 'true'
         uses: mnao305/chrome-extension-upload@v5.0.0
         with:
           file-path: ${{ steps.zip.outputs.path }}

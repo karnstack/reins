@@ -20,3 +20,24 @@ jobs:
           name: reins-extension
           path: packages/extension/release/*.zip
           if-no-files-found: error
+
+  # The CLI and extension are `linked`, not `fixed`: the extension only ships
+  # to the store when something bumps its version. A protocol change without
+  # an extension bump would leave the store build speaking an old protocol —
+  # catch that at PR time.
+  protocol-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          fetch-depth: 0
+      - name: protocol change requires an extension changeset
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          if git diff --name-only "$base"...HEAD -- packages/protocol | grep -q .; then
+            if ! grep -l '"@reins/extension"' .changeset/*.md >/dev/null 2>&1; then
+              echo "::error::packages/protocol changed but no changeset bumps @reins/extension — the store build would silently lag the protocol. Run pnpm changeset and select BOTH @karnstack/reins and @reins/extension."
+              exit 1
+            fi
+          fi
