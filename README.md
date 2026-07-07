@@ -165,6 +165,11 @@ Chrome Web Store: **[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)**.
 - The extension collects nothing and talks to nothing but your local daemon —
   see [docs/PRIVACY.md](docs/PRIVACY.md).
 
+## Roadmap
+
+Where reins is headed — competitive landscape, a permission model, skill
+evals, and capability gaps: **[docs/ROADMAP.md](docs/ROADMAP.md)**.
+
 ## Design
 
 - [`docs/superpowers/specs/2026-07-04-reins-cli-skill-design.md`](docs/superpowers/specs/2026-07-04-reins-cli-skill-design.md) — CLI + daemon + extension, discovery, multi-browser, page control, skill
