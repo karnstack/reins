@@ -189,8 +189,11 @@ from CI (see [RELEASING.md](RELEASING.md)). One-time OAuth setup:
    - `CWS_EXTENSION_ID` — the ID the store assigned this item
    - `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`
 
-From then on, merging a "Version Packages" PR ships to npm **and** uploads +
-submits the new zip to the store. To publish a store update by hand instead:
+From then on, merging a "Version Packages" PR ships to npm **and** — when the
+release actually bumps the extension version — uploads + submits the new zip
+to the store. CLI-only releases skip the upload (the workflow compares the
+local extension version against the store's `crxVersion`), so reviewers never
+see a resubmission of an identical build. To publish a store update by hand instead:
 `pnpm zip`, then Dashboard → the reins item → **Package** → upload → **Submit
 for review**.
 

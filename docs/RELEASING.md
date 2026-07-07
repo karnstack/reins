@@ -3,11 +3,18 @@
 Releases are **fully automated by changesets** — no manual `git tag`, no manual
 `npm publish`. You describe changes; merging a bot-generated PR ships them.
 
-Two artifacts share one version (kept in lockstep):
+Two artifacts, versioned as a **linked** changeset group:
 
 1. **`@karnstack/reins`** — the npm package (CLI + daemon)
 2. **reins extension** — the Chrome Web Store item (version drives the manifest
    and the `pnpm zip` filename)
+
+Linked (not fixed) means each package bumps only when a changeset names it,
+but whenever they bump together they land on the same version. The extension
+carries the `debugger` permission, so **every store upload goes through manual
+review** — CLI-only releases deliberately leave the extension version alone,
+and the release workflow skips the store upload when the store already has the
+current extension version.
 
 `@reins/protocol` is private and bundled into the npm package; changesets
 ignores it and it is never published on its own.
@@ -20,9 +27,17 @@ ignores it and it is never published on its own.
    pnpm changeset
    ```
 
-   Pick the bump (`patch` / `minor` / `major`) and a one-line summary.
-   `@karnstack/reins` and `@reins/extension` are a **fixed** group — one
-   changeset bumps both to the same version.
+   Pick the bump (`patch` / `minor` / `major`) and a one-line summary, and
+   select the package(s) the change actually ships in:
+
+   - **CLI-only change** (daemon, commands, docs in the npm package) →
+     `@karnstack/reins` only. The extension stays at its current version and
+     nothing is re-submitted to the store.
+   - **Extension or protocol change** → select **both** `@karnstack/reins`
+     and `@reins/extension`. A protocol change without an extension bump would
+     leave the store build speaking an old protocol — CI's `protocol-guard`
+     job fails the PR if `packages/protocol` changes with no
+     `@reins/extension` changeset.
 
 2. **Push to `main`.** The `release` workflow opens (or updates) a
    **"Version Packages"** PR that applies the pending changesets: bumps
@@ -32,8 +47,10 @@ ignores it and it is never published on its own.
    publish path:
    - publishes `@karnstack/reins` to npm (with provenance),
    - creates the git tag + GitHub release automatically,
-   - if the Chrome Web Store secrets are set, builds the zip and uploads it to
-     the store.
+   - if the Chrome Web Store secrets are set **and the extension version is
+     newer than what the store has** (checked against the store API), builds
+     the zip and uploads + submits it. CLI-only releases skip this step, so
+     the store isn't re-reviewed for identical builds.
 
 That's it — no tagging by hand.
 
