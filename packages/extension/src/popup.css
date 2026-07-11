@@ -617,3 +617,12 @@ body {
 .reins__select-menu li[aria-selected="true"] .reins__select-check {
   visibility: visible;
 }
+
+.reins__policy-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.08);
+}

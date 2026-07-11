@@ -1,4 +1,5 @@
 import { dispatchMethod } from "./lib/dispatch.js";
+import { applyPolicyChange, type PolicyChange } from "./lib/policy.js";
 import { candidateUrls, loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
@@ -153,6 +154,17 @@ chrome.runtime.onMessage.addListener(
           void saveSettings({ lastPort: info.port }).catch(() => {});
         }
         return;
+      }
+
+      case "reins:policy-change": {
+        // Popup edits route through the worker so every policy write shares
+        // the single-writer queue with policy_tighten (no lost updates).
+        applyPolicyChange(message.change as PolicyChange)
+          .then((policy) => sendResponse({ policy }))
+          .catch((err) =>
+            sendResponse({ error: err instanceof Error ? err.message : String(err) }),
+          );
+        return true;
       }
 
       case "reins:dispatch": {

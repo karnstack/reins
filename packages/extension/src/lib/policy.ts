@@ -5,9 +5,10 @@ import {
   METHOD_TIERS,
   normalizePattern,
   Policy,
-  type Tier,
+  Tier,
   tighterThan,
 } from "@reins/protocol";
+import { removeRule, setDefaultTier, upsertRule } from "./policy-view.js";
 
 /** chrome.storage.local key. The popup reads/writes the same key directly. */
 export const POLICY_KEY = "reinsPolicy";
@@ -52,27 +53,73 @@ export async function savePolicy(p: Policy): Promise<void> {
 }
 
 /**
+ * All policy mutations run through one promise chain in this worker — the
+ * single writer. Interleaved read-modify-writes (popup click racing a CLI
+ * tighten) would otherwise silently drop whichever write lands first.
+ */
+let writeChain: Promise<unknown> = Promise.resolve();
+
+function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeChain.then(fn, fn);
+  writeChain = next.catch(() => {});
+  return next;
+}
+
+/**
  * Apply a strictly-tightening rule change. The comparison runs here, in the
  * extension — the daemon (any local process) cannot loosen policy. Grants
- * go through the popup, which writes storage directly.
+ * go through the popup (reins:policy-change → applyPolicyChange).
  */
-export async function tightenPolicy(patternInput: string, tier: Tier): Promise<Policy> {
-  const pattern = normalizePattern(patternInput);
-  const p = await policy();
-  const existing = p.rules.find((r) => r.pattern === pattern);
-  const current =
-    existing?.tier ?? effectiveTier(p, pattern.startsWith("*.") ? pattern.slice(2) : pattern);
-  if (!tighterThan(tier, current)) {
-    throw new PolicyDenied(
-      `policy_tighten can only restrict: "${pattern}" is already ${current} — grants require the extension popup`,
-    );
-  }
-  const rules = existing
-    ? p.rules.map((r) => (r.pattern === pattern ? { ...r, tier } : r))
-    : [...p.rules, { pattern, tier }];
-  const next: Policy = { ...p, rules };
-  await savePolicy(next);
-  return next;
+export function tightenPolicy(patternInput: string, tier: Tier): Promise<Policy> {
+  return enqueueWrite(async () => {
+    const pattern = normalizePattern(patternInput);
+    const p = await policy();
+    const existing = p.rules.find((r) => r.pattern === pattern);
+    const current =
+      existing?.tier ?? effectiveTier(p, pattern.startsWith("*.") ? pattern.slice(2) : pattern);
+    if (!tighterThan(tier, current)) {
+      throw new PolicyDenied(
+        `policy_tighten can only restrict: "${pattern}" is already ${current} — grants require the extension popup`,
+      );
+    }
+    const rules = existing
+      ? p.rules.map((r) => (r.pattern === pattern ? { ...r, tier } : r))
+      : [...p.rules, { pattern, tier }];
+    const next: Policy = { ...p, rules };
+    await savePolicy(next);
+    return next;
+  });
+}
+
+/** A popup-initiated policy edit. Unlike tighten, these may loosen — the
+ *  popup click IS the user's grant gesture; only extension pages can send
+ *  the runtime message that carries them. */
+export type PolicyChange =
+  | { kind: "upsert"; pattern: string; tier: Tier }
+  | { kind: "remove"; pattern: string }
+  | { kind: "setDefault"; tier: Tier };
+
+/** Validate + apply a popup edit through the single-writer queue. */
+export function applyPolicyChange(change: PolicyChange): Promise<Policy> {
+  return enqueueWrite(async () => {
+    const p = await policy();
+    let next: Policy;
+    switch (change.kind) {
+      case "upsert":
+        next = upsertRule(p, change.pattern, Tier.parse(change.tier));
+        break;
+      case "remove":
+        next = removeRule(p, normalizePattern(change.pattern));
+        break;
+      case "setDefault":
+        next = setDefaultTier(p, Tier.parse(change.tier));
+        break;
+      default:
+        throw new Error("unknown policy change");
+    }
+    await savePolicy(next);
+    return next;
+  });
 }
 
 /** Throw PolicyDenied unless `host`'s tier covers `method`'s required tier. */

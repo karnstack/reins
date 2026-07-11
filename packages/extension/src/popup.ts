@@ -1,7 +1,13 @@
 import "./popup.css";
-import { DEFAULT_POLICY, effectiveTier, hostOf, Policy, type Tier } from "@reins/protocol";
-import { POLICY_KEY } from "./lib/policy.js";
-import { removeRule, setDefaultTier, upsertRule } from "./lib/policy-view.js";
+import {
+  DEFAULT_POLICY,
+  effectiveTier,
+  hostOf,
+  normalizePattern,
+  Policy,
+  type Tier,
+} from "@reins/protocol";
+import { POLICY_KEY, type PolicyChange } from "./lib/policy.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
@@ -104,8 +110,9 @@ savePortBtn.addEventListener("click", async () => {
 
 // ─── Site permissions ────────────────────────────────────────────────────────
 // The popup is the ONLY loosening surface: a click here is the user gesture
-// that grants access. It writes chrome.storage.local directly; the service
-// worker's policy cache refreshes via storage.onChanged.
+// that grants access. Edits are sent to the service worker
+// (reins:policy-change), which serializes every policy write — a direct
+// storage write here could race a concurrent CLI tighten and clobber it.
 
 const policyCurrent = document.getElementById("policy-current") as HTMLElement;
 const policyHost = document.getElementById("policy-host") as HTMLElement;
@@ -113,11 +120,14 @@ const policySeg = document.getElementById("policy-current-seg") as HTMLElement;
 const policyRules = document.getElementById("policy-rules") as HTMLUListElement;
 const policyAdd = document.getElementById("policy-add") as HTMLFormElement;
 const policyPattern = document.getElementById("policy-pattern") as HTMLInputElement;
+const policyError = document.getElementById("policy-error") as HTMLElement;
 
 /** Highlight one tier button in a segmented control. */
 function setSegActive(seg: HTMLElement, tier: Tier | undefined): void {
   for (const btn of seg.querySelectorAll<HTMLButtonElement>("button")) {
-    btn.classList.toggle("reins__seg--on", btn.dataset.tier === tier);
+    const on = btn.dataset.tier === tier;
+    btn.classList.toggle("reins__seg--on", on);
+    btn.setAttribute("aria-pressed", String(on));
   }
 }
 
@@ -143,6 +153,7 @@ function tierSelect(
     read: root.dataset.labelRead ?? "Read",
     deny: root.dataset.labelDeny ?? "Deny",
   };
+  const name = root.dataset.name ?? "Tier";
   let value = initial;
 
   const btn = document.createElement("button");
@@ -150,6 +161,7 @@ function tierSelect(
   btn.className = "reins__select-btn";
   btn.setAttribute("aria-haspopup", "listbox");
   btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-controls", `${root.id}-menu`);
   const labelEl = document.createElement("span");
   labelEl.className = "reins__select-label";
   const chevron = document.createElement("span");
@@ -159,8 +171,10 @@ function tierSelect(
   btn.append(labelEl, chevron);
 
   const menu = document.createElement("ul");
+  menu.id = `${root.id}-menu`;
   menu.className = "reins__select-menu";
   menu.setAttribute("role", "listbox");
+  menu.setAttribute("aria-label", name);
   menu.hidden = true;
 
   const options = TIER_ORDER.map((tier) => {
@@ -181,6 +195,7 @@ function tierSelect(
 
   function sync(): void {
     labelEl.textContent = labels[value];
+    btn.setAttribute("aria-label", `${name}: ${labels[value]}`);
     for (const li of options) {
       li.setAttribute("aria-selected", String(li.dataset.tier === value));
     }
@@ -208,7 +223,14 @@ function tierSelect(
     if (ev.key === "ArrowDown") {
       ev.preventDefault();
       open();
+    } else if (ev.key === "Escape" && !menu.hidden) {
+      ev.preventDefault();
+      close();
     }
+  });
+  // Tab / Shift+Tab out of the open menu must not leave it dangling open.
+  root.addEventListener("focusout", (ev) => {
+    if (!menu.hidden && !root.contains(ev.relatedTarget as Node)) close();
   });
   menu.addEventListener("click", (ev) => {
     const li = (ev.target as HTMLElement).closest("li[data-tier]") as HTMLElement | null;
@@ -251,23 +273,27 @@ function tierSelect(
 const policyDefaultDd = tierSelect(
   document.getElementById("policy-default-dd") as HTMLElement,
   "full",
-  (tier) => {
-    void loadPolicyFromStorage().then((p) => writePolicy(setDefaultTier(p, tier)));
-  },
+  (tier) => void requestPolicyChange({ kind: "setDefault", tier }),
 );
 const policyAddDd = tierSelect(document.getElementById("policy-add-dd") as HTMLElement, "deny");
 
+/** Read-only view of the stored policy. A MISSING key is a fresh install
+ *  (default policy); an UNREADABLE or corrupt one throws so renderPolicy
+ *  shows the error state — falling back to full-everywhere here would let
+ *  one click persist a rule-wiping policy over whatever storage held. */
 async function loadPolicyFromStorage(): Promise<Policy> {
-  try {
-    const got = await chrome.storage.local.get(POLICY_KEY);
-    return got[POLICY_KEY] === undefined ? DEFAULT_POLICY : Policy.parse(got[POLICY_KEY]);
-  } catch {
-    return DEFAULT_POLICY;
-  }
+  const got = await chrome.storage.local.get(POLICY_KEY);
+  return got[POLICY_KEY] === undefined ? DEFAULT_POLICY : Policy.parse(got[POLICY_KEY]);
 }
 
-async function writePolicy(p: Policy): Promise<void> {
-  await chrome.storage.local.set({ [POLICY_KEY]: p });
+/** Apply an edit via the worker's serialized write queue. */
+async function requestPolicyChange(change: PolicyChange): Promise<void> {
+  const res = (await chrome.runtime.sendMessage({ type: "reins:policy-change", change })) as
+    | { policy?: unknown; error?: string }
+    | undefined;
+  if (res?.error !== undefined || res?.policy === undefined) {
+    throw new Error(res?.error ?? "policy update failed");
+  }
   await renderPolicy();
 }
 
@@ -280,8 +306,25 @@ async function activeHost(): Promise<string | undefined> {
   }
 }
 
+function setPolicyErrorState(broken: boolean): void {
+  policyError.hidden = !broken;
+  policyCurrent.hidden = policyCurrent.hidden || broken;
+  for (const el of [policyRules, policyAdd]) el.hidden = broken;
+  const defaultRow = document.getElementById("policy-default-dd")?.parentElement;
+  if (defaultRow) defaultRow.hidden = broken;
+}
+
 async function renderPolicy(): Promise<void> {
-  const p = await loadPolicyFromStorage();
+  let p: Policy;
+  try {
+    p = await loadPolicyFromStorage();
+  } catch {
+    // Corrupt/unreadable policy: the worker fails closed; mirror that here
+    // instead of rendering (and then persisting) full-access defaults.
+    setPolicyErrorState(true);
+    return;
+  }
+  setPolicyErrorState(false);
   const host = await activeHost();
 
   policyDefaultDd.value = p.defaultTier;
@@ -308,7 +351,7 @@ async function renderPolicy(): Promise<void> {
       del.textContent = "×";
       del.setAttribute("aria-label", `remove rule for ${r.pattern}`);
       del.addEventListener("click", () => {
-        void loadPolicyFromStorage().then((cur) => writePolicy(removeRule(cur, r.pattern)));
+        void requestPolicyChange({ kind: "remove", pattern: r.pattern });
       });
       li.append(pattern, badge, del);
       return li;
@@ -322,7 +365,7 @@ policySeg.addEventListener("click", (ev) => {
   void (async () => {
     const host = await activeHost();
     if (host === undefined) return;
-    await writePolicy(upsertRule(await loadPolicyFromStorage(), host, tier));
+    await requestPolicyChange({ kind: "upsert", pattern: host, tier });
   })();
 });
 
@@ -333,17 +376,32 @@ policyPattern.addEventListener("input", () => policyPattern.setCustomValidity(""
 
 policyAdd.addEventListener("submit", (ev) => {
   ev.preventDefault();
+  // Validate the pattern locally so a storage/messaging failure is never
+  // misreported as a syntax problem.
+  let pattern: string;
+  try {
+    pattern = normalizePattern(policyPattern.value);
+  } catch {
+    policyPattern.setCustomValidity("use host.com or *.host.com");
+    policyAdd.reportValidity();
+    return;
+  }
   void (async () => {
     try {
-      const p = await loadPolicyFromStorage();
-      await writePolicy(upsertRule(p, policyPattern.value, policyAddDd.value));
+      await requestPolicyChange({ kind: "upsert", pattern, tier: policyAddDd.value });
       policyPattern.value = "";
       policyPattern.setCustomValidity("");
     } catch {
-      policyPattern.setCustomValidity("use host.com or *.host.com");
+      policyPattern.setCustomValidity("couldn't save the rule — try again");
       policyAdd.reportValidity();
     }
   })();
+});
+
+// Policy can change while the popup is open (CLI tighten via the worker);
+// re-render on any storage change to the key so the view never goes stale.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && POLICY_KEY in changes) void renderPolicy();
 });
 
 void refresh();

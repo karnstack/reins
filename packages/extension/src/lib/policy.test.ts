@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  applyPolicyChange,
   ensureAllowed,
   PolicyDenied,
   policy,
@@ -84,6 +85,53 @@ describe("tightenPolicy", () => {
   it("rejects invalid patterns", async () => {
     stubStorage();
     await expect(tightenPolicy("foo.*.com", "deny")).rejects.toThrow(/invalid pattern/);
+  });
+});
+
+describe("applyPolicyChange", () => {
+  it("upserts, removes, and sets the default (popup ops may loosen)", async () => {
+    stubStorage({ defaultTier: "full", rules: [{ pattern: "x.com", tier: "deny" }] });
+    let next = await applyPolicyChange({ kind: "upsert", pattern: "X.com", tier: "full" });
+    expect(next.rules).toEqual([{ pattern: "x.com", tier: "full" }]);
+    next = await applyPolicyChange({ kind: "remove", pattern: "x.com" });
+    expect(next.rules).toEqual([]);
+    next = await applyPolicyChange({ kind: "setDefault", tier: "read" });
+    expect(next.defaultTier).toBe("read");
+  });
+
+  it("rejects invalid tiers and patterns", async () => {
+    stubStorage();
+    await expect(
+      applyPolicyChange({ kind: "setDefault", tier: "sideways" as never }),
+    ).rejects.toThrow();
+    await expect(
+      applyPolicyChange({ kind: "upsert", pattern: "foo.*.com", tier: "deny" }),
+    ).rejects.toThrow(/invalid pattern/);
+  });
+
+  it("serializes concurrent writes — no lost updates", async () => {
+    stubStorage({ defaultTier: "full", rules: [] });
+    // Fire without awaiting: unserialized RMW would drop one of the rules.
+    const [a, b] = await Promise.all([
+      applyPolicyChange({ kind: "upsert", pattern: "a.com", tier: "deny" }),
+      applyPolicyChange({ kind: "upsert", pattern: "b.com", tier: "read" }),
+    ]);
+    void a;
+    expect(b.rules).toEqual([
+      { pattern: "a.com", tier: "deny" },
+      { pattern: "b.com", tier: "read" },
+    ]);
+    expect((await policy()).rules).toHaveLength(2);
+  });
+
+  it("serializes a popup write against a concurrent tighten", async () => {
+    stubStorage({ defaultTier: "full", rules: [] });
+    const [, next] = await Promise.all([
+      tightenPolicy("evil.com", "deny"),
+      applyPolicyChange({ kind: "upsert", pattern: "ok.com", tier: "read" }),
+    ]);
+    expect(next.rules).toContainEqual({ pattern: "evil.com", tier: "deny" });
+    expect(next.rules).toContainEqual({ pattern: "ok.com", tier: "read" });
   });
 });
 
