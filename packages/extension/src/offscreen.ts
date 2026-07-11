@@ -10,10 +10,14 @@ let client: BridgeClient | undefined;
  */
 async function offscreenDispatch(method: string, params: unknown): Promise<unknown> {
   const res = (await chrome.runtime.sendMessage({ type: "reins:dispatch", method, params })) as
-    | { result: unknown; error?: undefined }
-    | { error: string; result?: undefined }
+    | { result: unknown; error?: undefined; code?: undefined }
+    | { error: string; code?: string; result?: undefined }
     | undefined;
-  if (res?.error) throw new Error(res.error);
+  if (res?.error) {
+    const err = new Error(res.error) as Error & { code?: string };
+    if (res.code) err.code = res.code;
+    throw err;
+  }
   return res?.result;
 }
 

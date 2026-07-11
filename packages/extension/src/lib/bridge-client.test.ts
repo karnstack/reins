@@ -222,6 +222,33 @@ describe("BridgeClient", () => {
     expect((response.error as { code: string }).code).toBe("HANDLER_ERROR");
   });
 
+  it("uses err.code in the error frame when present", async () => {
+    harness = await startServer();
+    let status = "";
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
+      dispatch: async () => {
+        throw Object.assign(new Error("nope"), { code: "policy_denied" });
+      },
+      onStatus: (s) => {
+        status = s;
+      },
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+
+    const response = await new Promise<Record<string, unknown>>((resolve) => {
+      // biome-ignore lint/style/noNonNullAssertion: connected implies the server accepted hello, so current() is set
+      const ws = harness!.current()!;
+      ws.on("message", (d: RawData) => {
+        const m = JSON.parse(d.toString());
+        if (m.type === "response") resolve(m);
+      });
+      ws.send(JSON.stringify({ type: "request", id: "r3", method: "click", params: {} }));
+    });
+    expect(response.ok).toBe(false);
+    expect(response.error).toEqual({ code: "policy_denied", message: "nope" });
+  });
+
   it("abandons a probe whose welcome arrives late, then adopts the retry", async () => {
     // Regression for a CI flake: on a stalled runner the probe timer can fire
     // after the server accepted hello but before welcome is processed. The

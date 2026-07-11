@@ -161,7 +161,13 @@ chrome.runtime.onMessage.addListener(
         dispatchMethod(method, params)
           .then((result) => sendResponse({ result }))
           .catch((err) =>
-            sendResponse({ error: err instanceof Error ? err.message : String(err) }),
+            sendResponse({
+              error: err instanceof Error ? err.message : String(err),
+              code:
+                typeof (err as { code?: unknown })?.code === "string"
+                  ? (err as { code: string }).code
+                  : undefined,
+            }),
           );
         return true;
       }
