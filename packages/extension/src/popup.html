@@ -50,18 +50,20 @@
       <section class="reins__policy">
         <h2 class="reins__policy-title">Site permissions</h2>
 
-        <div class="reins__policy-current" id="policy-current" hidden>
-          <span class="reins__policy-host" id="policy-host">—</span>
-          <fieldset class="reins__seg" id="policy-current-seg" aria-label="Tier for this site">
-            <button type="button" data-tier="full">Full</button>
-            <button type="button" data-tier="read">Read</button>
-            <button type="button" data-tier="deny">Deny</button>
-          </fieldset>
-        </div>
+        <div class="reins__policy-rows">
+          <div class="reins__policy-row" id="policy-current" hidden>
+            <span class="reins__policy-host" id="policy-host">—</span>
+            <fieldset class="reins__seg" id="policy-current-seg" aria-label="Tier for this site">
+              <button type="button" data-tier="full">Full</button>
+              <button type="button" data-tier="read">Read</button>
+              <button type="button" data-tier="deny">Deny</button>
+            </fieldset>
+          </div>
 
-        <div class="reins__policy-current">
-          <span class="reins__label">Default for other sites</span>
-          <div class="reins__select" id="policy-default-dd" data-label-full="Full access" data-label-read="Read-only" data-label-deny="Deny"></div>
+          <div class="reins__policy-row">
+            <span class="reins__policy-rowlabel">Default for other sites</span>
+            <div class="reins__select" id="policy-default-dd" data-label-full="Full" data-label-read="Read-only" data-label-deny="Deny"></div>
+          </div>
         </div>
 
         <ul class="reins__policy-rules" id="policy-rules"></ul>
@@ -70,13 +72,13 @@
           <input
             class="reins__input reins__input--mono"
             id="policy-pattern"
+            name="pattern"
+            aria-label="Site pattern"
             placeholder="*.example.com"
             autocomplete="off"
           />
-          <div class="reins__policy-add-row">
-            <div class="reins__select" id="policy-add-dd" data-label-full="Full" data-label-read="Read-only" data-label-deny="Deny"></div>
-            <button class="reins__btn reins__btn--ghost" type="submit">Add rule</button>
-          </div>
+          <div class="reins__select reins__select--up" id="policy-add-dd" data-label-full="Full" data-label-read="Read" data-label-deny="Deny"></div>
+          <button class="reins__policy-add-btn" type="submit" aria-label="Add rule">＋</button>
         </form>
       </section>
 

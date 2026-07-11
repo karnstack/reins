@@ -309,13 +309,15 @@ body {
   color: var(--ink);
 }
 
-/* Site permissions */
+/* Site permissions
+   One control size across the section (30px), concentric radii (8px outer /
+   6px inner on 2px padding), opacity-based dividers, ring+shadow popover. */
 .reins__policy {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 12px;
 }
 
 .reins__policy-title {
@@ -327,45 +329,62 @@ body {
   letter-spacing: 0.04em;
 }
 
-.reins__policy-current {
+.reins__policy-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reins__policy-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 30px;
+}
+
+.reins__policy-rowlabel {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .reins__policy-host {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px;
-  color: var(--ink);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--ink);
 }
 
+/* Segmented control (current site) */
 .reins__seg {
   display: inline-flex;
   flex: none;
-  margin: 0; /* fieldset reset */
-  padding: 0;
+  margin: 0;
+  padding: 2px;
   min-width: 0;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
 }
 
 .reins__seg button {
   border: 0;
   background: transparent;
-  padding: 4px 8px;
+  height: 24px;
+  padding: 0 9px;
   font: inherit;
   font-size: 11px;
+  font-weight: 500;
   color: var(--muted);
+  border-radius: 6px;
   cursor: pointer;
 }
 
-.reins__seg button + button {
-  border-left: 1px solid var(--line);
+.reins__seg button:hover {
+  color: var(--ink);
 }
 
 .reins__seg button.reins__seg--on {
@@ -373,13 +392,17 @@ body {
   color: #fff;
 }
 
+.reins__seg button.reins__seg--on:hover {
+  color: #fff;
+}
+
+/* Rules list — divider-separated sibling rows */
 .reins__policy-rules {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .reins__policy-rules:empty {
@@ -388,72 +411,131 @@ body {
 
 .reins__policy-rule {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  gap: 8px;
+  padding: 7px 0;
 }
 
-.reins__policy-rule code {
+.reins__policy-rule:first-child {
+  padding-top: 0;
+}
+
+.reins__policy-rule:last-child {
+  padding-bottom: 0;
+}
+
+.reins__policy-rule + .reins__policy-rule {
+  border-top: 1px solid var(--line);
+}
+
+.reins__policy-pattern {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
   color: var(--ink);
 }
 
+.reins__tier {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reins__tier--full {
+  color: var(--violet-800);
+  background: rgba(124, 131, 255, 0.14);
+}
+
+.reins__tier--read {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.reins__tier--deny {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
 .reins__policy-del {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  cursor: pointer;
-  font: inherit;
   color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 .reins__policy-del:hover {
   color: var(--err);
+  background: rgba(239, 68, 68, 0.1);
 }
 
+/* Add rule — single compact row */
 .reins__policy-add {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.reins__policy-add input {
-  min-width: 0;
-}
-
-.reins__policy-add-row {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
 }
 
-.reins__policy-add-row .reins__btn {
+.reins__policy-add .reins__input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-size: 12px;
+}
+
+.reins__policy-add-btn {
   flex: none;
-}
-
-.reins__seg button:hover {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
   color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
 }
 
-.reins__seg button.reins__seg--on:hover {
-  color: #fff;
+.reins__policy-add-btn:hover {
+  border-color: var(--line-strong);
+}
+
+.reins__policy-add-btn:focus-visible {
+  border-color: var(--violet-1);
+  box-shadow: 0 0 0 3px rgba(124, 131, 255, 0.18);
 }
 
 /* Custom tier select (native <select> replacement) */
 .reins__select {
   position: relative;
-  min-width: 128px;
+  flex: none;
 }
 
 .reins__select-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  font-size: 13px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--ink);
   background: var(--bg);
   border: 1px solid var(--line);
@@ -474,7 +556,7 @@ body {
 
 .reins__select-chevron {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   transition: transform 120ms ease;
 }
 
@@ -485,18 +567,23 @@ body {
 .reins__select-menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
   right: 0;
   z-index: 10;
+  min-width: 128px;
   margin: 0;
   padding: 4px;
   list-style: none;
   background: var(--bg);
-  border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow:
+    0 0 0 1px rgba(24, 24, 27, 0.08),
     0 8px 24px rgba(24, 24, 27, 0.12),
     0 2px 6px rgba(24, 24, 27, 0.08);
+}
+
+.reins__select--up .reins__select-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .reins__select-menu li {
@@ -504,7 +591,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink);
   border-radius: 6px;
   cursor: pointer;

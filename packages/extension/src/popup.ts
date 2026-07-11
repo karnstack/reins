@@ -296,8 +296,12 @@ async function renderPolicy(): Promise<void> {
     ...p.rules.map((r) => {
       const li = document.createElement("li");
       li.className = "reins__policy-rule";
-      const label = document.createElement("code");
-      label.textContent = `${r.pattern} · ${r.tier}`;
+      const pattern = document.createElement("code");
+      pattern.className = "reins__policy-pattern";
+      pattern.textContent = r.pattern;
+      const badge = document.createElement("span");
+      badge.className = `reins__tier reins__tier--${r.tier}`;
+      badge.textContent = r.tier;
       const del = document.createElement("button");
       del.type = "button";
       del.className = "reins__policy-del";
@@ -306,7 +310,7 @@ async function renderPolicy(): Promise<void> {
       del.addEventListener("click", () => {
         void loadPolicyFromStorage().then((cur) => writePolicy(removeRule(cur, r.pattern)));
       });
-      li.append(label, del);
+      li.append(pattern, badge, del);
       return li;
     }),
   );
