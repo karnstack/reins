@@ -110,11 +110,30 @@ savePortBtn.addEventListener("click", async () => {
 const policyCurrent = document.getElementById("policy-current") as HTMLElement;
 const policyHost = document.getElementById("policy-host") as HTMLElement;
 const policySeg = document.getElementById("policy-current-seg") as HTMLElement;
-const policyDefault = document.getElementById("policy-default") as HTMLSelectElement;
+const policyDefaultSeg = document.getElementById("policy-default-seg") as HTMLElement;
 const policyRules = document.getElementById("policy-rules") as HTMLUListElement;
 const policyAdd = document.getElementById("policy-add") as HTMLFormElement;
 const policyPattern = document.getElementById("policy-pattern") as HTMLInputElement;
-const policyAddTier = document.getElementById("policy-add-tier") as HTMLSelectElement;
+const policyAddSeg = document.getElementById("policy-add-seg") as HTMLElement;
+
+/** Highlight one tier button in a segmented control. */
+function setSegActive(seg: HTMLElement, tier: Tier | undefined): void {
+  for (const btn of seg.querySelectorAll<HTMLButtonElement>("button")) {
+    btn.classList.toggle("reins__seg--on", btn.dataset.tier === tier);
+  }
+}
+
+/** The tier a segmented control currently highlights. */
+function segActive(seg: HTMLElement): Tier | undefined {
+  return seg.querySelector<HTMLButtonElement>("button.reins__seg--on")?.dataset.tier as
+    | Tier
+    | undefined;
+}
+
+/** Tier button under a click event, if any. */
+function segClickTier(ev: Event): Tier | undefined {
+  return (ev.target as HTMLElement).dataset?.tier as Tier | undefined;
+}
 
 async function loadPolicyFromStorage(): Promise<Policy> {
   try {
@@ -143,15 +162,12 @@ async function renderPolicy(): Promise<void> {
   const p = await loadPolicyFromStorage();
   const host = await activeHost();
 
-  policyDefault.value = p.defaultTier;
+  setSegActive(policyDefaultSeg, p.defaultTier);
 
   policyCurrent.hidden = host === undefined;
   if (host !== undefined) {
     policyHost.textContent = host;
-    const tier = effectiveTier(p, host);
-    for (const btn of policySeg.querySelectorAll<HTMLButtonElement>("button")) {
-      btn.classList.toggle("reins__seg--on", btn.dataset.tier === tier);
-    }
+    setSegActive(policySeg, effectiveTier(p, host));
   }
 
   policyRules.replaceChildren(
@@ -175,7 +191,7 @@ async function renderPolicy(): Promise<void> {
 }
 
 policySeg.addEventListener("click", (ev) => {
-  const tier = (ev.target as HTMLElement).dataset?.tier as Tier | undefined;
+  const tier = segClickTier(ev);
   if (!tier) return;
   void (async () => {
     const host = await activeHost();
@@ -184,10 +200,16 @@ policySeg.addEventListener("click", (ev) => {
   })();
 });
 
-policyDefault.addEventListener("change", () => {
-  void loadPolicyFromStorage().then((p) =>
-    writePolicy(setDefaultTier(p, policyDefault.value as Tier)),
-  );
+policyDefaultSeg.addEventListener("click", (ev) => {
+  const tier = segClickTier(ev);
+  if (!tier) return;
+  void loadPolicyFromStorage().then((p) => writePolicy(setDefaultTier(p, tier)));
+});
+
+// The add-rule segment is local selection only; it's read at submit.
+policyAddSeg.addEventListener("click", (ev) => {
+  const tier = segClickTier(ev);
+  if (tier) setSegActive(policyAddSeg, tier);
 });
 
 policyAdd.addEventListener("submit", (ev) => {
@@ -195,7 +217,7 @@ policyAdd.addEventListener("submit", (ev) => {
   void (async () => {
     try {
       const p = await loadPolicyFromStorage();
-      await writePolicy(upsertRule(p, policyPattern.value, policyAddTier.value as Tier));
+      await writePolicy(upsertRule(p, policyPattern.value, segActive(policyAddSeg) ?? "deny"));
       policyPattern.value = "";
       policyPattern.setCustomValidity("");
     } catch {

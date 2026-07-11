@@ -412,14 +412,29 @@ body {
 
 .reins__policy-add {
   display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
 .reins__policy-add input {
-  flex: 1;
   min-width: 0;
 }
 
-.reins__policy-add select {
-  width: auto;
+.reins__policy-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.reins__policy-add-row .reins__btn {
+  flex: none;
+}
+
+.reins__seg button:hover {
+  color: var(--ink);
+}
+
+.reins__seg button.reins__seg--on:hover {
+  color: #fff;
 }

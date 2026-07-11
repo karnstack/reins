@@ -59,13 +59,13 @@
           </fieldset>
         </div>
 
-        <div class="reins__field">
-          <label class="reins__label" for="policy-default">Default for other sites</label>
-          <select class="reins__input" id="policy-default">
-            <option value="full">Full access</option>
-            <option value="read">Read-only</option>
-            <option value="deny">Deny</option>
-          </select>
+        <div class="reins__policy-current">
+          <span class="reins__label">Default for other sites</span>
+          <fieldset class="reins__seg" id="policy-default-seg" aria-label="Default tier">
+            <button type="button" data-tier="full">Full</button>
+            <button type="button" data-tier="read">Read</button>
+            <button type="button" data-tier="deny">Deny</button>
+          </fieldset>
         </div>
 
         <ul class="reins__policy-rules" id="policy-rules"></ul>
@@ -77,12 +77,14 @@
             placeholder="*.example.com"
             autocomplete="off"
           />
-          <select class="reins__input" id="policy-add-tier">
-            <option value="deny">Deny</option>
-            <option value="read">Read-only</option>
-            <option value="full">Full</option>
-          </select>
-          <button class="reins__btn reins__btn--ghost" type="submit">Add</button>
+          <div class="reins__policy-add-row">
+            <fieldset class="reins__seg" id="policy-add-seg" aria-label="Tier for new rule">
+              <button type="button" data-tier="full">Full</button>
+              <button type="button" data-tier="read">Read</button>
+              <button type="button" data-tier="deny" class="reins__seg--on">Deny</button>
+            </fieldset>
+            <button class="reins__btn reins__btn--ghost" type="submit">Add rule</button>
+          </div>
         </form>
       </section>
 
