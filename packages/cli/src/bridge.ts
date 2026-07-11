@@ -215,9 +215,11 @@ export class BridgeHost implements BridgePort {
       const e = new Error(`${err.code}: ${err.message}`) as Error & {
         code?: string;
         meta?: ResponseMeta;
+        browserId?: string;
       };
       e.code = err.code;
       e.meta = frame.meta;
+      e.browserId = pending.browserId;
       pending.reject(e);
     }
   }
@@ -256,7 +258,11 @@ export class BridgeHost implements BridgePort {
     return new Promise<BridgeReply>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
-        reject(new Error(`request "${method}" timed out after ${timeoutMs}ms`));
+        const e = new Error(`request "${method}" timed out after ${timeoutMs}ms`) as Error & {
+          browserId?: string;
+        };
+        e.browserId = target.id;
+        reject(e);
       }, timeoutMs);
       this.#pending.set(id, { resolve, reject, timer, browserId: target.id });
       try {

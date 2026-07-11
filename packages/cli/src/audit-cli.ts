@@ -15,6 +15,14 @@ interface Loaded {
   skipped: number;
 }
 
+/** Guard against JSON-parseable but shape-invalid lines (e.g. `5`, `{}`) that
+ *  would otherwise crash the table renderer on `r.ts.slice`. */
+function isAuditRecord(v: unknown): v is AuditRecord {
+  if (typeof v !== "object" || v === null) return false;
+  const r = v as Record<string, unknown>;
+  return typeof r.ts === "string" && typeof r.method === "string";
+}
+
 function loadFiles(dir: string, files: string[]): Loaded {
   const records: AuditRecord[] = [];
   let skipped = 0;
@@ -28,7 +36,12 @@ function loadFiles(dir: string, files: string[]): Loaded {
     for (const line of text.split("\n")) {
       if (line.trim() === "") continue;
       try {
-        records.push(JSON.parse(line) as AuditRecord);
+        const parsed: unknown = JSON.parse(line);
+        if (!isAuditRecord(parsed)) {
+          skipped += 1;
+          continue;
+        }
+        records.push(parsed);
       } catch {
         skipped += 1;
       }

@@ -21,7 +21,7 @@ export interface AuditRecord {
 export type AuditHook = (record: AuditRecord) => void;
 
 /** Param keys whose string values are typed/filled/evaluated content. */
-const VALUE_KEYS = new Set(["text", "value", "expression"]);
+const VALUE_KEYS = new Set(["text", "value", "expression", "promptText"]);
 
 /**
  * Strip secrets from params before they reach disk. Fixed field-name table,

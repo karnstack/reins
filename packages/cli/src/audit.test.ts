@@ -1,4 +1,12 @@
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -42,6 +50,11 @@ describe("redactParams", () => {
     ],
     ["press_key", { key: "Meta+A" }, { key: "Meta+A" }],
     ["navigate", { to: "https://x.com/a" }, { to: "https://x.com/a" }],
+    [
+      "handle_dialog",
+      { accept: true, promptText: "hunter2" },
+      { accept: true, promptText: "[redacted 7 chars]" },
+    ],
   ])("%s", (method, input, expected) => {
     expect(redactParams(method, input)).toEqual(expected);
   });
@@ -94,6 +107,16 @@ describe("createAuditor", () => {
     chmodSync(dir, 0o755); // so afterEach can clean up
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("audit write failed");
+  });
+
+  it("creates a missing nested directory before writing", () => {
+    const dir = join(tempDir(), "nested", "logs");
+    const now = () => new Date("2026-07-11T10:00:00Z");
+    const audit = createAuditor(dir, { now });
+    audit(record());
+    const path = auditFilePath(dir, now());
+    expect(existsSync(path)).toBe(true);
+    expect(readFileSync(path, "utf8").trim().split("\n")).toHaveLength(1);
   });
 });
 

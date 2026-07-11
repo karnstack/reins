@@ -96,11 +96,11 @@ describe("runAudit", () => {
     const dir = tempDir();
     writeFileSync(
       join(dir, "audit-2026-07-11.jsonl"),
-      `not json\n${line({ host: undefined, tabId: undefined, browser: undefined })}`,
+      `not json\n5\n{}\n${line({ host: undefined, tabId: undefined, browser: undefined })}`,
     );
     const view = runAudit([], { dir, now: NOW });
     expect(view.out).toContain("—");
-    expect(view.warnings).toEqual(["skipped 1 corrupt audit line"]);
+    expect(view.warnings).toEqual(["skipped 3 corrupt audit lines"]);
   });
 
   it("says so when there is nothing to show", () => {

@@ -296,6 +296,7 @@ describe("BridgeHost (requestFull)", () => {
     expect(err.message).toBe("policy_denied: blocked by policy: bank.com is read-only");
     expect(err.code).toBe("policy_denied");
     expect(err.meta).toEqual({ host: "bank.com", tier: "read", tabId: 7 });
+    expect(err.browserId).toBe("b1");
     client.close();
   });
 

@@ -131,10 +131,13 @@ describe("audit hook", () => {
     const err = new Error("policy_denied: blocked by policy: bank.com is read-only") as Error & {
       code?: string;
       meta?: unknown;
+      browserId?: string;
     };
     err.code = "policy_denied";
     err.meta = { host: "bank.com", tier: "read", tabId: 7 };
+    err.browserId = "b1";
     const bridge = fakeBridge({
+      browsers: [{ id: "b1", browser: "Chromium", connectedAt: 0 }],
       requestFull: async () => {
         throw err;
       },
@@ -146,6 +149,8 @@ describe("audit hook", () => {
       method: "click",
       ok: false,
       denied: true,
+      browserId: "b1",
+      browser: "Chromium",
       host: "bank.com",
       tier: "read",
       tabId: 7,
@@ -161,14 +166,17 @@ describe("audit hook", () => {
       },
     });
     await expect(
-      handleRpc(bridge, { method: "click", params: {} }, (r) => records.push(r)),
+      handleRpc(bridge, { method: "click", params: { tabId: 412 } }, (r) => records.push(r)),
     ).rejects.toThrow();
     expect(records[0]).toMatchObject({
       method: "click",
       ok: false,
       error: "extension not connected",
+      tabId: 412,
     });
+    expect(records[0]?.browserId).toBeUndefined();
     expect(records[0]?.host).toBeUndefined();
+    expect(records[0]?.tier).toBeUndefined();
     expect(records[0]?.denied).toBeUndefined();
   });
 

@@ -64,16 +64,18 @@ export async function handleRpc(
     error?: Error & { code?: string };
   }): void => {
     if (!audit) return;
-    const browser = outcome.browserId
-      ? bridge.browsers.find((b) => b.id === outcome.browserId)?.browser
-      : undefined;
     try {
+      const browser = outcome.browserId
+        ? bridge.browsers.find((b) => b.id === outcome.browserId)?.browser
+        : undefined;
+      const tabId =
+        outcome.meta?.tabId ?? (typeof params.tabId === "number" ? params.tabId : undefined);
       audit({
         ts: new Date(started).toISOString(),
         method,
         ...(outcome.browserId !== undefined ? { browserId: outcome.browserId } : {}),
         ...(browser !== undefined ? { browser } : {}),
-        ...(outcome.meta?.tabId !== undefined ? { tabId: outcome.meta.tabId } : {}),
+        ...(tabId !== undefined ? { tabId } : {}),
         ...(outcome.meta?.host !== undefined ? { host: outcome.meta.host } : {}),
         ...(outcome.meta?.tier !== undefined ? { tier: outcome.meta.tier } : {}),
         params: redactParams(method, params),
@@ -102,8 +104,9 @@ export async function handleRpc(
     const e = (err instanceof Error ? err : new Error(String(err))) as Error & {
       code?: string;
       meta?: ResponseMeta;
+      browserId?: string;
     };
-    finish({ ok: false, browserId, meta: e.meta, error: e });
+    finish({ ok: false, browserId: e.browserId ?? browserId, meta: e.meta, error: e });
     throw err;
   }
 }

@@ -61,7 +61,7 @@ show attempts, not just completions.
 Redaction happens in the daemon **before** the write; plaintext never
 reaches disk. A fixed field-name list, not heuristics:
 
-- `text`, `value`, `expression` → `"[redacted <n> chars]"`.
+- `text`, `value`, `expression`, `promptText` → `"[redacted <n> chars]"`.
 - `upload` file paths (`files`) → basename only.
 - `cdp` nested `params` → `"[redacted]"` (arbitrary CDP payloads can carry
   anything, e.g. `Input.insertText`); the `Domain.method` name stays.
