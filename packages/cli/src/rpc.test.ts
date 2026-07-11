@@ -181,6 +181,17 @@ describe("audit hook", () => {
     expect(records[0]?.host).toBeUndefined();
   });
 
+  it("never lets a throwing hook affect the RPC result or double-record", async () => {
+    let calls = 0;
+    const bridge = fakeBridge();
+    const result = await handleRpc(bridge, { method: "click", params: { ref: "e1" } }, () => {
+      calls++;
+      throw new Error("boom");
+    });
+    expect(result).toEqual({ ok: true });
+    expect(calls).toBe(1);
+  });
+
   it("does not audit malformed bodies", async () => {
     const records: AuditRecord[] = [];
     await expect(handleRpc(fakeBridge({}), { nope: 1 }, (r) => records.push(r))).rejects.toThrow();

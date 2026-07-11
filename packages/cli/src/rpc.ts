@@ -67,20 +67,26 @@ export async function handleRpc(
     const browser = outcome.browserId
       ? bridge.browsers.find((b) => b.id === outcome.browserId)?.browser
       : undefined;
-    audit({
-      ts: new Date(started).toISOString(),
-      method,
-      ...(outcome.browserId !== undefined ? { browserId: outcome.browserId } : {}),
-      ...(browser !== undefined ? { browser } : {}),
-      ...(outcome.meta?.tabId !== undefined ? { tabId: outcome.meta.tabId } : {}),
-      ...(outcome.meta?.host !== undefined ? { host: outcome.meta.host } : {}),
-      ...(outcome.meta?.tier !== undefined ? { tier: outcome.meta.tier } : {}),
-      params: redactParams(method, params),
-      ok: outcome.ok,
-      ...(outcome.error?.code === "policy_denied" ? { denied: true } : {}),
-      ...(outcome.error !== undefined ? { error: outcome.error.message } : {}),
-      ms: Date.now() - started,
-    });
+    try {
+      audit({
+        ts: new Date(started).toISOString(),
+        method,
+        ...(outcome.browserId !== undefined ? { browserId: outcome.browserId } : {}),
+        ...(browser !== undefined ? { browser } : {}),
+        ...(outcome.meta?.tabId !== undefined ? { tabId: outcome.meta.tabId } : {}),
+        ...(outcome.meta?.host !== undefined ? { host: outcome.meta.host } : {}),
+        ...(outcome.meta?.tier !== undefined ? { tier: outcome.meta.tier } : {}),
+        params: redactParams(method, params),
+        ok: outcome.ok,
+        ...(outcome.error?.code === "policy_denied" ? { denied: true } : {}),
+        ...(outcome.error !== undefined ? { error: outcome.error.message } : {}),
+        ms: Date.now() - started,
+      });
+    } catch {
+      // An audit hook must never affect the RPC result: a throw here on the
+      // success path would land in handleRpc's catch — double-recording the
+      // attempt and rejecting a genuinely successful call.
+    }
   };
 
   try {
