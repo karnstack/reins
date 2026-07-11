@@ -47,6 +47,45 @@
         Disconnect
       </button>
 
+      <section class="reins__policy">
+        <h2 class="reins__policy-title">Site permissions</h2>
+
+        <div class="reins__policy-current" id="policy-current" hidden>
+          <span class="reins__policy-host" id="policy-host">—</span>
+          <div class="reins__seg" id="policy-current-seg" role="group" aria-label="Tier for this site">
+            <button type="button" data-tier="full">Full</button>
+            <button type="button" data-tier="read">Read</button>
+            <button type="button" data-tier="deny">Deny</button>
+          </div>
+        </div>
+
+        <div class="reins__field">
+          <label class="reins__label" for="policy-default">Default for other sites</label>
+          <select class="reins__input" id="policy-default">
+            <option value="full">Full access</option>
+            <option value="read">Read-only</option>
+            <option value="deny">Deny</option>
+          </select>
+        </div>
+
+        <ul class="reins__policy-rules" id="policy-rules"></ul>
+
+        <form class="reins__policy-add" id="policy-add">
+          <input
+            class="reins__input reins__input--mono"
+            id="policy-pattern"
+            placeholder="*.example.com"
+            autocomplete="off"
+          />
+          <select class="reins__input" id="policy-add-tier">
+            <option value="deny">Deny</option>
+            <option value="read">Read-only</option>
+            <option value="full">Full</option>
+          </select>
+          <button class="reins__btn reins__btn--ghost" type="submit">Add</button>
+        </form>
+      </section>
+
       <details class="reins__advanced">
         <summary>Advanced</summary>
         <div class="reins__field">

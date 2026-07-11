@@ -1,4 +1,7 @@
 import "./popup.css";
+import { DEFAULT_POLICY, effectiveTier, hostOf, Policy, type Tier } from "@reins/protocol";
+import { POLICY_KEY } from "./lib/policy.js";
+import { removeRule, setDefaultTier, upsertRule } from "./lib/policy-view.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
@@ -99,4 +102,108 @@ savePortBtn.addEventListener("click", async () => {
   render("connecting");
 });
 
+// ─── Site permissions ────────────────────────────────────────────────────────
+// The popup is the ONLY loosening surface: a click here is the user gesture
+// that grants access. It writes chrome.storage.local directly; the service
+// worker's policy cache refreshes via storage.onChanged.
+
+const policyCurrent = document.getElementById("policy-current") as HTMLElement;
+const policyHost = document.getElementById("policy-host") as HTMLElement;
+const policySeg = document.getElementById("policy-current-seg") as HTMLElement;
+const policyDefault = document.getElementById("policy-default") as HTMLSelectElement;
+const policyRules = document.getElementById("policy-rules") as HTMLUListElement;
+const policyAdd = document.getElementById("policy-add") as HTMLFormElement;
+const policyPattern = document.getElementById("policy-pattern") as HTMLInputElement;
+const policyAddTier = document.getElementById("policy-add-tier") as HTMLSelectElement;
+
+async function loadPolicyFromStorage(): Promise<Policy> {
+  try {
+    const got = await chrome.storage.local.get(POLICY_KEY);
+    return got[POLICY_KEY] === undefined ? DEFAULT_POLICY : Policy.parse(got[POLICY_KEY]);
+  } catch {
+    return DEFAULT_POLICY;
+  }
+}
+
+async function writePolicy(p: Policy): Promise<void> {
+  await chrome.storage.local.set({ [POLICY_KEY]: p });
+  await renderPolicy();
+}
+
+async function activeHost(): Promise<string | undefined> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return hostOf(tab?.url ?? "");
+  } catch {
+    return undefined;
+  }
+}
+
+async function renderPolicy(): Promise<void> {
+  const p = await loadPolicyFromStorage();
+  const host = await activeHost();
+
+  policyDefault.value = p.defaultTier;
+
+  policyCurrent.hidden = host === undefined;
+  if (host !== undefined) {
+    policyHost.textContent = host;
+    const tier = effectiveTier(p, host);
+    for (const btn of policySeg.querySelectorAll<HTMLButtonElement>("button")) {
+      btn.classList.toggle("reins__seg--on", btn.dataset.tier === tier);
+    }
+  }
+
+  policyRules.replaceChildren(
+    ...p.rules.map((r) => {
+      const li = document.createElement("li");
+      li.className = "reins__policy-rule";
+      const label = document.createElement("code");
+      label.textContent = `${r.pattern} · ${r.tier}`;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "reins__policy-del";
+      del.textContent = "×";
+      del.setAttribute("aria-label", `remove rule for ${r.pattern}`);
+      del.addEventListener("click", () => {
+        void loadPolicyFromStorage().then((cur) => writePolicy(removeRule(cur, r.pattern)));
+      });
+      li.append(label, del);
+      return li;
+    }),
+  );
+}
+
+policySeg.addEventListener("click", (ev) => {
+  const tier = (ev.target as HTMLElement).dataset?.tier as Tier | undefined;
+  if (!tier) return;
+  void (async () => {
+    const host = await activeHost();
+    if (host === undefined) return;
+    await writePolicy(upsertRule(await loadPolicyFromStorage(), host, tier));
+  })();
+});
+
+policyDefault.addEventListener("change", () => {
+  void loadPolicyFromStorage().then((p) =>
+    writePolicy(setDefaultTier(p, policyDefault.value as Tier)),
+  );
+});
+
+policyAdd.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  void (async () => {
+    try {
+      const p = await loadPolicyFromStorage();
+      await writePolicy(upsertRule(p, policyPattern.value, policyAddTier.value as Tier));
+      policyPattern.value = "";
+      policyPattern.setCustomValidity("");
+    } catch {
+      policyPattern.setCustomValidity("use host.com or *.host.com");
+      policyAdd.reportValidity();
+    }
+  })();
+});
+
 void refresh();
+void renderPolicy();
