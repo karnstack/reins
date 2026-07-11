@@ -14,6 +14,7 @@ const NAV = [
   { to: "/docs", label: "Getting started", exact: true },
   { to: "/docs/sideload", label: "Install without the store", exact: false },
   { to: "/docs/commands", label: "Commands", exact: false },
+  { to: "/docs/permissions", label: "Site permissions", exact: false },
   { to: "/docs/architecture", label: "Architecture", exact: false },
   { to: "/docs/security", label: "Security", exact: false },
   { to: "/docs/comparison", label: "How it compares", exact: false },
@@ -63,7 +64,7 @@ function DocsLayout() {
       </div>
       <div className="mx-auto flex min-h-dvh max-w-6xl gap-12 px-4 sm:px-6 lg:px-8">
         <aside className="w-52 shrink-0 border-r border-border py-10 pr-6 max-lg:hidden">
-          <div className="sticky top-10">
+          <div className="sticky top-24">
             <DocsNav />
           </div>
         </aside>

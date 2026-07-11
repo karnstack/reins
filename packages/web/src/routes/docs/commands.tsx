@@ -117,6 +117,31 @@ const GROUPS: Array<{ title: string; intro?: string; commands: Command[] }> = [
     ],
   },
   {
+    title: "Site permissions",
+    intro:
+      "The shell can inspect and tighten the per-site policy, never loosen it — grants happen in the extension popup. See the Site permissions page for the full model.",
+    commands: [
+      {
+        usage: "reins policy [--browser <id>]",
+        summary:
+          "Show the default tier, the rules, and the effective tier for each open tab's host.",
+      },
+      {
+        usage: "reins policy deny <pattern>",
+        summary: "Block a site entirely; the pattern is a host or a *.wildcard.",
+      },
+      {
+        usage: "reins policy readonly <pattern>",
+        summary: "Tighten a site to read-only: agents can look but not act.",
+      },
+      {
+        usage: "reins policy allow <pattern>",
+        summary:
+          "Always errors — grants require the extension popup, and the error message says exactly that.",
+      },
+    ],
+  },
+  {
     title: "Management",
     commands: [
       { usage: "reins browsers", summary: "List browsers connected to the daemon." },
