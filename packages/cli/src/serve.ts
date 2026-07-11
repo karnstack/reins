@@ -1,9 +1,10 @@
 import { loadAllowedOrigins } from "./allowlist.js";
+import { createAuditor, pruneAuditLogs } from "./audit.js";
 import { BridgeHost } from "./bridge.js";
 import { candidatePorts, loadOrCreateConfig, recordPort } from "./config.js";
 import { type Daemon, startDaemon } from "./daemon.js";
 import { type FoundDaemon, probeHealth } from "./ensure.js";
-import { createLogger, type Log } from "./log.js";
+import { createLogger, type Log, logsDir } from "./log.js";
 
 /** First live daemon on a lower candidate port than ours, if any. Two racing
  *  CLI spawns can bind different candidates; the lower port deterministically
@@ -43,6 +44,9 @@ async function bindFirstFree<T>(
 /** `reins daemon` — the foreground daemon (the CLI spawns this detached). */
 export async function runDaemon(): Promise<void> {
   const log = createLogger();
+  const audit = createAuditor(logsDir(), { log });
+  const pruned = pruneAuditLogs(logsDir(), new Date());
+  if (pruned.length > 0) log(`reins: pruned ${pruned.length} audit file(s) older than 30 days`);
   const config = loadOrCreateConfig();
   const bridge = new BridgeHost({ allowedOrigins: loadAllowedOrigins(config.dir), log });
   const ports = candidatePorts(config);
@@ -63,6 +67,7 @@ export async function runDaemon(): Promise<void> {
         port,
         bridge,
         log,
+        audit,
         onShutdown: () => void shutdown("/shutdown", () => daemon.close()),
       }),
     );
