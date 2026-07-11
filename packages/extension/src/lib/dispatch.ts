@@ -4,6 +4,7 @@ import {
   hostOf,
   METHOD_TIERS,
   PolicyTightenParams,
+  type ResponseMeta,
 } from "@reins/protocol";
 import {
   cdpClick,
@@ -27,45 +28,59 @@ import {
   selectOption,
   upload,
 } from "./page-actions.js";
-import { ensureAllowed, policy, tightenPolicy } from "./policy.js";
+import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
 import { closeTab, listTabs, openTab, resizeWindow, selectTab } from "./tab-handler.js";
 
 const NAV_HISTORY = new Set(["back", "forward", "reload"]);
 
+interface Gated {
+  params: Record<string, unknown>;
+  meta: ResponseMeta;
+}
+
 /**
  * Policy gate. Resolves the target tab once (so gate and handler agree),
  * checks the host's tier against the method's required tier, and returns
- * params with tabId pinned. list_tabs is gated per-tab (redaction) in the
- * switch below; open_tab has no current tab and checks its destination.
+ * params with tabId pinned plus the resolved host/tier/tabId for the audit
+ * trail. list_tabs is gated per-tab (redaction) in runHandler; open_tab has
+ * no current tab and checks its destination.
  */
-async function gate(method: GatedMethod, params: unknown): Promise<Record<string, unknown>> {
+async function gate(method: GatedMethod, params: unknown): Promise<Gated> {
   const p = { ...((params ?? {}) as Record<string, unknown>) };
-  if (method === "list_tabs") return p;
+  if (method === "list_tabs") return { params: p, meta: {} };
   if (method === "open_tab") {
-    await ensureAllowed("open_tab", hostOf(String(p.url ?? "")));
-    return p;
+    const host = hostOf(String(p.url ?? ""));
+    const tier = await ensureAllowed("open_tab", host);
+    return { params: p, meta: { host, tier } };
   }
   const tabId = await resolveTabId(typeof p.tabId === "number" ? p.tabId : undefined);
-  const tab = await chrome.tabs.get(tabId);
-  await ensureAllowed(method, hostOf(tab.url ?? ""));
-  if (method === "navigate") {
-    const to = String(p.to ?? "");
-    if (!NAV_HISTORY.has(to)) {
-      let dest = hostOf(to);
-      if (dest === undefined) {
-        // Protocol-relative ("//bank.com/x") and path-relative targets
-        // resolve against the current page — check what they resolve to,
-        // or they would dodge the destination gate.
-        try {
-          dest = hostOf(new URL(to, tab.url).href);
-        } catch {
-          // unresolvable target — the handler will reject it
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const host = hostOf(tab.url ?? "");
+    const tier = await ensureAllowed(method, host);
+    if (method === "navigate") {
+      const to = String(p.to ?? "");
+      if (!NAV_HISTORY.has(to)) {
+        let dest = hostOf(to);
+        if (dest === undefined) {
+          // Protocol-relative ("//bank.com/x") and path-relative targets
+          // resolve against the current page — check what they resolve to,
+          // or they would dodge the destination gate.
+          try {
+            dest = hostOf(new URL(to, tab.url).href);
+          } catch {
+            // unresolvable target — the handler will reject it
+          }
         }
+        if (dest !== undefined) await ensureAllowed("navigate", dest);
       }
-      if (dest !== undefined) await ensureAllowed("navigate", dest);
     }
+    return { params: { ...p, tabId }, meta: { host, tier, tabId } };
+  } catch (err) {
+    // A denial thrown in here knows host+tier but not the tab — add it.
+    if (err instanceof PolicyDenied && err.meta) err.meta = { ...err.meta, tabId };
+    throw err;
   }
-  return { ...p, tabId };
 }
 
 /**
@@ -73,15 +88,7 @@ async function gate(method: GatedMethod, params: unknown): Promise<Record<string
  * Add new cases here as more bridge methods are implemented — and classify
  * the method in METHOD_TIERS (@reins/protocol), or the gate refuses it.
  */
-export async function dispatchMethod(method: string, params: unknown): Promise<unknown> {
-  if (method === "policy_get") return policy();
-  if (method === "policy_tighten") {
-    const { pattern, tier } = PolicyTightenParams.parse(params ?? {});
-    return tightenPolicy(pattern, tier);
-  }
-  if (!(method in METHOD_TIERS)) throw new Error(`unknown method: ${method}`);
-  const gated = await gate(method as GatedMethod, params);
-
+async function runHandler(method: GatedMethod, gated: Record<string, unknown>): Promise<unknown> {
   switch (method) {
     case "list_tabs": {
       const { tabs } = await listTabs();
@@ -141,4 +148,27 @@ export async function dispatchMethod(method: string, params: unknown): Promise<u
     default:
       throw new Error(`unknown method: ${method}`);
   }
+}
+
+export interface DispatchOutcome {
+  result: unknown;
+  meta?: ResponseMeta;
+}
+
+/** Route a bridge method to its handler; the outcome carries the resolved
+ *  target (host/tier/tabId) for the daemon's audit trail. */
+export async function dispatchWithMeta(method: string, params: unknown): Promise<DispatchOutcome> {
+  if (method === "policy_get") return { result: await policy() };
+  if (method === "policy_tighten") {
+    const { pattern, tier } = PolicyTightenParams.parse(params ?? {});
+    return { result: await tightenPolicy(pattern, tier) };
+  }
+  if (!(method in METHOD_TIERS)) throw new Error(`unknown method: ${method}`);
+  const gated = await gate(method as GatedMethod, params);
+  const result = await runHandler(method as GatedMethod, gated.params);
+  return { result, meta: gated.meta };
+}
+
+export async function dispatchMethod(method: string, params: unknown): Promise<unknown> {
+  return (await dispatchWithMeta(method, params)).result;
 }

@@ -48,7 +48,7 @@ vi.mock("./policy.js", async (importOriginal) => {
 });
 
 import { cdpClick } from "./cdp.js";
-import { dispatchMethod } from "./dispatch.js";
+import { dispatchMethod, dispatchWithMeta } from "./dispatch.js";
 import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
 
 /** chrome stub with enough tabs API for the gate (tabs.get → host). */
@@ -283,5 +283,37 @@ describe("policy methods", () => {
     await expect(
       dispatchMethod("policy_tighten", { pattern: "x.com", tier: "sideways" }),
     ).rejects.toThrow();
+  });
+});
+
+describe("dispatchWithMeta", () => {
+  it("stamps host/tier/tabId on success", async () => {
+    stubTabs("https://app.example.com/x");
+    vi.mocked(ensureAllowed).mockResolvedValueOnce("full");
+    const out = await dispatchWithMeta("read_text", { tabId: 7 });
+    expect(out.meta).toEqual({ host: "app.example.com", tier: "full", tabId: 7 });
+  });
+
+  it("stamps meta (with tabId) on a policy denial", async () => {
+    stubTabs("https://bank.com/x");
+    vi.mocked(ensureAllowed).mockImplementationOnce(async () => {
+      const err = new PolicyDenied("blocked by policy: bank.com is read-only");
+      err.meta = { host: "bank.com", tier: "read" };
+      throw err;
+    });
+    const err = await dispatchWithMeta("click", { tabId: 7 }).catch((e) => e);
+    expect(err.code).toBe("policy_denied");
+    expect(err.meta).toEqual({ host: "bank.com", tier: "read", tabId: 7 });
+  });
+
+  it("leaves meta undefined for policy_get", async () => {
+    const out = await dispatchWithMeta("policy_get", {});
+    expect(out.meta).toBeUndefined();
+  });
+
+  it("dispatchMethod still returns the bare result", async () => {
+    stubTabs();
+    const result = await dispatchMethod("read_text", { tabId: 7 });
+    expect(result).not.toHaveProperty("meta");
   });
 });
