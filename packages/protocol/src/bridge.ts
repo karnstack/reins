@@ -7,6 +7,8 @@ export const Tab = z.object({
   title: z.string(),
   url: z.string(),
   active: z.boolean(),
+  /** true when the tab's host is policy-denied: title/url are redacted. */
+  blocked: z.boolean().optional(),
   browserId: z.string().optional(),
   browser: z.string().optional(),
 });

@@ -1,4 +1,5 @@
 import { dispatchMethod } from "./lib/dispatch.js";
+import { applyPolicyChange, type PolicyChange } from "./lib/policy.js";
 import { candidateUrls, loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
 
@@ -155,13 +156,30 @@ chrome.runtime.onMessage.addListener(
         return;
       }
 
+      case "reins:policy-change": {
+        // Popup edits route through the worker so every policy write shares
+        // the single-writer queue with policy_tighten (no lost updates).
+        applyPolicyChange(message.change as PolicyChange)
+          .then((policy) => sendResponse({ policy }))
+          .catch((err) =>
+            sendResponse({ error: err instanceof Error ? err.message : String(err) }),
+          );
+        return true;
+      }
+
       case "reins:dispatch": {
         const method = message.method as string;
         const params = message.params;
         dispatchMethod(method, params)
           .then((result) => sendResponse({ result }))
           .catch((err) =>
-            sendResponse({ error: err instanceof Error ? err.message : String(err) }),
+            sendResponse({
+              error: err instanceof Error ? err.message : String(err),
+              code:
+                typeof (err as { code?: unknown })?.code === "string"
+                  ? (err as { code: string }).code
+                  : undefined,
+            }),
           );
         return true;
       }

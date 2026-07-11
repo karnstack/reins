@@ -119,6 +119,25 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "policy": {
+      const { runPolicy } = await import("./policy-cli.js");
+      const ensured = await ensureDaemon(loadOrCreateConfig());
+      if (ensured.health.browsers.length === 0) {
+        if (!ensured.spawned) {
+          throw new Error(
+            "no browser connected — is the reins extension installed? (`reins status`)",
+          );
+        }
+        await waitForBrowsers(ensured.port);
+      }
+      console.log(
+        await runPolicy(rest, {
+          rpc: (method, params) => rpc(ensured.port, method, params),
+        }),
+      );
+      break;
+    }
+
     case "browsers": {
       const found = await findDaemon(loadOrCreateConfig());
       if (!found) {

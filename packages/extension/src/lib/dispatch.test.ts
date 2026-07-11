@@ -11,6 +11,7 @@ vi.mock("./monitor.js", () => ({
 }));
 
 vi.mock("./cdp.js", () => ({
+  resolveTabId: vi.fn(async (tabId?: number) => tabId ?? 1),
   cdpNavigate: vi.fn(async () => ({ url: "https://x/" })),
   cdpSnapshot: vi.fn(async () => ({ content: "", refs: [] })),
   cdpClick: vi.fn(async () => ({ ok: true })),
@@ -32,9 +33,42 @@ vi.mock("./page-actions.js", () => ({
   cdpRaw: vi.fn(async () => ({ result: { frameId: "F1" } })),
 }));
 
-import { dispatchMethod } from "./dispatch.js";
+// Allow-all policy by default so routing tests exercise handlers, not the gate.
+vi.mock("./policy.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./policy.js")>();
+  return {
+    ...real,
+    policy: vi.fn(async () => ({ defaultTier: "full", rules: [] })),
+    ensureAllowed: vi.fn(async () => undefined),
+    tightenPolicy: vi.fn(async (pattern: string, tier: string) => ({
+      defaultTier: "full",
+      rules: [{ pattern, tier }],
+    })),
+  };
+});
 
-afterEach(() => vi.unstubAllGlobals());
+import { cdpClick } from "./cdp.js";
+import { dispatchMethod } from "./dispatch.js";
+import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
+
+/** chrome stub with enough tabs API for the gate (tabs.get → host). */
+function stubTabs(url = "https://x.com/") {
+  vi.stubGlobal("chrome", {
+    tabs: {
+      get: async (id: number) => ({ id, url }),
+      query: async () => [{ id: 1, title: "t", url, active: true }],
+      create: async () => ({ id: 11 }),
+      remove: async () => undefined,
+      update: async () => ({}),
+    },
+    windows: { update: async () => ({}) },
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
 
 describe("dispatchMethod", () => {
   it("list_tabs returns mapped tabs", async () => {
@@ -62,23 +96,28 @@ describe("dispatchMethod", () => {
 
 describe("dispatchMethod routing (CDP)", () => {
   it("routes navigate to cdpNavigate", async () => {
+    stubTabs();
     expect(await dispatchMethod("navigate", { to: "https://x" })).toEqual({ url: "https://x/" });
   });
   it("routes click/type/read_snapshot", async () => {
+    stubTabs();
     expect(await dispatchMethod("click", { ref: "e1" })).toEqual({ ok: true });
     expect(await dispatchMethod("type", { ref: "e1", text: "hi" })).toEqual({ ok: true });
     expect(await dispatchMethod("read_snapshot", {})).toEqual({ content: "", refs: [] });
   });
   it("routes screenshot to cdpScreenshot", async () => {
+    stubTabs();
     expect(await dispatchMethod("screenshot", {})).toEqual({
       data: "abc123",
       mimeType: "image/png",
     });
   });
   it("routes eval_js to cdpEval", async () => {
+    stubTabs();
     expect(await dispatchMethod("eval_js", { expression: "1+1" })).toEqual({ value: 42 });
   });
   it("routes wait_for to cdpWaitFor", async () => {
+    stubTabs();
     expect(await dispatchMethod("wait_for", { selector: "#btn" })).toEqual({ ok: true });
   });
 });
@@ -92,7 +131,9 @@ describe("dispatchMethod routing (chrome.tabs)", () => {
 
   it("routes close_tab", async () => {
     const remove = vi.fn(async () => undefined);
-    vi.stubGlobal("chrome", { tabs: { remove } });
+    vi.stubGlobal("chrome", {
+      tabs: { remove, get: async (id: number) => ({ id, url: "https://x.com/" }) },
+    });
     const result = await dispatchMethod("close_tab", { tabId: 5 });
     expect(remove).toHaveBeenCalledWith(5);
     expect(result).toEqual({ ok: true });
@@ -100,7 +141,9 @@ describe("dispatchMethod routing (chrome.tabs)", () => {
 
   it("routes select_tab", async () => {
     const update = vi.fn(async () => ({}));
-    vi.stubGlobal("chrome", { tabs: { update } });
+    vi.stubGlobal("chrome", {
+      tabs: { update, get: async (id: number) => ({ id, url: "https://x.com/" }) },
+    });
     const result = await dispatchMethod("select_tab", { tabId: 7 });
     expect(update).toHaveBeenCalledWith(7, { active: true });
     expect(result).toEqual({ ok: true });
@@ -119,13 +162,14 @@ describe("dispatchMethod routing (page-actions)", () => {
     ["handle_dialog", { accept: true }, { ok: true }],
     ["cdp", { method: "Page.enable" }, { result: { frameId: "F1" } }],
   ] as const)("routes %s", async (method, params, expected) => {
+    stubTabs();
     expect(await dispatchMethod(method, params)).toEqual(expected);
   });
 
   it("routes resize to chrome.windows.update", async () => {
     const update = vi.fn(async () => ({}));
     vi.stubGlobal("chrome", {
-      tabs: { get: async () => ({ id: 5, windowId: 3 }) },
+      tabs: { get: async () => ({ id: 5, windowId: 3, url: "https://x.com/" }) },
       windows: { update },
     });
     expect(await dispatchMethod("resize", { tabId: 5, width: 1280, height: 800 })).toEqual({
@@ -137,13 +181,107 @@ describe("dispatchMethod routing (page-actions)", () => {
 
 describe("dispatchMethod routing (monitor)", () => {
   it("routes read_console to readConsole", async () => {
+    stubTabs();
     expect(await dispatchMethod("read_console", {})).toEqual({
       entries: [{ level: "error", text: "boom", timestamp: 1000 }],
     });
   });
   it("routes read_network to readNetwork", async () => {
+    stubTabs();
     expect(await dispatchMethod("read_network", {})).toEqual({
       entries: [{ method: "GET", url: "https://x/", status: 200, timestamp: 2000 }],
     });
+  });
+});
+
+describe("policy gate", () => {
+  it("checks the resolved tab's host for tab-scoped methods", async () => {
+    stubTabs("https://app.example.com/page");
+    await dispatchMethod("click", { ref: "e1" });
+    expect(ensureAllowed).toHaveBeenCalledWith("click", "app.example.com");
+  });
+
+  it("pins the resolved tabId into handler params", async () => {
+    stubTabs();
+    await dispatchMethod("click", { ref: "e1" });
+    expect(cdpClick).toHaveBeenCalledWith(expect.objectContaining({ tabId: 1 }));
+  });
+
+  it("checks the destination host for open_tab", async () => {
+    stubTabs();
+    await dispatchMethod("open_tab", { url: "https://new.site/x", activate: true });
+    expect(ensureAllowed).toHaveBeenCalledWith("open_tab", "new.site");
+  });
+
+  it("checks current AND destination hosts for navigate", async () => {
+    stubTabs("https://here.com/");
+    await dispatchMethod("navigate", { to: "https://there.com/x" });
+    expect(ensureAllowed).toHaveBeenCalledWith("navigate", "here.com");
+    expect(ensureAllowed).toHaveBeenCalledWith("navigate", "there.com");
+  });
+
+  it("checks only the current host for back/forward/reload", async () => {
+    stubTabs("https://here.com/");
+    await dispatchMethod("navigate", { to: "back" });
+    expect(ensureAllowed).toHaveBeenCalledTimes(1);
+    expect(ensureAllowed).toHaveBeenCalledWith("navigate", "here.com");
+  });
+
+  it("resolves protocol-relative navigate targets against the current page", async () => {
+    stubTabs("https://here.com/");
+    await dispatchMethod("navigate", { to: "//there.com/x" });
+    expect(ensureAllowed).toHaveBeenCalledWith("navigate", "there.com");
+  });
+
+  it("propagates PolicyDenied from the gate", async () => {
+    stubTabs();
+    vi.mocked(ensureAllowed).mockRejectedValueOnce(
+      new PolicyDenied("blocked by policy: x.com is read-only"),
+    );
+    await expect(dispatchMethod("click", { ref: "e1" })).rejects.toThrow(/blocked by policy/);
+  });
+});
+
+describe("list_tabs redaction", () => {
+  it("redacts denied tabs, passes others through", async () => {
+    vi.stubGlobal("chrome", {
+      tabs: {
+        query: async () => [
+          { id: 1, title: "Bank", url: "https://app.bank.com/x", active: true },
+          { id: 2, title: "Docs", url: "https://docs.example.com", active: false },
+        ],
+      },
+    });
+    vi.mocked(policy).mockResolvedValueOnce({
+      defaultTier: "full",
+      rules: [{ pattern: "*.bank.com", tier: "deny" }],
+    });
+    expect(await dispatchMethod("list_tabs", {})).toEqual({
+      tabs: [
+        { tabId: 1, title: "", url: "", active: true, blocked: true },
+        { tabId: 2, title: "Docs", url: "https://docs.example.com", active: false },
+      ],
+    });
+  });
+});
+
+describe("policy methods", () => {
+  it("policy_get returns the policy", async () => {
+    expect(await dispatchMethod("policy_get", {})).toEqual({
+      defaultTier: "full",
+      rules: [],
+    });
+  });
+  it("policy_tighten validates params and delegates", async () => {
+    expect(await dispatchMethod("policy_tighten", { pattern: "x.com", tier: "read" })).toEqual({
+      defaultTier: "full",
+      rules: [{ pattern: "x.com", tier: "read" }],
+    });
+    expect(tightenPolicy).toHaveBeenCalledWith("x.com", "read");
+  });
+  it("policy_tighten rejects a bad tier", async () => {
+    await expect(
+      dispatchMethod("policy_tighten", { pattern: "x.com", tier: "sideways" }),
+    ).rejects.toThrow();
   });
 });

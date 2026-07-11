@@ -47,6 +47,47 @@
         Disconnect
       </button>
 
+      <section class="reins__policy">
+        <h2 class="reins__policy-title">Site permissions</h2>
+
+        <p class="reins__policy-error" id="policy-error" hidden>
+          Stored site permissions are unreadable — all commands are refused
+          until this is resolved. Re-set your policy after clearing it from
+          the extension's storage.
+        </p>
+
+        <div class="reins__policy-rows">
+          <div class="reins__policy-row" id="policy-current" hidden>
+            <span class="reins__policy-host" id="policy-host">—</span>
+            <fieldset class="reins__seg" id="policy-current-seg" aria-label="Tier for this site">
+              <button type="button" data-tier="full" aria-pressed="false">Full</button>
+              <button type="button" data-tier="read" aria-pressed="false">Read</button>
+              <button type="button" data-tier="deny" aria-pressed="false">Deny</button>
+            </fieldset>
+          </div>
+
+          <div class="reins__policy-row">
+            <span class="reins__policy-rowlabel">Default for other sites</span>
+            <div class="reins__select" id="policy-default-dd" data-name="Default tier for other sites" data-label-full="Full" data-label-read="Read-only" data-label-deny="Deny"></div>
+          </div>
+        </div>
+
+        <ul class="reins__policy-rules" id="policy-rules"></ul>
+
+        <form class="reins__policy-add" id="policy-add" novalidate>
+          <input
+            class="reins__input reins__input--mono"
+            id="policy-pattern"
+            name="pattern"
+            aria-label="Site pattern"
+            placeholder="*.example.com"
+            autocomplete="off"
+          />
+          <div class="reins__select reins__select--up" id="policy-add-dd" data-name="Tier for new rule" data-label-full="Full" data-label-read="Read" data-label-deny="Deny"></div>
+          <button class="reins__policy-add-btn" type="submit" aria-label="Add rule">＋</button>
+        </form>
+      </section>
+
       <details class="reins__advanced">
         <summary>Advanced</summary>
         <div class="reins__field">

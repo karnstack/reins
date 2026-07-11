@@ -153,6 +153,13 @@ Chrome Web Store: **[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)**.
 
 ## Security
 
+- Per-site permissions, enforced in the extension: every host resolves to a
+  tier — `deny`, `read` (observation only: tabs/text/snapshot/screenshot/
+  console/network), or `full`. Fresh installs default to `full` everywhere
+  (zero-config); tighten with `reins policy deny <host>` /
+  `reins policy readonly <host>` or from the popup. Loosening is popup-only
+  by design — a shell agent cannot grant itself access, because the check
+  runs in the extension, not the daemon.
 - Everything binds `127.0.0.1` — nothing is reachable from the network.
 - `/rpc` and the other endpoints validate the `Host` header (DNS-rebinding
   protection), so web pages can't reach the daemon even via rebound DNS.
