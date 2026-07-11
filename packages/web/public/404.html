@@ -6,9 +6,22 @@
     <meta name="robots" content="noindex" />
     <title>Page not found — reins</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Honor the theme picked on the main site; unset follows the OS.
+      try {
+        const t = localStorage.getItem("theme");
+        if (t === "light" || t === "dark") document.documentElement.classList.add(t);
+      } catch (_e) {}
+    </script>
     <style>
       :root {
         color-scheme: light dark;
+      }
+      :root.light {
+        color-scheme: light;
+      }
+      :root.dark {
+        color-scheme: dark;
       }
       body {
         margin: 0;
@@ -17,8 +30,8 @@
         min-height: 100dvh;
         font-family:
           "InterVariable", ui-sans-serif, system-ui, sans-serif;
-        background: #fff;
-        color: #171717;
+        background: light-dark(#fff, #0a0a0a);
+        color: light-dark(#171717, #fafafa);
       }
       main {
         text-align: center;
@@ -31,21 +44,12 @@
         margin: 0 0 0.5rem;
       }
       p {
-        color: #737373;
+        color: light-dark(#737373, #a3a3a3);
         margin: 0 0 1.5rem;
       }
       a {
         color: inherit;
         font-weight: 500;
-      }
-      @media (prefers-color-scheme: dark) {
-        body {
-          background: #0a0a0a;
-          color: #fafafa;
-        }
-        p {
-          color: #a3a3a3;
-        }
       }
     </style>
   </head>

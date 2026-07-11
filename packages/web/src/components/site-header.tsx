@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Wordmark } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 function GitHubIcon({ className }: { className?: string }) {
@@ -47,6 +48,7 @@ export function SiteHeader() {
           >
             Docs
           </Link>
+          <ThemeToggle />
           <Button asChild variant="ghost" size="icon" aria-label="GitHub repository">
             <a href={GITHUB_URL} target="_blank" rel="noreferrer">
               <GitHubIcon className="size-4.5" />

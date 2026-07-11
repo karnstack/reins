@@ -15,7 +15,9 @@ export function highlightShell(code: string): string {
   return highlighter.codeToHtml(code, {
     lang: "shellscript",
     theme: "github-dark-default",
-    // Let the surrounding `.prose pre` surface color show through.
-    colorReplacements: { "#0d1117": "transparent" },
+    // Code blocks keep the dark surface in both themes; the github-dark
+    // token colors assume it, so pin the bg rather than letting the page
+    // show through.
+    colorReplacements: { "#0d1117": "oklch(0.205 0 0)" },
   });
 }

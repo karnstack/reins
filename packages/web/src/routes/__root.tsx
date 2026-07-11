@@ -32,11 +32,17 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 });
 
+/* Runs before first paint so the stored theme (or the OS preference when
+   unset) applies without a flash. Kept in sync by ThemeToggle afterwards. */
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
+
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="antialiased">
+    <html lang="en" className="antialiased" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static theme bootstrap */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="bg-background font-sans text-foreground">
         <div className="isolate">{children}</div>

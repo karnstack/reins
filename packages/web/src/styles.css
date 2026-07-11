@@ -3,9 +3,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* No theme toggle — the site follows the OS, so `dark:` keeps Tailwind's
-   default prefers-color-scheme behavior and the shadcn tokens flip in the
-   media query below. */
+/* Theme is class-driven: a pre-paint script in __root.tsx puts `.dark` on
+   <html> from the stored preference (or the OS when set to "system"), so
+   `dark:` and the shadcn tokens key off the class rather than the media
+   query. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "InterVariable", ui-sans-serif, system-ui, sans-serif;
@@ -16,7 +18,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -38,27 +40,26 @@
   --ring: oklch(0.606 0.25 292.717);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.606 0.25 292.717);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.606 0.25 292.717);
-  }
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.606 0.25 292.717);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.606 0.25 292.717);
 }
 
 @theme inline {
@@ -103,6 +104,13 @@
     font-weight: var(--font-weight-semibold);
     letter-spacing: var(--tracking-tight);
     text-wrap: pretty;
+  }
+
+  & h1,
+  & h2,
+  & h3 {
+    /* Anchored headings land below the sticky site header. */
+    scroll-margin-top: --spacing(20);
   }
 
   & h2 {
