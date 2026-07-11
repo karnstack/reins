@@ -1,6 +1,11 @@
 import { nextBackoff } from "./backoff.js";
 
-export type Dispatch = (method: string, params: unknown) => Promise<unknown>;
+export interface DispatchOutcome {
+  result: unknown;
+  /** Resolved action target (host/tier/tabId), forwarded verbatim to the daemon. */
+  meta?: unknown;
+}
+export type Dispatch = (method: string, params: unknown) => Promise<DispatchOutcome>;
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
 /** The subset of the browser WebSocket API that BridgeClient uses. */
@@ -171,19 +176,27 @@ export class BridgeClient {
   async #handleRequest(id: string, method: string, params: unknown): Promise<void> {
     const socket = this.#socket;
     if (!socket) return;
-    let result: unknown;
+    let outcome: DispatchOutcome | undefined;
     let dispatchError: unknown;
     let threw = false;
     try {
-      result = await this.#opts.dispatch(method, params);
+      outcome = await this.#opts.dispatch(method, params);
     } catch (err) {
       threw = true;
       dispatchError = err;
     }
     if (this.#socket !== socket) return; // socket replaced/closed during dispatch
     try {
-      if (!threw) {
-        socket.send(JSON.stringify({ type: "response", id, ok: true, result }));
+      if (!threw && outcome) {
+        socket.send(
+          JSON.stringify({
+            type: "response",
+            id,
+            ok: true,
+            result: outcome.result,
+            ...(outcome.meta !== undefined ? { meta: outcome.meta } : {}),
+          }),
+        );
       } else {
         const message =
           dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
@@ -191,7 +204,16 @@ export class BridgeClient {
           typeof (dispatchError as { code?: unknown })?.code === "string"
             ? (dispatchError as { code: string }).code
             : "HANDLER_ERROR";
-        socket.send(JSON.stringify({ type: "response", id, ok: false, error: { code, message } }));
+        const meta = (dispatchError as { meta?: unknown })?.meta;
+        socket.send(
+          JSON.stringify({
+            type: "response",
+            id,
+            ok: false,
+            error: { code, message },
+            ...(meta !== undefined ? { meta } : {}),
+          }),
+        );
       }
     } catch {
       // Socket closed between dispatch and send; response cannot be delivered.

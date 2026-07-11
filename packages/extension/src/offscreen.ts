@@ -1,24 +1,25 @@
-import { BridgeClient, type SocketLike } from "./lib/bridge-client.js";
+import { BridgeClient, type DispatchOutcome, type SocketLike } from "./lib/bridge-client.js";
 import { portFromUrl } from "./lib/settings.js";
 
 let client: BridgeClient | undefined;
 
 /**
  * Relay dispatch requests to the background service worker, which owns the
- * chrome.* APIs (e.g. chrome.tabs). The service worker returns { result } on
- * success or { error } on failure.
+ * chrome.* APIs (e.g. chrome.tabs). The service worker returns { result, meta? }
+ * on success or { error, meta? } on failure.
  */
-async function offscreenDispatch(method: string, params: unknown): Promise<unknown> {
+async function offscreenDispatch(method: string, params: unknown): Promise<DispatchOutcome> {
   const res = (await chrome.runtime.sendMessage({ type: "reins:dispatch", method, params })) as
-    | { result: unknown; error?: undefined; code?: undefined }
-    | { error: string; code?: string; result?: undefined }
+    | { result: unknown; meta?: unknown; error?: undefined; code?: undefined }
+    | { error: string; code?: string; meta?: unknown; result?: undefined }
     | undefined;
   if (res?.error) {
-    const err = new Error(res.error) as Error & { code?: string };
+    const err = new Error(res.error) as Error & { code?: string; meta?: unknown };
     if (res.code) err.code = res.code;
+    if (res.meta !== undefined) err.meta = res.meta;
     throw err;
   }
-  return res?.result;
+  return { result: res?.result, meta: res?.meta };
 }
 
 /** Best-effort human browser name (Chrome, Brave, Edge, …) for the daemon's roster. */
