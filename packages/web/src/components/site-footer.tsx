@@ -17,6 +17,12 @@ export function SiteFooter() {
             Docs
           </Link>
           <Link
+            to="/changelog"
+            className="text-sm font-normal text-muted-foreground hover:text-foreground"
+          >
+            Changelog
+          </Link>
+          <Link
             to="/privacy"
             className="text-sm font-normal text-muted-foreground hover:text-foreground"
           >
