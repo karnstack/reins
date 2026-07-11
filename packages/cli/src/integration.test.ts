@@ -14,6 +14,7 @@ afterEach(async () => {
   daemon = undefined;
   bridge = undefined;
   extension = undefined;
+  DENY_CLICKS = false;
 });
 
 /** Lookup table: bridge method name → stand-in result the extension returns. */
@@ -41,7 +42,15 @@ const METHOD_RESULTS: Record<string, unknown> = {
   resize: { ok: true },
   handle_dialog: { ok: true },
   cdp: { result: { frameId: "F1" } },
+  policy_get: { defaultTier: "full", rules: [] },
+  policy_tighten: {
+    defaultTier: "full",
+    rules: [{ pattern: "evil.com", tier: "deny" }],
+  },
 };
+
+/** When set, the stand-in refuses `click` like the real extension's policy gate. */
+let DENY_CLICKS = false;
 
 /** Stand-in extension: connects, authenticates, and answers any method via the lookup table. */
 function standInExtension(port: number): Promise<WebSocket> {
@@ -52,6 +61,21 @@ function standInExtension(port: number): Promise<WebSocket> {
       const msg = JSON.parse(data.toString()) as { type: string; id?: string; method?: string };
       if (msg.type === "welcome") resolve(ws);
       if (msg.type === "request") {
+        if (msg.method === "click" && DENY_CLICKS) {
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              ok: false,
+              error: {
+                code: "policy_denied",
+                message:
+                  "blocked by policy: x.com is read-only — grant full access from the reins extension popup",
+              },
+            }),
+          );
+          return;
+        }
         const result = METHOD_RESULTS[msg.method ?? ""];
         ws.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result }));
       }
@@ -141,5 +165,32 @@ describe("end-to-end /rpc → WS bridge", () => {
   it.each(TABLE)("routes $method end-to-end", async ({ method, params, expected }) => {
     const port = await setupHarness();
     expect(await rpc(port, method, params)).toEqual(expected);
+  });
+});
+
+describe("policy over the bridge", () => {
+  it("routes policy_get and policy_tighten end-to-end", async () => {
+    const port = await setupHarness();
+    expect(await rpc(port, "policy_get")).toEqual({ defaultTier: "full", rules: [] });
+    expect(await rpc(port, "policy_tighten", { pattern: "evil.com", tier: "deny" })).toEqual({
+      defaultTier: "full",
+      rules: [{ pattern: "evil.com", tier: "deny" }],
+    });
+  });
+
+  it("surfaces policy_denied to the HTTP caller", async () => {
+    const port = await setupHarness();
+    DENY_CLICKS = true;
+    const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method: "click", params: { ref: "e1" } }),
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/blocked by policy/);
+    expect(body.error).toMatch(/popup/);
+    // read-tier methods still work in the same session
+    expect(await rpc(port, "read_text")).toEqual({ text: "page text" });
   });
 });
