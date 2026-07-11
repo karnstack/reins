@@ -76,10 +76,7 @@ export async function tightenPolicy(patternInput: string, tier: Tier): Promise<P
 }
 
 /** Throw PolicyDenied unless `host`'s tier covers `method`'s required tier. */
-export async function ensureAllowed(
-  method: GatedMethod,
-  host: string | undefined,
-): Promise<void> {
+export async function ensureAllowed(method: GatedMethod, host: string | undefined): Promise<void> {
   const tier = effectiveTier(await policy(), host);
   const required = METHOD_TIERS[method];
   if (tier === "full" || (tier === "read" && required === "read")) return;

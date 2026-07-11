@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import type { Policy } from "@reins/protocol";
+import { describe, expect, it, vi } from "vitest";
 import { policyText, runPolicy } from "./policy-cli.js";
 
 const POLICY: Policy = {

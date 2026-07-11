@@ -191,9 +191,7 @@ export class BridgeClient {
           typeof (dispatchError as { code?: unknown })?.code === "string"
             ? (dispatchError as { code: string }).code
             : "HANDLER_ERROR";
-        socket.send(
-          JSON.stringify({ type: "response", id, ok: false, error: { code, message } }),
-        );
+        socket.send(JSON.stringify({ type: "response", id, ok: false, error: { code, message } }));
       }
     } catch {
       // Socket closed between dispatch and send; response cannot be delivered.

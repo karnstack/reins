@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { Policy } from "@reins/protocol";
+import { describe, expect, it } from "vitest";
 import { removeRule, setDefaultTier, upsertRule } from "./policy-view.js";
 
 const base: Policy = { defaultTier: "full", rules: [{ pattern: "x.com", tier: "read" }] };

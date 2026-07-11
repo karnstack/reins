@@ -28,8 +28,7 @@ describe("normalizePattern", () => {
     expect(normalizePattern("*.Google.com")).toBe("*.google.com");
   });
   it.each(["foo.*.com", "*", "a b.com", "", "*.", "https://"])("rejects %j", (bad) =>
-    expect(() => normalizePattern(bad)).toThrow(/invalid pattern/),
-  );
+    expect(() => normalizePattern(bad)).toThrow(/invalid pattern/));
 });
 
 describe("hostOf", () => {

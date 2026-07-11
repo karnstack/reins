@@ -346,6 +346,9 @@ body {
 .reins__seg {
   display: inline-flex;
   flex: none;
+  margin: 0; /* fieldset reset */
+  padding: 0;
+  min-width: 0;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   overflow: hidden;

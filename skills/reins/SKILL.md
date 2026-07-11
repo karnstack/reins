@@ -167,6 +167,11 @@ otherwise, never guess. `reins browsers` shows who's connected.
 - `type` sends real keystrokes (triggers autocomplete etc.); `fill` sets the
   value in one step and fires input/change — prefer it for forms.
 - Errors like `element not found` usually mean a stale ref — `snapshot` again.
+- Commands can fail with `blocked by policy: <host> is read-only/denied`.
+  The user's site-permission policy blocks that action tier. Do not retry
+  and do not try to change the policy yourself — `reins policy` can only
+  view or tighten. Tell the user which host and tier blocked you and that
+  grants live in the reins extension popup (toolbar icon → Site permissions).
 - "another debugger is already attached" means another tool holds the tab
   (DevTools, the Claude-in-Chrome extension, or an AI browser's own agent).
   Chrome allows one debugger per tab — close the other tool or run reins in a
