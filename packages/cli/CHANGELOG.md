@@ -1,5 +1,14 @@
 # @karnstack/reins
 
+## 0.3.0
+
+### Minor Changes
+
+- d8108a6: Per-site permission tiers (deny/read/full) enforced in the extension.
+  `reins policy` shows and tightens policy; grants are popup-only. New
+  bridge methods `policy_get`/`policy_tighten`; denied tabs are redacted in
+  `list_tabs`. Default remains full access everywhere.
+
 ## 0.2.1
 
 ### Patch Changes
