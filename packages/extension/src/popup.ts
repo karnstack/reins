@@ -326,6 +326,11 @@ policySeg.addEventListener("click", (ev) => {
   })();
 });
 
+// A custom validity error makes the browser swallow future submit events,
+// so the form is novalidate and the error is cleared on input — otherwise
+// one bad attempt would block every submit after it, valid or not.
+policyPattern.addEventListener("input", () => policyPattern.setCustomValidity(""));
+
 policyAdd.addEventListener("submit", (ev) => {
   ev.preventDefault();
   void (async () => {
