@@ -5,6 +5,7 @@ import {
   METHOD_TIERS,
   normalizePattern,
   Policy,
+  type ResponseMeta,
   Tier,
   tighterThan,
 } from "@reins/protocol";
@@ -16,6 +17,8 @@ export const POLICY_KEY = "reinsPolicy";
 /** Refused by the policy gate. `code` survives to the ResponseFrame. */
 export class PolicyDenied extends Error {
   readonly code = "policy_denied";
+  /** Resolved target for the audit trail; the dispatch gate adds tabId. */
+  meta?: ResponseMeta;
 }
 
 let cached: Policy | undefined;
@@ -122,15 +125,18 @@ export function applyPolicyChange(change: PolicyChange): Promise<Policy> {
   });
 }
 
-/** Throw PolicyDenied unless `host`'s tier covers `method`'s required tier. */
-export async function ensureAllowed(method: GatedMethod, host: string | undefined): Promise<void> {
+/** Throw PolicyDenied unless `host`'s tier covers `method`'s required tier;
+ *  return the effective tier so dispatch can stamp it on the response. */
+export async function ensureAllowed(method: GatedMethod, host: string | undefined): Promise<Tier> {
   const tier = effectiveTier(await policy(), host);
   const required = METHOD_TIERS[method];
-  if (tier === "full" || (tier === "read" && required === "read")) return;
+  if (tier === "full" || (tier === "read" && required === "read")) return tier;
   const label = host ?? "this tab";
-  throw new PolicyDenied(
+  const err = new PolicyDenied(
     tier === "deny"
       ? `blocked by policy: ${label} is denied — change its tier from the reins extension popup`
       : `blocked by policy: ${label} is read-only — grant full access from the reins extension popup`,
   );
+  err.meta = { host, tier };
+  throw err;
 }
