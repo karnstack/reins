@@ -52,6 +52,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     "",
     "Management:",
     line("browsers", "list browsers connected to the daemon"),
+    line("policy", "site permissions: show, deny/readonly <pattern> (grants: popup)"),
     line("status", "daemon state, port, connected browsers"),
     line("extension", "install the extension without the Chrome Web Store (load unpacked)"),
     line("allow <id>", "allow an unpacked/dev extension to connect"),
