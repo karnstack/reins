@@ -6,6 +6,7 @@ import {
   HelloFrame,
   RequestFrame,
   ResponseFrame,
+  type ResponseMeta,
   WelcomeFrame,
 } from "@reins/protocol";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
@@ -17,14 +18,23 @@ export interface RequestOpts {
   timeoutMs?: number;
 }
 
+/** A settled bridge request: the result plus the extension-stamped action
+ *  target and the browser that served it — everything the audit trail needs. */
+export interface BridgeReply {
+  result: unknown;
+  meta?: ResponseMeta;
+  browserId: string;
+}
+
 export interface BridgePort {
   readonly paired: boolean;
   readonly browsers: BrowserInfo[];
   request(method: string, params: unknown, opts?: RequestOpts): Promise<unknown>;
+  requestFull(method: string, params: unknown, opts?: RequestOpts): Promise<BridgeReply>;
 }
 
 interface Pending {
-  resolve: (value: unknown) => void;
+  resolve: (value: BridgeReply) => void;
   reject: (reason: Error) => void;
   timer: NodeJS.Timeout;
   browserId: string;
@@ -199,10 +209,16 @@ export class BridgeHost implements BridgePort {
     clearTimeout(pending.timer);
     this.#pending.delete(id);
     if (frame.ok === true) {
-      pending.resolve(frame.result);
+      pending.resolve({ result: frame.result, meta: frame.meta, browserId: pending.browserId });
     } else {
       const err = frame.error ?? { code: "ERR", message: "request failed" };
-      pending.reject(new Error(`${err.code}: ${err.message}`));
+      const e = new Error(`${err.code}: ${err.message}`) as Error & {
+        code?: string;
+        meta?: ResponseMeta;
+      };
+      e.code = err.code;
+      e.meta = frame.meta;
+      pending.reject(e);
     }
   }
 
@@ -228,7 +244,7 @@ export class BridgeHost implements BridgePort {
     return { id: only.id, ws: entry.ws };
   }
 
-  request(method: string, params: unknown, opts: RequestOpts = {}): Promise<unknown> {
+  requestFull(method: string, params: unknown, opts: RequestOpts = {}): Promise<BridgeReply> {
     let target: { id: string; ws: WebSocket };
     try {
       target = this.#resolveBrowser(opts.browserId);
@@ -237,7 +253,7 @@ export class BridgeHost implements BridgePort {
     }
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const id = randomUUID();
-    return new Promise<unknown>((resolve, reject) => {
+    return new Promise<BridgeReply>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error(`request "${method}" timed out after ${timeoutMs}ms`));
@@ -253,6 +269,10 @@ export class BridgeHost implements BridgePort {
         reject(err instanceof Error ? err : new Error(String(err)));
       }
     });
+  }
+
+  request(method: string, params: unknown, opts: RequestOpts = {}): Promise<unknown> {
+    return this.requestFull(method, params, opts).then((r) => r.result);
   }
 
   stop(): Promise<void> {
