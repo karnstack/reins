@@ -43,11 +43,10 @@ the scariest sentence in the README. Ship containment before growth.
   snapshot / screenshot / console / network` allowed, `click / type / fill /
   eval / cdp` refused with `blocked by policy: <host> is read-only/denied`.
   SKILL.md teaches agents not to retry or self-escalate.
-- ⬜ **Audit log.** Structured per-action log line (timestamp, command,
-  browser, tab, origin) — `~/.reins/logs` has daemon lifecycle logs today, but
-  no per-action trail. Make it first-class and document it. `reins audit` to
-  view. Include policy denials — the trail should show what was blocked, not
-  just what ran.
+- ✅ **Audit log.** Shipped: one structured JSONL line per action (and per
+  policy denial) in `~/.reins/logs/audit-YYYY-MM-DD.jsonl`, value-bearing
+  params redacted before write, 30-day retention, `reins audit` to view
+  (`--last`, `--denied`, `--json`).
 - ⬜ **Threat model doc (SECURITY.md).** Cover what the per-site tiers protect
   against, what they can't (any local process is already inside the trust
   boundary — the Claude-in-Chrome LevelDB permission-bypass class), and the
