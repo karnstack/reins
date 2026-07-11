@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Tier } from "./policy.js";
 
 /** A browser tab as seen by the agent. browserId/browser are tagged by the
  *  daemon when aggregating tabs across several connected browsers. */
@@ -26,6 +27,17 @@ export type BrowserInfo = z.infer<typeof BrowserInfo>;
 export const FrameError = z.object({ code: z.string(), message: z.string() });
 export type FrameError = z.infer<typeof FrameError>;
 
+/** Optional target metadata the extension stamps on a response: the
+ *  resolved tab/host/tier the command actually hit. Consumed by the
+ *  daemon's audit trail. Absent on daemon-side failures and on responses
+ *  from extensions older than this field. */
+export const ResponseMeta = z.object({
+  host: z.string().optional(),
+  tier: Tier.optional(),
+  tabId: z.number().optional(),
+});
+export type ResponseMeta = z.infer<typeof ResponseMeta>;
+
 /** Server → extension: invoke a method on the browser. */
 export const RequestFrame = z.object({
   type: z.literal("request"),
@@ -42,6 +54,7 @@ export const ResponseFrame = z.object({
   ok: z.boolean(),
   result: z.unknown().optional(),
   error: FrameError.optional(),
+  meta: ResponseMeta.optional(),
 });
 export type ResponseFrame = z.infer<typeof ResponseFrame>;
 
