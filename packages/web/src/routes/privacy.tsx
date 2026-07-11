@@ -14,7 +14,7 @@ function PrivacyPage() {
       <main className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
         <article className="prose max-w-[70ch]">
           <h1>Privacy policy</h1>
-          <p>Last updated: July 4, 2026</p>
+          <p>Last updated: July 11, 2026</p>
           <p>
             reins is a browser extension that lets a local daemon on your own machine (installed by
             you, via the <code>@karnstack/reins</code> CLI) drive your browser. It is a developer
@@ -30,7 +30,8 @@ function PrivacyPage() {
               a WebSocket bound to <code>127.0.0.1</code> on your machine.
             </li>
             <li>
-              Settings (the auto-connect toggle and the cached daemon port) are stored in{" "}
+              Settings (the auto-connect toggle and the cached daemon port) and your site-permission
+              policy (per-site access tiers: deny, read, or full) are stored in{" "}
               <code>chrome.storage.local</code> on your device. Connection status is stored in{" "}
               <code>chrome.storage.session</code>.
             </li>

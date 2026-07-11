@@ -235,3 +235,9 @@
     color: var(--color-muted-foreground);
   }
 }
+
+@keyframes terminal-caret {
+  50% {
+    opacity: 0;
+  }
+}

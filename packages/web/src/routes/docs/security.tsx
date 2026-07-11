@@ -46,6 +46,28 @@ function SecurityPage() {
         </li>
       </ul>
 
+      <h2>Per-site permissions</h2>
+      <ul>
+        <li>
+          Every host resolves to a tier — <code>deny</code>, <code>read</code>, or <code>full</code>{" "}
+          — and the extension enforces it before any command touches a tab. The check runs inside
+          the extension, so no process on your machine can skip it.
+        </li>
+        <li>
+          Grants happen only in the extension popup, a user gesture an agent can't perform from the
+          shell. The CLI (<code>reins policy</code>) can view and tighten the policy, never loosen
+          it.
+        </li>
+        <li>
+          The shipped default is <code>full</code> everywhere — today's behavior — so tightening is
+          opt-in. <code>deny</code> also redacts the site's tabs from <code>reins tabs</code>.
+        </li>
+      </ul>
+      <p>
+        The full model — tiers, wildcard rules, matching precedence — is on the{" "}
+        <Link to="/docs/permissions">Site permissions</Link> page.
+      </p>
+
       <h2>Data handling</h2>
       <ul>
         <li>
@@ -55,7 +77,8 @@ function SecurityPage() {
         <li>No analytics, no telemetry, no tracking, no remote servers, no remote code.</li>
         <li>
           The only stored state is the extension's own settings (auto-connect, cached daemon port,
-          connection status), kept in <code>chrome.storage</code> on your device.
+          connection status) and your site-permission policy, kept in <code>chrome.storage</code> on
+          your device.
         </li>
       </ul>
       <p>

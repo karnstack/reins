@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as DocsSideloadRouteImport } from './routes/docs/sideload'
 import { Route as DocsSecurityRouteImport } from './routes/docs/security'
+import { Route as DocsPermissionsRouteImport } from './routes/docs/permissions'
 import { Route as DocsFaqRouteImport } from './routes/docs/faq'
 import { Route as DocsComparisonRouteImport } from './routes/docs/comparison'
 import { Route as DocsCommandsRouteImport } from './routes/docs/commands'
@@ -50,6 +51,11 @@ const DocsSecurityRoute = DocsSecurityRouteImport.update({
   path: '/security',
   getParentRoute: () => DocsRouteRoute,
 } as any)
+const DocsPermissionsRoute = DocsPermissionsRouteImport.update({
+  id: '/permissions',
+  path: '/permissions',
+  getParentRoute: () => DocsRouteRoute,
+} as any)
 const DocsFaqRoute = DocsFaqRouteImport.update({
   id: '/faq',
   path: '/faq',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
+  '/docs/permissions': typeof DocsPermissionsRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
   '/docs/': typeof DocsIndexRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
+  '/docs/permissions': typeof DocsPermissionsRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
   '/docs': typeof DocsIndexRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
+  '/docs/permissions': typeof DocsPermissionsRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
   '/docs/': typeof DocsIndexRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/docs/commands'
     | '/docs/comparison'
     | '/docs/faq'
+    | '/docs/permissions'
     | '/docs/security'
     | '/docs/sideload'
     | '/docs/'
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/docs/commands'
     | '/docs/comparison'
     | '/docs/faq'
+    | '/docs/permissions'
     | '/docs/security'
     | '/docs/sideload'
     | '/docs'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/docs/commands'
     | '/docs/comparison'
     | '/docs/faq'
+    | '/docs/permissions'
     | '/docs/security'
     | '/docs/sideload'
     | '/docs/'
@@ -195,6 +207,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsSecurityRouteImport
       parentRoute: typeof DocsRouteRoute
     }
+    '/docs/permissions': {
+      id: '/docs/permissions'
+      path: '/permissions'
+      fullPath: '/docs/permissions'
+      preLoaderRoute: typeof DocsPermissionsRouteImport
+      parentRoute: typeof DocsRouteRoute
+    }
     '/docs/faq': {
       id: '/docs/faq'
       path: '/faq'
@@ -231,6 +250,7 @@ interface DocsRouteRouteChildren {
   DocsCommandsRoute: typeof DocsCommandsRoute
   DocsComparisonRoute: typeof DocsComparisonRoute
   DocsFaqRoute: typeof DocsFaqRoute
+  DocsPermissionsRoute: typeof DocsPermissionsRoute
   DocsSecurityRoute: typeof DocsSecurityRoute
   DocsSideloadRoute: typeof DocsSideloadRoute
   DocsIndexRoute: typeof DocsIndexRoute
@@ -241,6 +261,7 @@ const DocsRouteRouteChildren: DocsRouteRouteChildren = {
   DocsCommandsRoute: DocsCommandsRoute,
   DocsComparisonRoute: DocsComparisonRoute,
   DocsFaqRoute: DocsFaqRoute,
+  DocsPermissionsRoute: DocsPermissionsRoute,
   DocsSecurityRoute: DocsSecurityRoute,
   DocsSideloadRoute: DocsSideloadRoute,
   DocsIndexRoute: DocsIndexRoute,
