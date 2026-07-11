@@ -1,6 +1,8 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { CopyMarkdown } from "@/components/copy-markdown";
+import { DocsToc } from "@/components/docs-toc";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
@@ -42,24 +44,28 @@ function DocsNav({ onNavigate }: { onNavigate?: () => void }) {
 
 function DocsLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const contentRef = useRef<HTMLElement>(null);
 
   return (
     <>
       <SiteHeader />
-      <div className="border-b border-border lg:hidden">
-        <div className="mx-auto max-w-6xl px-4 py-2 sm:px-6">
-          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <Menu aria-hidden="true" className="size-4" />
-                Docs menu
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-4 pt-12">
-              <SheetTitle className="sr-only">Documentation navigation</SheetTitle>
-              <DocsNav onNavigate={() => setMobileNavOpen(false)} />
-            </SheetContent>
-          </Sheet>
+      <div className="border-b border-border xl:hidden">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 sm:px-6">
+          <div className="lg:hidden">
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Menu aria-hidden="true" className="size-4" />
+                  Docs menu
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 p-4 pt-12">
+                <SheetTitle className="sr-only">Documentation navigation</SheetTitle>
+                <DocsNav onNavigate={() => setMobileNavOpen(false)} />
+              </SheetContent>
+            </Sheet>
+          </div>
+          <CopyMarkdown contentRef={contentRef} className="ml-auto" />
         </div>
       </div>
       <div className="mx-auto flex min-h-dvh max-w-6xl gap-12 px-4 sm:px-6 lg:px-8">
@@ -68,9 +74,15 @@ function DocsLayout() {
             <DocsNav />
           </div>
         </aside>
-        <main className="min-w-0 flex-1 py-10 lg:py-12">
+        <main ref={contentRef} className="min-w-0 flex-1 py-10 lg:py-12">
           <Outlet />
         </main>
+        <aside className="w-56 shrink-0 py-12 max-xl:hidden">
+          <div className="sticky top-24 flex flex-col gap-6">
+            <CopyMarkdown contentRef={contentRef} className="self-start" />
+            <DocsToc contentRef={contentRef} />
+          </div>
+        </aside>
       </div>
       <SiteFooter />
     </>
