@@ -20,7 +20,13 @@
  *     `"log"`, `"info"`, `"warning"` (NOT `"warn"`), `"error"`, `"debug"`.
  */
 
-import type { ConsoleEntry, ConsoleParams, NetworkEntry, NetworkParams } from "@reins/protocol";
+import {
+  type ConsoleEntry,
+  type ConsoleParams,
+  hostOf,
+  type NetworkEntry,
+  type NetworkParams,
+} from "@reins/protocol";
 import { filterConsole, filterNetwork } from "./event-filter.js";
 import { RingBuffer } from "./ring-buffer.js";
 
@@ -31,6 +37,8 @@ interface Monitor {
   console: RingBuffer<ConsoleEntry>;
   network: RingBuffer<NetworkEntry>;
   byRequestId: Map<string, NetworkEntry>;
+  /** Top-level host the buffers belong to (undefined for non-http(s)). */
+  host: string | undefined;
 }
 
 const MONITORS = new Map<number, Monitor>();
@@ -105,6 +113,23 @@ chrome.debugger.onDetach.addListener((source) => {
   if (tabId !== undefined) MONITORS.delete(tabId);
 });
 
+// Buffers are scoped to the tab's top-level host: when the tab navigates to
+// a different host, drop everything captured so far. Otherwise a read on the
+// new (allowed) host would replay console/network telemetry recorded while
+// the tab was on a host the policy may deny — read_console/read_network are
+// gated by the tab's CURRENT host only.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.url === undefined) return;
+  const mon = MONITORS.get(tabId);
+  if (!mon) return;
+  const host = hostOf(changeInfo.url);
+  if (host === mon.host) return;
+  mon.host = host;
+  mon.console.clear();
+  mon.network.clear();
+  mon.byRequestId.clear();
+});
+
 /** True if this module holds (or is acquiring) the debugger session for the tab. */
 export function isMonitored(tabId: number): boolean {
   return MONITORS.has(tabId);
@@ -132,10 +157,12 @@ async function attachMonitor(tabId: number): Promise<Monitor> {
     await chrome.debugger.detach({ tabId }).catch(() => {});
     throw e;
   }
+  const tab = await chrome.tabs.get(tabId).catch(() => undefined);
   const mon: Monitor = {
     console: new RingBuffer<ConsoleEntry>(RING_CAPACITY),
     network: new RingBuffer<NetworkEntry>(RING_CAPACITY),
     byRequestId: new Map(),
+    host: hostOf(tab?.url ?? ""),
   };
   MONITORS.set(tabId, mon);
   return mon;

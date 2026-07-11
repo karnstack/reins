@@ -38,12 +38,15 @@ export function normalizePattern(input: string): string {
 }
 
 /** Host of an http(s) URL, lowercase; undefined for any other scheme or
- *  unparseable input (chrome://, about:, …) — those get the default tier. */
+ *  unparseable input (chrome://, about:, …) — those get the default tier.
+ *  Trailing dots are stripped: `https://bank.com./` must match a `bank.com`
+ *  rule, or the FQDN form would bypass per-host policy. */
 export function hostOf(url: string): string | undefined {
   try {
     const u = new URL(url);
     if (u.protocol !== "http:" && u.protocol !== "https:") return undefined;
-    return u.hostname.toLowerCase();
+    const host = u.hostname.toLowerCase().replace(/\.+$/, "");
+    return host === "" ? undefined : host;
   } catch {
     return undefined;
   }

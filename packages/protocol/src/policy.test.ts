@@ -42,6 +42,10 @@ describe("hostOf", () => {
     expect(hostOf("not a url")).toBeUndefined();
     expect(hostOf("")).toBeUndefined();
   });
+  it("strips trailing dots (FQDN form must not bypass rules)", () => {
+    expect(hostOf("https://bank.com./x")).toBe("bank.com");
+    expect(hostOf("https://sub.bank.com./")).toBe("sub.bank.com");
+  });
 });
 
 describe("effectiveTier", () => {
@@ -73,6 +77,9 @@ describe("effectiveTier", () => {
   });
   it("DEFAULT_POLICY allows everything", () => {
     expect(effectiveTier(DEFAULT_POLICY, "anything.com")).toBe("full");
+  });
+  it("dotted-FQDN URL resolves to the same tier as the plain host", () => {
+    expect(effectiveTier(policy, hostOf("https://bank.com./"))).toBe("deny");
   });
 });
 
