@@ -12,6 +12,7 @@ function fakeBridge(overrides: Partial<BridgePort> = {}): BridgePort {
       }
       return { ok: true };
     }),
+    requestFull: vi.fn(async () => ({ result: undefined, browserId: "b1" })),
     ...overrides,
   } as BridgePort;
 }
