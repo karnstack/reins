@@ -31,7 +31,7 @@ lives"):
 
 ```json
 {"ts":"2026-07-11T10:15:02.113Z","method":"click","browserId":"b1","browser":"Chromium","tabId":412,"host":"app.example.com","tier":"full","params":{"selector":"#submit"},"ok":true,"ms":184}
-{"ts":"2026-07-11T10:15:09.442Z","method":"fill","browserId":"b1","browser":"Chromium","tabId":412,"host":"bank.com","tier":"read","params":{"fields":"[redacted 2 fields]"},"ok":false,"denied":true,"error":"POLICY_BLOCKED: blocked by policy: bank.com is read-only","ms":12}
+{"ts":"2026-07-11T10:15:09.442Z","method":"fill","browserId":"b1","browser":"Chromium","tabId":412,"host":"bank.com","tier":"read","params":{"selector":"#amount","value":"[redacted 7 chars]"},"ok":false,"denied":true,"error":"policy_denied: blocked by policy: bank.com is read-only — grant full access from the reins extension popup","ms":12}
 ```
 
 Fields:
@@ -47,7 +47,7 @@ Fields:
   below); absent on daemon-side failures or with an older extension.
 - `params` — redacted copy (see Redaction).
 - `ok` — mirror of the response frame.
-- `denied` — `true` only for policy denials (`POLICY_BLOCKED`).
+- `denied` — `true` only for policy denials (error code `policy_denied`).
 - `error` — `code: message` string when `ok` is false.
 - `ms` — wall-clock duration from send to settle.
 
@@ -61,11 +61,12 @@ show attempts, not just completions.
 Redaction happens in the daemon **before** the write; plaintext never
 reaches disk. A fixed field-name list, not heuristics:
 
-- `text`, `value`, `code`, `expression` → `"[redacted <n> chars]"`.
-- `fill` field maps → `"[redacted <n> fields]"`.
-- `upload` file paths → basename only.
+- `text`, `value`, `expression` → `"[redacted <n> chars]"`.
+- `upload` file paths (`files`) → basename only.
+- `cdp` nested `params` → `"[redacted]"` (arbitrary CDP payloads can carry
+  anything, e.g. `Input.insertText`); the `Domain.method` name stays.
 - Everything else — selectors, URLs, tabIds, key names (`Enter`), scroll
-  deltas, CDP method names — passes through verbatim.
+  deltas — passes through verbatim.
 
 The list lives in one exported table in the CLI package with a table-driven
 test, so adding a future value-bearing param means one row + one test case.
@@ -81,9 +82,10 @@ test, so adding a future value-bearing param means one row + one test case.
    stamps `meta` on the response frame for both the success path and the
    policy-denial path — denials must carry the host so the trail shows
    what was blocked, not just what ran.
-3. **Structured denial code.** Policy denials get error code
-   `POLICY_BLOCKED` (today the code is generic and the CLI would need
-   string-matching). The auditor classifies `denied: true` off the code.
+3. **Denial classification.** Policy denials already carry the structured
+   error code `policy_denied` (the extension's `PolicyDenied` class; the
+   code survives to the ResponseFrame). The daemon auditor classifies
+   `denied: true` off that code — no string matching, no new code needed.
 4. **Daemon auditor.** The `/rpc` handler wraps the bridge call: capture
    start time, method, redacted params, resolve browser name from the
    roster; on settle (success or error) append the record. The auditor is
@@ -97,9 +99,10 @@ Reads the JSONL files directly — no daemon required.
 - **Default:** today's records as a table:
   `HH:MM:SS  method  browser  host  tab  outcome  ms`. Policy denials render
   `DENIED`; other failures `error`.
-- `-n <count>` — last N records, newest last, crossing day-file boundaries.
+- `--last <n>` — last N records, newest last, crossing day-file boundaries
+  (the repo's flag parser handles `--flag` forms only, so no short `-n`).
 - `--denied` — denials only.
-- `--json` — raw JSONL lines (composable with `-n`/`--denied`).
+- `--json` — raw JSONL lines (composable with `--last`/`--denied`).
 - Missing host/tier (old extension, daemon-side failure) renders `—`.
 - Corrupt or partially-written lines are skipped; the viewer prints a
   one-line skip count to stderr.
@@ -128,11 +131,11 @@ separate change).
   parses (back-compat).
 - **extension:** dispatch stamps `meta.host`/`meta.tier`/`meta.tabId` on
   success and on policy denial (tabId as resolved by the gate, including
-  the active-tab default); denial error code is `POLICY_BLOCKED`.
+  the active-tab default); denial error code is `policy_denied`.
 - **cli:** table-driven redaction tests; auditor unit tests (denial
   classification, duration, daemon-side failure records, browser-name
-  resolution); viewer tests (parse, `-n` across files, `--denied`, corrupt
-  lines); prune-on-startup test; end-to-end record via the stand-in WS
+  resolution); viewer tests (parse, `--last` across files, `--denied`,
+  corrupt lines); prune-on-startup test; end-to-end record via the stand-in WS
   extension in `integration.test.ts`.
 - Build note: rebuild `@reins/protocol` before running cli/extension tests
   (workspace consumes `dist/`).
