@@ -306,6 +306,34 @@ describe("dispatchWithMeta", () => {
     expect(err.meta).toEqual({ host: "bank.com", tier: "read", tabId: 7 });
   });
 
+  it("stamps host/tier (no tabId) on open_tab success", async () => {
+    vi.stubGlobal("chrome", { tabs: { create: async () => ({ id: 11 }) } });
+    vi.mocked(ensureAllowed).mockResolvedValueOnce("full");
+    const out = await dispatchWithMeta("open_tab", {
+      url: "https://app.example.com/x",
+      activate: true,
+    });
+    expect(out.meta).toEqual({ host: "app.example.com", tier: "full" });
+  });
+
+  it("stamps empty meta for list_tabs", async () => {
+    vi.stubGlobal("chrome", {
+      tabs: { query: async () => [{ id: 1, title: "t", url: "https://x.com/", active: true }] },
+    });
+    const out = await dispatchWithMeta("list_tabs", {});
+    expect(out.meta).toEqual({});
+  });
+
+  it("propagates a metaless denial without adding tabId", async () => {
+    stubTabs("https://x.com/");
+    vi.mocked(ensureAllowed).mockRejectedValueOnce(
+      new PolicyDenied("blocked by policy: x.com is read-only"),
+    );
+    const err = await dispatchWithMeta("click", { tabId: 7 }).catch((e) => e);
+    expect(err.code).toBe("policy_denied");
+    expect(err.meta).toBeUndefined();
+  });
+
   it("leaves meta undefined for policy_get", async () => {
     const out = await dispatchWithMeta("policy_get", {});
     expect(out.meta).toBeUndefined();
