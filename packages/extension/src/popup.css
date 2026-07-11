@@ -22,6 +22,8 @@
 /* Author display rules (flex/grid) on containers would otherwise defeat the
    UA sheet's non-important [hidden] { display: none }. */
 [hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: [hidden] must beat every
+     author display rule or hiding via the attribute silently breaks. */
   display: none !important;
 }
 
