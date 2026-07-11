@@ -110,11 +110,9 @@ savePortBtn.addEventListener("click", async () => {
 const policyCurrent = document.getElementById("policy-current") as HTMLElement;
 const policyHost = document.getElementById("policy-host") as HTMLElement;
 const policySeg = document.getElementById("policy-current-seg") as HTMLElement;
-const policyDefaultSeg = document.getElementById("policy-default-seg") as HTMLElement;
 const policyRules = document.getElementById("policy-rules") as HTMLUListElement;
 const policyAdd = document.getElementById("policy-add") as HTMLFormElement;
 const policyPattern = document.getElementById("policy-pattern") as HTMLInputElement;
-const policyAddSeg = document.getElementById("policy-add-seg") as HTMLElement;
 
 /** Highlight one tier button in a segmented control. */
 function setSegActive(seg: HTMLElement, tier: Tier | undefined): void {
@@ -123,17 +121,141 @@ function setSegActive(seg: HTMLElement, tier: Tier | undefined): void {
   }
 }
 
-/** The tier a segmented control currently highlights. */
-function segActive(seg: HTMLElement): Tier | undefined {
-  return seg.querySelector<HTMLButtonElement>("button.reins__seg--on")?.dataset.tier as
-    | Tier
-    | undefined;
-}
-
 /** Tier button under a click event, if any. */
 function segClickTier(ev: Event): Tier | undefined {
   return (ev.target as HTMLElement).dataset?.tier as Tier | undefined;
 }
+
+const TIER_ORDER: Tier[] = ["full", "read", "deny"];
+
+/**
+ * Themed replacement for a native <select>: a button that opens a listbox
+ * popover. Option labels come from the root's data-label-<tier> attributes.
+ * Setting `.value` re-renders without firing onChange (used by renderPolicy).
+ */
+function tierSelect(
+  root: HTMLElement,
+  initial: Tier,
+  onChange?: (tier: Tier) => void,
+): { value: Tier } {
+  const labels: Record<Tier, string> = {
+    full: root.dataset.labelFull ?? "Full",
+    read: root.dataset.labelRead ?? "Read",
+    deny: root.dataset.labelDeny ?? "Deny",
+  };
+  let value = initial;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "reins__select-btn";
+  btn.setAttribute("aria-haspopup", "listbox");
+  btn.setAttribute("aria-expanded", "false");
+  const labelEl = document.createElement("span");
+  labelEl.className = "reins__select-label";
+  const chevron = document.createElement("span");
+  chevron.className = "reins__select-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = "▾";
+  btn.append(labelEl, chevron);
+
+  const menu = document.createElement("ul");
+  menu.className = "reins__select-menu";
+  menu.setAttribute("role", "listbox");
+  menu.hidden = true;
+
+  const options = TIER_ORDER.map((tier) => {
+    const li = document.createElement("li");
+    li.setAttribute("role", "option");
+    li.tabIndex = -1;
+    li.dataset.tier = tier;
+    const check = document.createElement("span");
+    check.className = "reins__select-check";
+    check.setAttribute("aria-hidden", "true");
+    check.textContent = "✓";
+    const text = document.createElement("span");
+    text.textContent = labels[tier];
+    li.append(check, text);
+    menu.append(li);
+    return li;
+  });
+
+  function sync(): void {
+    labelEl.textContent = labels[value];
+    for (const li of options) {
+      li.setAttribute("aria-selected", String(li.dataset.tier === value));
+    }
+  }
+  function open(): void {
+    menu.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    (options.find((o) => o.dataset.tier === value) ?? options[0])?.focus();
+  }
+  function close(focusBtn = false): void {
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (focusBtn) btn.focus();
+  }
+  function select(tier: Tier): void {
+    const changed = tier !== value;
+    value = tier;
+    sync();
+    close(true);
+    if (changed) onChange?.(tier);
+  }
+
+  btn.addEventListener("click", () => (menu.hidden ? open() : close()));
+  btn.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      open();
+    }
+  });
+  menu.addEventListener("click", (ev) => {
+    const li = (ev.target as HTMLElement).closest("li[data-tier]") as HTMLElement | null;
+    if (li) select(li.dataset.tier as Tier);
+  });
+  menu.addEventListener("keydown", (ev) => {
+    const idx = options.indexOf(document.activeElement as HTMLLIElement);
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      options[Math.min(idx + 1, options.length - 1)]?.focus();
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      options[Math.max(idx - 1, 0)]?.focus();
+    } else if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      const li = document.activeElement as HTMLElement | null;
+      if (li?.dataset.tier) select(li.dataset.tier as Tier);
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      close(true);
+    }
+  });
+  document.addEventListener("click", (ev) => {
+    if (!menu.hidden && !root.contains(ev.target as Node)) close();
+  });
+
+  root.append(btn, menu);
+  sync();
+  return {
+    get value() {
+      return value;
+    },
+    set value(t: Tier) {
+      value = t;
+      sync();
+    },
+  };
+}
+
+const policyDefaultDd = tierSelect(
+  document.getElementById("policy-default-dd") as HTMLElement,
+  "full",
+  (tier) => {
+    void loadPolicyFromStorage().then((p) => writePolicy(setDefaultTier(p, tier)));
+  },
+);
+const policyAddDd = tierSelect(document.getElementById("policy-add-dd") as HTMLElement, "deny");
 
 async function loadPolicyFromStorage(): Promise<Policy> {
   try {
@@ -162,7 +284,7 @@ async function renderPolicy(): Promise<void> {
   const p = await loadPolicyFromStorage();
   const host = await activeHost();
 
-  setSegActive(policyDefaultSeg, p.defaultTier);
+  policyDefaultDd.value = p.defaultTier;
 
   policyCurrent.hidden = host === undefined;
   if (host !== undefined) {
@@ -200,24 +322,12 @@ policySeg.addEventListener("click", (ev) => {
   })();
 });
 
-policyDefaultSeg.addEventListener("click", (ev) => {
-  const tier = segClickTier(ev);
-  if (!tier) return;
-  void loadPolicyFromStorage().then((p) => writePolicy(setDefaultTier(p, tier)));
-});
-
-// The add-rule segment is local selection only; it's read at submit.
-policyAddSeg.addEventListener("click", (ev) => {
-  const tier = segClickTier(ev);
-  if (tier) setSegActive(policyAddSeg, tier);
-});
-
 policyAdd.addEventListener("submit", (ev) => {
   ev.preventDefault();
   void (async () => {
     try {
       const p = await loadPolicyFromStorage();
-      await writePolicy(upsertRule(p, policyPattern.value, segActive(policyAddSeg) ?? "deny"));
+      await writePolicy(upsertRule(p, policyPattern.value, policyAddDd.value));
       policyPattern.value = "";
       policyPattern.setCustomValidity("");
     } catch {
