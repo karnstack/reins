@@ -19,6 +19,12 @@
   box-sizing: border-box;
 }
 
+/* Author display rules (flex/grid) on containers would otherwise defeat the
+   UA sheet's non-important [hidden] { display: none }. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

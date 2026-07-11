@@ -273,7 +273,7 @@ function tierSelect(
 const policyDefaultDd = tierSelect(
   document.getElementById("policy-default-dd") as HTMLElement,
   "full",
-  (tier) => void requestPolicyChange({ kind: "setDefault", tier }),
+  (tier) => applyChange({ kind: "setDefault", tier }),
 );
 const policyAddDd = tierSelect(document.getElementById("policy-add-dd") as HTMLElement, "deny");
 
@@ -295,6 +295,16 @@ async function requestPolicyChange(change: PolicyChange): Promise<void> {
     throw new Error(res?.error ?? "policy update failed");
   }
   await renderPolicy();
+}
+
+/** requestPolicyChange for fire-from-a-click paths: on failure, re-render
+ *  from storage so optimistic UI (dropdown label, seg highlight) snaps back
+ *  to the truth instead of showing an unsaved value. */
+function applyChange(change: PolicyChange): void {
+  requestPolicyChange(change).catch((err: unknown) => {
+    console.error("reins: policy change failed", err);
+    void renderPolicy();
+  });
 }
 
 async function activeHost(): Promise<string | undefined> {
@@ -351,7 +361,7 @@ async function renderPolicy(): Promise<void> {
       del.textContent = "×";
       del.setAttribute("aria-label", `remove rule for ${r.pattern}`);
       del.addEventListener("click", () => {
-        void requestPolicyChange({ kind: "remove", pattern: r.pattern });
+        applyChange({ kind: "remove", pattern: r.pattern });
       });
       li.append(pattern, badge, del);
       return li;
@@ -362,11 +372,9 @@ async function renderPolicy(): Promise<void> {
 policySeg.addEventListener("click", (ev) => {
   const tier = segClickTier(ev);
   if (!tier) return;
-  void (async () => {
-    const host = await activeHost();
-    if (host === undefined) return;
-    await requestPolicyChange({ kind: "upsert", pattern: host, tier });
-  })();
+  void activeHost().then((host) => {
+    if (host !== undefined) applyChange({ kind: "upsert", pattern: host, tier });
+  });
 });
 
 // A custom validity error makes the browser swallow future submit events,
