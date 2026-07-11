@@ -68,6 +68,25 @@ function SecurityPage() {
         <Link to="/docs/permissions">Site permissions</Link> page.
       </p>
 
+      <h2>Audit trail</h2>
+      <ul>
+        <li>
+          Every command the daemon executes — and every one the policy blocks — appends one
+          structured line (timestamp, command, browser, tab, host, tier, outcome, duration) to{" "}
+          <code>~/.reins/logs/audit-YYYY-MM-DD.jsonl</code>. <code>reins audit</code> renders the
+          trail; <code>--denied</code> shows only what policy blocked.
+        </li>
+        <li>
+          Value-bearing params — typed text, fill values, <code>eval</code> code, CDP payloads — are
+          redacted before the line is written, so the trail never stores what the agent typed, only
+          that it typed.
+        </li>
+        <li>
+          Audit files are pruned after 30 days. Writes are best-effort: a full disk never blocks a
+          command.
+        </li>
+      </ul>
+
       <h2>Data handling</h2>
       <ul>
         <li>

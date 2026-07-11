@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
-import { BridgeClient, type SocketLike } from "./bridge-client.js";
+import { BridgeClient, type DispatchOutcome, type SocketLike } from "./bridge-client.js";
 
 interface Harness {
   server: WebSocketServer;
@@ -98,7 +98,7 @@ function makeClient(
   return new BridgeClient({
     urls: () => urls,
     browser: "test",
-    dispatch: async () => ({}),
+    dispatch: async () => ({ result: {} }),
     createSocket: nodeSocketFactory,
     // Production default. A short probe window is a flake hazard on loaded CI
     // runners: if the timer fires before the welcome frame is processed, the
@@ -171,7 +171,9 @@ describe("BridgeClient", () => {
     harness = await startServer();
     let status = "";
     client = makeClient([`ws://127.0.0.1:${harness.port}`], {
-      dispatch: async (method) => (method === "list_tabs" ? { tabs: [{ tabId: 1 }] } : {}),
+      dispatch: async (method) => ({
+        result: method === "list_tabs" ? { tabs: [{ tabId: 1 }] } : {},
+      }),
       onStatus: (s) => {
         status = s;
       },
@@ -249,6 +251,100 @@ describe("BridgeClient", () => {
     expect(response.error).toEqual({ code: "policy_denied", message: "nope" });
   });
 
+  it("forwards dispatch meta on the response frame", async () => {
+    harness = await startServer();
+    let status = "";
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
+      dispatch: async () => ({
+        result: { ok: true },
+        meta: { host: "app.example.com", tier: "full", tabId: 7 },
+      }),
+      onStatus: (s) => {
+        status = s;
+      },
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+
+    const response = await new Promise<Record<string, unknown>>((resolve) => {
+      // biome-ignore lint/style/noNonNullAssertion: connected implies the server accepted hello, so current() is set
+      const ws = harness!.current()!;
+      ws.on("message", (d: RawData) => {
+        const m = JSON.parse(d.toString());
+        if (m.type === "response") resolve(m);
+      });
+      ws.send(JSON.stringify({ type: "request", id: "r1", method: "read_text", params: {} }));
+    });
+    expect(response).toMatchObject({
+      type: "response",
+      id: "r1",
+      ok: true,
+      meta: { host: "app.example.com", tier: "full", tabId: 7 },
+    });
+  });
+
+  it("forwards meta from a thrown dispatch error", async () => {
+    harness = await startServer();
+    let status = "";
+    const err = new Error("blocked by policy: bank.com is read-only") as Error & {
+      code?: string;
+      meta?: unknown;
+    };
+    err.code = "policy_denied";
+    err.meta = { host: "bank.com", tier: "read", tabId: 7 };
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
+      dispatch: async () => {
+        throw err;
+      },
+      onStatus: (s) => {
+        status = s;
+      },
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+
+    const response = await new Promise<Record<string, unknown>>((resolve) => {
+      // biome-ignore lint/style/noNonNullAssertion: connected implies the server accepted hello, so current() is set
+      const ws = harness!.current()!;
+      ws.on("message", (d: RawData) => {
+        const m = JSON.parse(d.toString());
+        if (m.type === "response") resolve(m);
+      });
+      ws.send(JSON.stringify({ type: "request", id: "r2", method: "click", params: {} }));
+    });
+    expect(response).toMatchObject({
+      type: "response",
+      id: "r2",
+      ok: false,
+      error: { code: "policy_denied" },
+      meta: { host: "bank.com", tier: "read", tabId: 7 },
+    });
+  });
+
+  it("omits meta when dispatch returns none", async () => {
+    harness = await startServer();
+    let status = "";
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
+      dispatch: async () => ({ result: 1 }),
+      onStatus: (s) => {
+        status = s;
+      },
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+
+    const response = await new Promise<Record<string, unknown>>((resolve) => {
+      // biome-ignore lint/style/noNonNullAssertion: connected implies the server accepted hello, so current() is set
+      const ws = harness!.current()!;
+      ws.on("message", (d: RawData) => {
+        const m = JSON.parse(d.toString());
+        if (m.type === "response") resolve(m);
+      });
+      ws.send(JSON.stringify({ type: "request", id: "r3", method: "policy_get", params: {} }));
+    });
+    expect(response).not.toHaveProperty("meta");
+  });
+
   it("abandons a probe whose welcome arrives late, then adopts the retry", async () => {
     // Regression for a CI flake: on a stalled runner the probe timer can fire
     // after the server accepted hello but before welcome is processed. The
@@ -271,7 +367,7 @@ describe("BridgeClient", () => {
 
     let status = "";
     client = makeClient([`ws://127.0.0.1:${harness.port}`], {
-      dispatch: async () => ({ pong: true }),
+      dispatch: async () => ({ result: { pong: true } }),
       onStatus: (s) => {
         status = s;
       },
@@ -298,8 +394,8 @@ describe("BridgeClient", () => {
     harness = await startServer();
 
     // Deferred dispatch: dispatch returns a promise we resolve manually after the socket closes.
-    let resolveDispatch!: (v: unknown) => void;
-    const dispatchInflight = new Promise<unknown>((res) => {
+    let resolveDispatch!: (v: DispatchOutcome) => void;
+    const dispatchInflight = new Promise<DispatchOutcome>((res) => {
       resolveDispatch = res;
     });
     let dispatchCalled = false;
@@ -329,7 +425,7 @@ describe("BridgeClient", () => {
     harness.current()?.close();
     await waitFor(() => sawDisconnected);
 
-    resolveDispatch({ ok: true });
+    resolveDispatch({ result: { ok: true } });
     await new Promise<void>((res) => setTimeout(res, 50));
     expect(sawDisconnected).toBe(true);
   });

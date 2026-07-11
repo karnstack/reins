@@ -1,4 +1,4 @@
-import { dispatchMethod } from "./lib/dispatch.js";
+import { dispatchWithMeta } from "./lib/dispatch.js";
 import { applyPolicyChange, type PolicyChange } from "./lib/policy.js";
 import { candidateUrls, loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
@@ -170,8 +170,10 @@ chrome.runtime.onMessage.addListener(
       case "reins:dispatch": {
         const method = message.method as string;
         const params = message.params;
-        dispatchMethod(method, params)
-          .then((result) => sendResponse({ result }))
+        dispatchWithMeta(method, params)
+          .then(({ result, meta }) =>
+            sendResponse({ result, ...(meta !== undefined ? { meta } : {}) }),
+          )
           .catch((err) =>
             sendResponse({
               error: err instanceof Error ? err.message : String(err),
@@ -179,6 +181,7 @@ chrome.runtime.onMessage.addListener(
                 typeof (err as { code?: unknown })?.code === "string"
                   ? (err as { code: string }).code
                   : undefined,
+              meta: (err as { meta?: unknown })?.meta,
             }),
           );
         return true;

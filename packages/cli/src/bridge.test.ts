@@ -248,6 +248,73 @@ describe("BridgeHost (listen mode)", () => {
   });
 });
 
+describe("BridgeHost (requestFull)", () => {
+  it("resolves result + meta + browserId", async () => {
+    host = newHost();
+    await host.listen(0);
+    const client = await connectClient(host.port);
+    client.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request" && msg.method === "read_text") {
+        client.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            ok: true,
+            result: { done: true },
+            meta: { host: "app.example.com", tier: "full", tabId: 7 },
+          }),
+        );
+      }
+    });
+    const reply = await host.requestFull("read_text", {});
+    expect(reply.result).toEqual({ done: true });
+    expect(reply.meta).toEqual({ host: "app.example.com", tier: "full", tabId: 7 });
+    expect(reply.browserId).toBe("b1");
+    client.close();
+  });
+
+  it("rejects with code and meta from an error frame", async () => {
+    host = newHost();
+    await host.listen(0);
+    const client = await connectClient(host.port);
+    client.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request" && msg.method === "click") {
+        client.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            ok: false,
+            error: { code: "policy_denied", message: "blocked by policy: bank.com is read-only" },
+            meta: { host: "bank.com", tier: "read", tabId: 7 },
+          }),
+        );
+      }
+    });
+    const err = await host.requestFull("click", {}).catch((e) => e);
+    expect(err.message).toBe("policy_denied: blocked by policy: bank.com is read-only");
+    expect(err.code).toBe("policy_denied");
+    expect(err.meta).toEqual({ host: "bank.com", tier: "read", tabId: 7 });
+    expect(err.browserId).toBe("b1");
+    client.close();
+  });
+
+  it("request() still resolves the bare result", async () => {
+    host = newHost();
+    await host.listen(0);
+    const client = await connectClient(host.port);
+    client.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "request" && msg.method === "read_text") {
+        client.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result: 42 }));
+      }
+    });
+    await expect(host.request("read_text", {})).resolves.toBe(42);
+    client.close();
+  });
+});
+
 describe("BridgeHost (attach mode)", () => {
   it("serves WS upgrades on a caller-owned HTTP server and leaves it open on stop()", async () => {
     httpServer = createHttpServer();

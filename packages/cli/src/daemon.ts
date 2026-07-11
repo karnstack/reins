@@ -3,6 +3,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import type { AuditHook } from "./audit.js";
 import type { BridgeHost } from "./bridge.js";
 import type { Log } from "./log.js";
 import { handleRpc, RpcBadRequest } from "./rpc.js";
@@ -49,6 +50,7 @@ export async function startDaemon(opts: {
   port: number;
   bridge: BridgeHost;
   log: Log;
+  audit?: AuditHook;
   onShutdown?: () => void;
 }): Promise<Daemon> {
   function allowedHosts(): string[] {
@@ -82,7 +84,7 @@ export async function startDaemon(opts: {
     }
     if (path === "/rpc" && req.method === "POST") {
       void readJsonBody(req)
-        .then((body) => handleRpc(opts.bridge, body))
+        .then((body) => handleRpc(opts.bridge, body, opts.audit))
         .then((result) => sendJson(res, 200, { result }))
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);

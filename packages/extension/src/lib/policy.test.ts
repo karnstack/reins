@@ -138,12 +138,12 @@ describe("applyPolicyChange", () => {
 describe("ensureAllowed", () => {
   it("full host allows read and full methods", async () => {
     stubStorage({ defaultTier: "full", rules: [] });
-    await expect(ensureAllowed("click", "x.com")).resolves.toBeUndefined();
-    await expect(ensureAllowed("read_text", "x.com")).resolves.toBeUndefined();
+    await expect(ensureAllowed("click", "x.com")).resolves.toBe("full");
+    await expect(ensureAllowed("read_text", "x.com")).resolves.toBe("full");
   });
   it("read host allows read, blocks full with popup hint", async () => {
     stubStorage({ defaultTier: "full", rules: [{ pattern: "x.com", tier: "read" }] });
-    await expect(ensureAllowed("read_snapshot", "x.com")).resolves.toBeUndefined();
+    await expect(ensureAllowed("read_snapshot", "x.com")).resolves.toBe("read");
     await expect(ensureAllowed("click", "x.com")).rejects.toThrow(/x\.com is read-only.*popup/);
   });
   it("deny host blocks everything", async () => {
@@ -154,12 +154,24 @@ describe("ensureAllowed", () => {
   });
   it("undefined host uses the default tier", async () => {
     stubStorage({ defaultTier: "read", rules: [] });
-    await expect(ensureAllowed("screenshot", undefined)).resolves.toBeUndefined();
+    await expect(ensureAllowed("screenshot", undefined)).resolves.toBe("read");
     await expect(ensureAllowed("eval_js", undefined)).rejects.toThrow(PolicyDenied);
   });
   it("carries code policy_denied", async () => {
     stubStorage({ defaultTier: "deny", rules: [] });
     const err = await ensureAllowed("click", "x.com").catch((e: unknown) => e);
     expect((err as { code?: string }).code).toBe("policy_denied");
+  });
+  it("returns the effective tier when allowed", async () => {
+    stubStorage(); // default policy is full everywhere
+    await expect(ensureAllowed("click", "app.example.com")).resolves.toBe("full");
+    await expect(ensureAllowed("read_text", "app.example.com")).resolves.toBe("full");
+  });
+  it("stamps meta on PolicyDenied", async () => {
+    stubStorage({ defaultTier: "full", rules: [{ pattern: "bank.com", tier: "read" }] });
+    const err = await ensureAllowed("click", "bank.com").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PolicyDenied);
+    expect((err as PolicyDenied).code).toBe("policy_denied");
+    expect((err as PolicyDenied).meta).toEqual({ host: "bank.com", tier: "read" });
   });
 });

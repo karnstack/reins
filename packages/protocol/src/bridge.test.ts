@@ -38,3 +38,33 @@ describe("bridge frames", () => {
     expect(WelcomeFrame.parse({ type: "welcome", server: "reins" }).server).toBe("reins");
   });
 });
+
+describe("ResponseMeta", () => {
+  it("round-trips meta on a response frame", () => {
+    const frame = ResponseFrame.parse({
+      type: "response",
+      id: "r1",
+      ok: true,
+      result: { done: true },
+      meta: { host: "app.example.com", tier: "full", tabId: 412 },
+    });
+    expect(frame.meta).toEqual({ host: "app.example.com", tier: "full", tabId: 412 });
+  });
+
+  it("parses frames without meta (older extensions)", () => {
+    const frame = ResponseFrame.parse({ type: "response", id: "r2", ok: true, result: 1 });
+    expect(frame.meta).toBeUndefined();
+  });
+
+  it("allows partial meta (denial without tabId)", () => {
+    const frame = ResponseFrame.parse({
+      type: "response",
+      id: "r3",
+      ok: false,
+      error: { code: "policy_denied", message: "blocked" },
+      meta: { host: "bank.com", tier: "read" },
+    });
+    expect(frame.meta?.host).toBe("bank.com");
+    expect(frame.meta?.tabId).toBeUndefined();
+  });
+});

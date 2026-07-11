@@ -180,6 +180,14 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "audit": {
+      const { runAudit } = await import("./audit-cli.js");
+      const view = runAudit(rest, { dir: logsDir(), now: () => new Date() });
+      for (const w of view.warnings) console.error(w);
+      console.log(view.out);
+      break;
+    }
+
     case "version":
     case "--version":
     case "-v":

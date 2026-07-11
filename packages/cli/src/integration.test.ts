@@ -1,5 +1,7 @@
+import type { ResponseMeta } from "@reins/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
+import type { AuditHook, AuditRecord } from "./audit.js";
 import { BridgeHost } from "./bridge.js";
 import { startDaemon } from "./daemon.js";
 
@@ -15,6 +17,7 @@ afterEach(async () => {
   bridge = undefined;
   extension = undefined;
   DENY_CLICKS = false;
+  NEXT_META = undefined;
 });
 
 /** Lookup table: bridge method name → stand-in result the extension returns. */
@@ -52,6 +55,11 @@ const METHOD_RESULTS: Record<string, unknown> = {
 /** When set, the stand-in refuses `click` like the real extension's policy gate. */
 let DENY_CLICKS = false;
 
+/** When set, the stand-in stamps this meta on its next successful response,
+ *  then clears it — lets a single test attach meta to one action instead of
+ *  the fixed METHOD_RESULTS table. */
+let NEXT_META: ResponseMeta | undefined;
+
 /** Stand-in extension: connects, authenticates, and answers any method via the lookup table. */
 function standInExtension(port: number): Promise<WebSocket> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { origin: ORIGIN } });
@@ -77,16 +85,26 @@ function standInExtension(port: number): Promise<WebSocket> {
           return;
         }
         const result = METHOD_RESULTS[msg.method ?? ""];
-        ws.send(JSON.stringify({ type: "response", id: msg.id, ok: true, result }));
+        const meta = NEXT_META;
+        NEXT_META = undefined;
+        ws.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            ok: true,
+            result,
+            ...(meta ? { meta } : {}),
+          }),
+        );
       }
     });
     ws.on("error", reject);
   });
 }
 
-async function setupHarness(): Promise<number> {
+async function setupHarness(opts: { audit?: AuditHook } = {}): Promise<number> {
   bridge = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: () => {} });
-  daemon = await startDaemon({ port: 0, bridge, log: () => {} });
+  daemon = await startDaemon({ port: 0, bridge, log: () => {}, audit: opts.audit });
   extension = await standInExtension(daemon.port);
   expect(bridge.paired).toBe(true);
   return daemon.port;
@@ -192,5 +210,24 @@ describe("policy over the bridge", () => {
     expect(body.error).toMatch(/popup/);
     // read-tier methods still work in the same session
     expect(await rpc(port, "read_text")).toEqual({ text: "page text" });
+  });
+});
+
+describe("audit over the bridge", () => {
+  it("writes one record per /rpc action, meta included", async () => {
+    const records: AuditRecord[] = [];
+    const port = await setupHarness({ audit: (r) => records.push(r) });
+    // stand-in extension: answer the next request with meta on the frame
+    NEXT_META = { host: "app.example.com", tier: "full", tabId: 3 };
+    await rpc(port, "read_text", { tabId: 3 });
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      method: "read_text",
+      ok: true,
+      browserId: "b1",
+      host: "app.example.com",
+      tier: "full",
+      tabId: 3,
+    });
   });
 });

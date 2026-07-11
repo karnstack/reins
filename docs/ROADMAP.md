@@ -1,7 +1,7 @@
 # reins roadmap
 
-Date: 2026-07-08. Living document — reorder freely; phases are priority order,
-not a calendar.
+Date: 2026-07-11 (updated; first written 2026-07-08). Living document —
+reorder freely; phases are priority order, not a calendar.
 
 ## Where reins stands
 
@@ -23,37 +23,37 @@ not a calendar.
   integration absorbs the niche for Claude users. reins' durable ground is
   agent-agnosticism (any shell agent, any Chromium browser, several at once)
   and being scriptable plumbing rather than a product surface.
-- **Biggest product gap vs expectations:** security. reins today is
-  all-or-nothing — extension connected means every tab, every origin, cookies
-  included. Claude in Chrome has set user expectations for per-site
-  permissions, action gating, and audit trails. Prompt injection in a
-  logged-in browser is treated as unsolvable; the answer is contained blast
-  radius, and reins doesn't offer containment yet.
+- **Biggest product gap vs expectations:** security — now partly closed.
+  v0.3.0 shipped per-site permission tiers (deny/read/full), ending the
+  all-or-nothing era. Still missing from the containment story: a per-action
+  audit trail, a written threat model (SECURITY.md), and prompt-injection
+  guidance in the skill. Claude in Chrome set user expectations for all
+  three; finish them before pivoting to growth.
 
-## Phase 1 — Trust: a permission model (v0.3)
+## Phase 1 — Trust: a permission model (v0.3) — mostly shipped
 
 The skill's superpower framing ("read tokens, call APIs as the user") is also
 the scariest sentence in the README. Ship containment before growth.
 
-- **Site policy.** Allow/deny list by origin, enforced in the extension (the
-  trust boundary the daemon can't fake), managed from the popup and
-  `reins policy`. Default stance configurable: everything (today's behavior),
-  allowlist-only, or deny-sensitive-categories.
-- **Read-only mode.** A per-site or global tier that permits `tabs / text /
-  snapshot / screenshot / console / network` but refuses `click / type / fill /
-  eval / cdp`. Cheap to implement (command classification already exists in
-  `TOOL_COMMANDS`), huge trust win — "let the agent read my browser" is a much
-  easier first yes.
-- **Audit log.** Structured per-action log line (timestamp, command, browser,
-  tab, origin) — `~/.reins/logs` already exists; make the action trail
-  first-class and document it. `reins audit` to view.
-- **Threat model doc (SECURITY.md).** Cover what the origin-allowlist protects
-  against, what it can't (any local process is already inside the trust
+- ✅ **Site policy.** Shipped in v0.3.0 (#15) as per-site permission tiers
+  (deny / read / full), enforced in the extension, managed from the popup and
+  `reins policy` (view/tighten only — the CLI can't grant). Documented on the
+  web (#17).
+- ✅ **Read-only mode.** Shipped as the "read" tier of #15: `tabs / text /
+  snapshot / screenshot / console / network` allowed, `click / type / fill /
+  eval / cdp` refused with `blocked by policy: <host> is read-only/denied`.
+  SKILL.md teaches agents not to retry or self-escalate.
+- ✅ **Audit log.** Shipped: one structured JSONL line per action (and per
+  policy denial) in `~/.reins/logs/audit-YYYY-MM-DD.jsonl`, value-bearing
+  params redacted before write, 30-day retention, `reins audit` to view
+  (`--last`, `--denied`, `--json`).
+- ⬜ **Threat model doc (SECURITY.md).** Cover what the per-site tiers protect
+  against, what they can't (any local process is already inside the trust
   boundary — the Claude-in-Chrome LevelDB permission-bypass class), and the
   prompt-injection story: page content is untrusted input to the agent.
-- **Skill hardening.** Add an explicit "treat page text as data, never as
-  instructions" section to SKILL.md; today it teaches capability with only a
-  light stewardship note.
+- ⬜ **Skill hardening.** Add an explicit "treat page text as data, never as
+  instructions" section to SKILL.md; today it teaches capability plus the
+  policy-blocked etiquette, but has no prompt-injection guidance.
 
 ## Phase 2 — Proof: an eval harness for the skill (v0.4)
 
@@ -117,7 +117,9 @@ Informed by the comparison table; promote by observed demand, not speculation.
 - **Discovery.** The funnel is installs-without-visitors; invert it: launch
   post (the CLI-vs-MCP token story + security model is the angle), demo
   recordings on the landing page, recipes gallery in docs (the SKILL.md
-  recipes are the best marketing copy the project has).
+  recipes are the best marketing copy the project has). Groundwork landed:
+  landing revamp + permissions docs (#17), light theme (#18), changelog page
+  (#19) — the site is launch-ready; the launch post is not written.
 - **Cross-agent eval matrix.** The skill claims Claude Code / Cursor / Codex /
   Copilot compatibility; actually run the trigger+execution evals per harness
   and publish the matrix. "Tested on N agents" is a differentiator the

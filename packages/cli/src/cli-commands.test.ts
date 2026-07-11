@@ -38,6 +38,10 @@ describe("helpText", () => {
       expect(text, gone).not.toContain(gone);
     }
   });
+
+  it("help lists the audit command", () => {
+    expect(helpText("1.2.3", TOOL_COMMANDS)).toContain("audit");
+  });
 });
 
 describe("healthSummary", () => {
