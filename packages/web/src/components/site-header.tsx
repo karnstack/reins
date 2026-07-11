@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { to: "/docs", label: "Docs" },
   { to: "/docs/commands", label: "Commands" },
   { to: "/docs/permissions", label: "Permissions" },
+  { to: "/changelog", label: "Changelog" },
 ] as const;
 
 export function SiteHeader() {

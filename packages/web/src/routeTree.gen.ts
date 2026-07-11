@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as DocsRouteRouteImport } from './routes/docs/route'
+import { Route as ChangelogRouteRouteImport } from './routes/changelog/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
+import { Route as ChangelogIndexRouteImport } from './routes/changelog/index'
 import { Route as DocsSideloadRouteImport } from './routes/docs/sideload'
 import { Route as DocsSecurityRouteImport } from './routes/docs/security'
 import { Route as DocsPermissionsRouteImport } from './routes/docs/permissions'
@@ -20,6 +22,7 @@ import { Route as DocsFaqRouteImport } from './routes/docs/faq'
 import { Route as DocsComparisonRouteImport } from './routes/docs/comparison'
 import { Route as DocsCommandsRouteImport } from './routes/docs/commands'
 import { Route as DocsArchitectureRouteImport } from './routes/docs/architecture'
+import { Route as ChangelogExtensionRouteImport } from './routes/changelog/extension'
 
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
@@ -31,6 +34,11 @@ const DocsRouteRoute = DocsRouteRouteImport.update({
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChangelogRouteRoute = ChangelogRouteRouteImport.update({
+  id: '/changelog',
+  path: '/changelog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -40,6 +48,11 @@ const DocsIndexRoute = DocsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DocsRouteRoute,
+} as any)
+const ChangelogIndexRoute = ChangelogIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ChangelogRouteRoute,
 } as any)
 const DocsSideloadRoute = DocsSideloadRouteImport.update({
   id: '/sideload',
@@ -76,11 +89,18 @@ const DocsArchitectureRoute = DocsArchitectureRouteImport.update({
   path: '/architecture',
   getParentRoute: () => DocsRouteRoute,
 } as any)
+const ChangelogExtensionRoute = ChangelogExtensionRouteImport.update({
+  id: '/extension',
+  path: '/extension',
+  getParentRoute: () => ChangelogRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/changelog': typeof ChangelogRouteRouteWithChildren
   '/docs': typeof DocsRouteRouteWithChildren
   '/privacy': typeof PrivacyRoute
+  '/changelog/extension': typeof ChangelogExtensionRoute
   '/docs/architecture': typeof DocsArchitectureRoute
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
@@ -88,11 +108,13 @@ export interface FileRoutesByFullPath {
   '/docs/permissions': typeof DocsPermissionsRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
+  '/changelog/': typeof ChangelogIndexRoute
   '/docs/': typeof DocsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/changelog/extension': typeof ChangelogExtensionRoute
   '/docs/architecture': typeof DocsArchitectureRoute
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
@@ -100,13 +122,16 @@ export interface FileRoutesByTo {
   '/docs/permissions': typeof DocsPermissionsRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
+  '/changelog': typeof ChangelogIndexRoute
   '/docs': typeof DocsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/changelog': typeof ChangelogRouteRouteWithChildren
   '/docs': typeof DocsRouteRouteWithChildren
   '/privacy': typeof PrivacyRoute
+  '/changelog/extension': typeof ChangelogExtensionRoute
   '/docs/architecture': typeof DocsArchitectureRoute
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
@@ -114,14 +139,17 @@ export interface FileRoutesById {
   '/docs/permissions': typeof DocsPermissionsRoute
   '/docs/security': typeof DocsSecurityRoute
   '/docs/sideload': typeof DocsSideloadRoute
+  '/changelog/': typeof ChangelogIndexRoute
   '/docs/': typeof DocsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/changelog'
     | '/docs'
     | '/privacy'
+    | '/changelog/extension'
     | '/docs/architecture'
     | '/docs/commands'
     | '/docs/comparison'
@@ -129,11 +157,13 @@ export interface FileRouteTypes {
     | '/docs/permissions'
     | '/docs/security'
     | '/docs/sideload'
+    | '/changelog/'
     | '/docs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/privacy'
+    | '/changelog/extension'
     | '/docs/architecture'
     | '/docs/commands'
     | '/docs/comparison'
@@ -141,12 +171,15 @@ export interface FileRouteTypes {
     | '/docs/permissions'
     | '/docs/security'
     | '/docs/sideload'
+    | '/changelog'
     | '/docs'
   id:
     | '__root__'
     | '/'
+    | '/changelog'
     | '/docs'
     | '/privacy'
+    | '/changelog/extension'
     | '/docs/architecture'
     | '/docs/commands'
     | '/docs/comparison'
@@ -154,11 +187,13 @@ export interface FileRouteTypes {
     | '/docs/permissions'
     | '/docs/security'
     | '/docs/sideload'
+    | '/changelog/'
     | '/docs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChangelogRouteRoute: typeof ChangelogRouteRouteWithChildren
   DocsRouteRoute: typeof DocsRouteRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
 }
@@ -179,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/changelog': {
+      id: '/changelog'
+      path: '/changelog'
+      fullPath: '/changelog'
+      preLoaderRoute: typeof ChangelogRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -192,6 +234,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/docs/'
       preLoaderRoute: typeof DocsIndexRouteImport
       parentRoute: typeof DocsRouteRoute
+    }
+    '/changelog/': {
+      id: '/changelog/'
+      path: '/'
+      fullPath: '/changelog/'
+      preLoaderRoute: typeof ChangelogIndexRouteImport
+      parentRoute: typeof ChangelogRouteRoute
     }
     '/docs/sideload': {
       id: '/docs/sideload'
@@ -242,8 +291,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsArchitectureRouteImport
       parentRoute: typeof DocsRouteRoute
     }
+    '/changelog/extension': {
+      id: '/changelog/extension'
+      path: '/extension'
+      fullPath: '/changelog/extension'
+      preLoaderRoute: typeof ChangelogExtensionRouteImport
+      parentRoute: typeof ChangelogRouteRoute
+    }
   }
 }
+
+interface ChangelogRouteRouteChildren {
+  ChangelogExtensionRoute: typeof ChangelogExtensionRoute
+  ChangelogIndexRoute: typeof ChangelogIndexRoute
+}
+
+const ChangelogRouteRouteChildren: ChangelogRouteRouteChildren = {
+  ChangelogExtensionRoute: ChangelogExtensionRoute,
+  ChangelogIndexRoute: ChangelogIndexRoute,
+}
+
+const ChangelogRouteRouteWithChildren = ChangelogRouteRoute._addFileChildren(
+  ChangelogRouteRouteChildren,
+)
 
 interface DocsRouteRouteChildren {
   DocsArchitectureRoute: typeof DocsArchitectureRoute
@@ -273,6 +343,7 @@ const DocsRouteRouteWithChildren = DocsRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChangelogRouteRoute: ChangelogRouteRouteWithChildren,
   DocsRouteRoute: DocsRouteRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
 }

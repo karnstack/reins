@@ -5,6 +5,11 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "extension/**"]
     },
+    "@reins/web#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../cli/CHANGELOG.md", "../extension/CHANGELOG.md"],
+      "outputs": ["dist/**"]
+    },
     "dev": {
       "dependsOn": ["^build"],
       "cache": false,
