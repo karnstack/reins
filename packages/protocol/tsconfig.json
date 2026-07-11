@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /* WHATWG URL (hostOf in policy.ts) — a global in every target runtime
+       (browser + Node ≥20), but TypeScript only ships its type in DOM. */
+    "lib": ["ES2023", "DOM"]
+  },
   "include": ["src"]
 }
