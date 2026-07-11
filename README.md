@@ -171,6 +171,11 @@ Chrome Web Store: **[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)**.
   command runs; the popup's **Disconnect** toggle is the kill switch.
 - The extension collects nothing and talks to nothing but your local daemon —
   see [docs/PRIVACY.md](docs/PRIVACY.md).
+- The full threat model — what the tiers protect against, what they
+  deliberately don't (local processes, `cdp`'s browser-wide reach), prompt
+  injection, audit-trail limits, and a hardening checklist — lives in
+  [docs/SECURITY.md](docs/SECURITY.md). Vulnerabilities: report privately via
+  [GitHub security advisories](https://github.com/karnstack/reins/security/advisories/new).
 
 ## Roadmap
 

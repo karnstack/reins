@@ -51,7 +51,8 @@ function SecurityPage() {
         <li>
           Every host resolves to a tier — <code>deny</code>, <code>read</code>, or <code>full</code>{" "}
           — and the extension enforces it before any command touches a tab. The check runs inside
-          the extension, so no process on your machine can skip it.
+          the extension, so nothing speaking the protocol — the CLI, the daemon, or any other local
+          client — can skip or loosen it.
         </li>
         <li>
           Grants happen only in the extension popup, a user gesture an agent can't perform from the
@@ -66,6 +67,23 @@ function SecurityPage() {
       <p>
         The full model — tiers, wildcard rules, matching precedence — is on the{" "}
         <Link to="/docs/permissions">Site permissions</Link> page.
+      </p>
+
+      <h2>Trust boundary</h2>
+      <p>
+        The tiers contain the agent you invited in; they are not a defense against other software on
+        your machine. Anything already running as your OS user sits inside the trust boundary — it
+        could talk to the daemon or rewrite the policy store directly, and no browser automation
+        tool's permission model survives local malware. The honest write-up — what the tiers protect
+        against, what they can't, prompt injection, and a hardening checklist — is the{" "}
+        <a
+          href="https://github.com/karnstack/reins/blob/main/docs/SECURITY.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          threat model (SECURITY.md)
+        </a>
+        .
       </p>
 
       <h2>Audit trail</h2>
