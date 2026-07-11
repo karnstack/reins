@@ -227,6 +227,12 @@ describe("policy gate", () => {
     expect(ensureAllowed).toHaveBeenCalledWith("navigate", "here.com");
   });
 
+  it("resolves protocol-relative navigate targets against the current page", async () => {
+    stubTabs("https://here.com/");
+    await dispatchMethod("navigate", { to: "//there.com/x" });
+    expect(ensureAllowed).toHaveBeenCalledWith("navigate", "there.com");
+  });
+
   it("propagates PolicyDenied from the gate", async () => {
     stubTabs();
     vi.mocked(ensureAllowed).mockRejectedValueOnce(

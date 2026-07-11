@@ -50,8 +50,20 @@ async function gate(method: GatedMethod, params: unknown): Promise<Record<string
   await ensureAllowed(method, hostOf(tab.url ?? ""));
   if (method === "navigate") {
     const to = String(p.to ?? "");
-    const dest = NAV_HISTORY.has(to) ? undefined : hostOf(to);
-    if (dest !== undefined) await ensureAllowed("navigate", dest);
+    if (!NAV_HISTORY.has(to)) {
+      let dest = hostOf(to);
+      if (dest === undefined) {
+        // Protocol-relative ("//bank.com/x") and path-relative targets
+        // resolve against the current page — check what they resolve to,
+        // or they would dodge the destination gate.
+        try {
+          dest = hostOf(new URL(to, tab.url).href);
+        } catch {
+          // unresolvable target — the handler will reject it
+        }
+      }
+      if (dest !== undefined) await ensureAllowed("navigate", dest);
+    }
   }
   return { ...p, tabId };
 }
