@@ -123,15 +123,25 @@ Ship-now, in win-per-effort order:
    line before "unreliable mini-agent". Never submits without `--submit`.
    Matching rules published verbatim in SKILL.md. Signup/checkout: 5–8 turns
    → 1–2.
-7. **Sticky tab + digests + screenshot economics.** `reins use --tab 12`
-   pins subsequent commands to a tab (retires the default-to-active-tab
-   hazard where the user switches tabs mid-task and the agent types into
-   their email; sticky tab closed = loud error, no silent fallback).
-   `console`/`network` return digests (`23 reqs: 18× GET /api/poll (200), 1×
-   POST /api/submit (500)`) with errors always verbatim, `--all` for raw.
-   `screenshot --if-changed` returns `unchanged` instead of a new image;
-   `screenshot --ref e5` crops to the element. Small individually; together
-   they shave the per-turn tax everywhere.
+7. **Explicit tab for acting commands + digests + screenshot economics.**
+   Concurrency is a standing constraint for this whole phase: several agents
+   can drive several tabs through the one daemon at once, so any "current
+   tab" state held daemon-side is cross-agent contamination waiting to
+   happen (agent A pins a tab, agent B re-pins, A acts on B's tab) — and
+   there's no reliable session identity to scope it by, since every command
+   is a fresh process and harnesses don't persist shell state. So no sticky
+   tab. Fix the actual hazard statelessly instead: acting commands
+   (`click` / `type` / `fill` / …) stop defaulting to the active tab — with
+   more than one driven tab they error with the roster (`specify --tab;
+   active is tab 12 "Gmail"`), mirroring the existing multiple-browser rule.
+   Read commands keep the convenience default. That retires the
+   user-switched-tabs-mid-task hazard where the agent types into their
+   email, with zero session state. Separately: `console`/`network` return
+   digests (`23 reqs: 18× GET /api/poll (200), 1× POST /api/submit (500)`)
+   with errors always verbatim, `--all` for raw; `screenshot --if-changed`
+   returns `unchanged` instead of a new image; `screenshot --ref e5` crops
+   to the element. Small individually; together they shave the per-turn tax
+   everywhere.
 
 Phase-later, in order: **`reins paginate`** (the one bounded loop worth
 having: click next-control, wait for settle, run an extraction expr per
