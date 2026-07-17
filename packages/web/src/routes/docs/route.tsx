@@ -74,7 +74,7 @@ function DocsLayout() {
             <DocsNav />
           </div>
         </aside>
-        <main ref={contentRef} className="min-w-0 flex-1 py-10 lg:py-12">
+        <main ref={contentRef} data-pagefind-body className="min-w-0 flex-1 py-10 lg:py-12">
           <Outlet />
         </main>
         <aside className="w-56 shrink-0 py-12 max-xl:hidden">
