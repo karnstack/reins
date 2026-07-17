@@ -1,8 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/code-block";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/sideload")({
-  head: () => ({ meta: [{ title: "Install without the store · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Install without the store · reins",
+      description:
+        "Install the bundled reins extension without the Chrome Web Store: reins extension stages it for Chrome's Load unpacked, no store access required.",
+      path: "/docs/sideload",
+    }),
+  }),
   component: SideloadPage,
 });
 

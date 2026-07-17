@@ -5,9 +5,31 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/faq")({
-  head: () => ({ meta: [{ title: "FAQ · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "FAQ · reins",
+      description:
+        "Answers to common questions about reins: supported browsers and agents, the local-only daemon, Chrome's debugging banner, and installing without the store.",
+      path: "/docs/faq",
+    }),
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: FAQS.map((faq) => ({
+            "@type": "Question",
+            name: faq.question,
+            acceptedAnswer: { "@type": "Answer", text: faq.answer },
+          })),
+        }),
+      },
+    ],
+  }),
   component: FaqPage,
 });
 
@@ -63,11 +85,20 @@ function FaqPage() {
   return (
     <article className="prose max-w-[70ch]">
       <h1>FAQ</h1>
+      <p>
+        Quick answers about how reins works. Anything missing? Ask on{" "}
+        <a href="https://github.com/karnstack/reins/issues" target="_blank" rel="noreferrer">
+          GitHub
+        </a>
+        .
+      </p>
       <Accordion type="single" collapsible className="mt-8 w-full">
         {FAQS.map((faq) => (
           <AccordionItem key={faq.question} value={faq.question}>
-            <AccordionTrigger className="text-left text-base">{faq.question}</AccordionTrigger>
-            <AccordionContent className="text-base/7 text-muted-foreground sm:text-sm/6">
+            <AccordionTrigger className="py-5 text-left text-base hover:no-underline hover:[&>svg]:text-foreground">
+              {faq.question}
+            </AccordionTrigger>
+            <AccordionContent className="max-w-[60ch] text-base/7 text-muted-foreground sm:text-sm/6">
               {faq.answer}
             </AccordionContent>
           </AccordionItem>

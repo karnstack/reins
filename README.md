@@ -18,6 +18,13 @@
   <a href="https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo"><img src="https://img.shields.io/chrome-web-store/v/hnjcfgochepemjndccfblpmfmlblkofo" alt="Chrome Web Store"></a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.png">
+    <img src=".github/assets/hero-light.png" alt="An agent driving a real browser through reins: a login page with e3/e7 element refs, and an agent session running reins snapshot then reins click --ref e7" width="820">
+  </picture>
+</p>
+
 reins gives agents (Claude Code, Cursor, Codex, Copilot, … — anything with a
 shell) full control of your actual, logged-in Chromium browsers — Chrome,
 Dia, Brave, Edge, Arc — through a CLI and a Manifest V3 extension. No MCP

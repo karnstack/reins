@@ -1,7 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/security")({
-  head: () => ({ meta: [{ title: "Security · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Security · reins",
+      description:
+        "The reins security model: localhost-only daemon, DNS-rebinding protection, extension-origin allowlisting, Chrome's native debug banner, and instant disconnect.",
+      path: "/docs/security",
+    }),
+  }),
   component: SecurityPage,
 });
 

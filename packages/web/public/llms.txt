@@ -1,0 +1,29 @@
+# reins
+
+> reins lets coding agents (Claude Code, Cursor, Codex, anything with a shell) drive the user's real, logged-in Chromium browser through a local CLI, an auto-spawned daemon, and a Manifest V3 browser extension. Everything runs on 127.0.0.1 — no cloud, no telemetry. Open source, MIT licensed.
+
+Key facts:
+
+- Install: `npm i -g @karnstack/reins`, then add the reins extension from the Chrome Web Store in any Chromium browser (Chrome, Brave, Edge, Arc, Dia).
+- Teach an agent: `npx skills add karnstack/reins`; agents without skill support can read `reins help`.
+- Core loop: `reins snapshot` (interactive elements with refs) → `reins click --ref e7` / `reins type --ref e3 --text "…"` → `reins text` or `reins screenshot` to verify.
+- Site permissions: every site resolves to a per-site tier — deny, read-only, or full — enforced inside the extension; grants happen only via a click in the extension popup.
+- Security: daemon binds 127.0.0.1 with Host-header validation; only allowlisted chrome-extension:// origins may connect; Chrome shows its native debug banner while attached.
+
+## Docs
+
+- [Getting started](https://reins.tech/docs): install the CLI and extension, teach your agent, verify the loop
+- [Commands](https://reins.tech/docs/commands): full command reference — tabs, snapshot, click, type, fill, screenshot, console, network, eval, cdp
+- [Site permissions](https://reins.tech/docs/permissions): per-site deny/read/full tiers and how grants work
+- [Architecture](https://reins.tech/docs/architecture): how the CLI, daemon, and extension fit together
+- [Security](https://reins.tech/docs/security): the localhost-only security model
+- [Install without the store](https://reins.tech/docs/sideload): stage the bundled extension for Chrome's Load unpacked
+- [How it compares](https://reins.tech/docs/comparison): reins vs agent-browser, dev3000, and playwright-mcp
+- [FAQ](https://reins.tech/docs/faq): common questions
+
+## Optional
+
+- [Changelog](https://reins.tech/changelog): release notes for the CLI and extension
+- [Privacy policy](https://reins.tech/privacy): nothing leaves your machine
+- [GitHub repository](https://github.com/karnstack/reins): source for the CLI, daemon, extension, and this site
+- [npm package](https://www.npmjs.com/package/@karnstack/reins)

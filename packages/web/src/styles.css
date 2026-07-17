@@ -62,6 +62,19 @@
   --ring: oklch(0.606 0.25 292.717);
 }
 
+/* Tailwind v4 has no default border color; without this, bare `border-*`
+   utilities (e.g. the accordion's `border-b`) fall back to currentColor and
+   render as harsh near-black/near-white lines. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -247,5 +260,35 @@
 @keyframes terminal-caret {
   50% {
     opacity: 0;
+  }
+}
+
+/* Decorative hero backdrop: a faint dot grid that fades out toward the edges,
+   plus a soft violet glow behind the headline. Sits in an aria-hidden layer
+   below the content; tuned low enough to stay subtle in light and dark. */
+@utility hero-grid {
+  background-image: radial-gradient(var(--color-foreground) 0.75px, transparent 0.75px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(120% 90% at 50% 0%, black, transparent 70%);
+  opacity: 0.04;
+
+  @variant dark {
+    opacity: 0.05;
+  }
+}
+
+@utility hero-glow {
+  background: radial-gradient(
+    42rem 30rem at 70% -10%,
+    --alpha(var(--color-primary) / 14%),
+    transparent 60%
+  );
+
+  @variant dark {
+    background: radial-gradient(
+      42rem 30rem at 70% -10%,
+      --alpha(var(--color-primary) / 22%),
+      transparent 62%
+    );
   }
 }
