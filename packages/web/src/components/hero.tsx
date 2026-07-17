@@ -87,7 +87,7 @@ export function Hero() {
             aria-hidden="true"
             className="pointer-events-none absolute -top-10 left-1/2 -z-10 h-64 w-4/5 -translate-x-1/2 rounded-[50%] bg-primary/25 blur-[110px]"
           />
-          <div className="rounded-xl border border-border bg-card shadow-2xl dark:shadow-none dark:inset-ring dark:inset-ring-white/10">
+          <div className="rounded-xl border border-foreground/6 bg-card shadow-2xl dark:bg-neutral-950 dark:shadow-none dark:inset-ring dark:inset-ring-white/8">
             {/* Chrome bar */}
             <div className="flex items-center gap-3 rounded-t-xl border-b border-border px-4 py-2.5">
               <div className="flex gap-1.5">
@@ -102,7 +102,7 @@ export function Hero() {
               <div className="w-11 shrink-0" />
             </div>
             {/* Debugging banner (mirrors Chrome's native one) */}
-            <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+            <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-700 dark:border-amber-300/20 dark:bg-amber-300/8 dark:text-amber-300">
               <span className="size-1.5 shrink-0 rounded-full bg-current" />
               <span className="truncate">reins is controlling this browser</span>
             </div>
