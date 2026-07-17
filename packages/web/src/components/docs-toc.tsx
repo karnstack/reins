@@ -238,7 +238,7 @@ export function DocsToc({ contentRef, className }: DocsTocProps) {
             <div
               ref={thumbRef}
               className={cn(
-                "absolute w-full bg-primary",
+                "absolute w-full bg-primary dark:bg-violet-300",
                 "top-[var(--toc-top)] h-[var(--toc-height)]",
                 "transition-[top,height] duration-150 ease-linear",
                 "data-[hidden=true]:opacity-0",
@@ -263,8 +263,8 @@ export function DocsToc({ contentRef, className }: DocsTocProps) {
                 }}
                 style={{ paddingInlineStart: getItemOffset(heading.level) }}
                 className={cn(
-                  "relative block py-1.5 text-xs leading-snug transition-colors hover:text-foreground",
-                  isActive ? "font-medium text-primary" : "text-muted-foreground",
+                  "relative block py-1.5 text-xs/5 transition-colors hover:text-foreground",
+                  isActive ? "text-primary dark:text-violet-300" : "text-muted-foreground",
                 )}
               >
                 {heading.text}

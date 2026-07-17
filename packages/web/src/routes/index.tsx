@@ -8,32 +8,51 @@ import {
   ScanSearch,
   ShieldCheck,
 } from "lucide-react";
-import { AnimatedTerminal, output, prompt } from "@/components/animated-terminal";
 import { CopyCommand } from "@/components/copy-command";
+import { Hero } from "@/components/hero";
 import { IdeasSection } from "@/components/ideas-section";
 import { PopupMock } from "@/components/popup-mock";
 import { Reveal } from "@/components/reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
+import { seo } from "@/lib/seo";
 
 const CHROME_WEB_STORE_URL =
   "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    ...seo({
+      title: "reins: drive your real browser from your coding agent",
+      description:
+        "reins lets coding agents drive the logged-in Chromium browser you already use, through a local CLI, daemon, and extension. Everything stays on 127.0.0.1.",
+      path: "/",
+    }),
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "reins",
+          applicationCategory: "DeveloperApplication",
+          operatingSystem: "macOS, Linux, Windows",
+          description:
+            "reins lets coding agents drive the logged-in Chromium browser you already use, through a local CLI, daemon, and extension.",
+          url: "https://reins.tech",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+          license: "https://github.com/karnstack/reins/blob/main/LICENSE",
+          sameAs: [
+            "https://github.com/karnstack/reins",
+            "https://www.npmjs.com/package/@karnstack/reins",
+          ],
+        }),
+      },
+    ],
+  }),
   component: LandingPage,
 });
-
-const HERO_LINES = [
-  prompt("reins tabs"),
-  output("  b1  chrome  tab 12 *  Dashboard — localhost:3000"),
-  prompt("reins snapshot"),
-  output('  e3: input "Email"\n  e7: button "Sign in"'),
-  prompt('reins type --ref e3 --text "you@work.dev"'),
-  prompt("reins click --ref e7"),
-  prompt("reins screenshot"),
-  output("  ~/.reins/shots/tab-12.png"),
-];
 
 const FEATURES = [
   {
@@ -96,32 +115,7 @@ function LandingPage() {
     <>
       <SiteHeader />
       <main>
-        <section className="py-20 sm:py-28">
-          <div className="mx-auto grid max-w-6xl items-center gap-16 px-4 sm:px-6 lg:grid-cols-2 lg:gap-12 lg:px-8">
-            <div>
-              <h1 className="max-w-[20ch] font-display text-5xl font-semibold tracking-tight text-balance sm:text-6xl">
-                Take the reins of your real browser
-              </h1>
-              <p className="mt-6 max-w-[48ch] text-lg text-pretty text-muted-foreground">
-                reins lets coding agents (Claude Code, Cursor, Codex, anything with a shell) drive
-                the logged-in browser you already use. No debug profile, no launch flags, no MCP
-                server to register.
-              </p>
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <Button asChild size="lg">
-                  <Link to="/docs">Get started</Link>
-                </Button>
-                <Button asChild size="lg" variant="ghost">
-                  <a href="https://github.com/karnstack/reins" target="_blank" rel="noreferrer">
-                    View on GitHub
-                  </a>
-                </Button>
-              </div>
-              <CopyCommand command="npm i -g @karnstack/reins" className="mt-8 max-w-md" />
-            </div>
-            <AnimatedTerminal title="agent session" lines={HERO_LINES} startDelay={500} />
-          </div>
-        </section>
+        <Hero />
 
         <SectionDivider />
 
@@ -296,7 +290,11 @@ function LandingPage() {
 
         <SectionDivider />
 
-        <section className="py-20 sm:py-28">
+        <section className="relative isolate overflow-hidden py-20 sm:py-28">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 [background:radial-gradient(42rem_26rem_at_50%_120%,--alpha(var(--color-primary)/12%),transparent_60%)] dark:[background:radial-gradient(42rem_26rem_at_50%_120%,--alpha(var(--color-primary)/20%),transparent_62%)]"
+          />
           <div className="mx-auto max-w-6xl px-4 text-center sm:px-6 lg:px-8">
             <Reveal>
               <h2 className="mx-auto max-w-[30ch] font-display text-5xl font-semibold tracking-tight text-balance">

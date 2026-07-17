@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/code-block";
+import { seo } from "@/lib/seo";
 
 const CHROME_WEB_STORE_URL =
   "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
 
 export const Route = createFileRoute("/docs/")({
-  head: () => ({ meta: [{ title: "Getting started · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Getting started · reins",
+      description:
+        "Install the reins CLI and Chrome extension, teach your coding agent the command loop, and have it driving your real logged-in browser in minutes.",
+      path: "/docs",
+    }),
+  }),
   component: GettingStarted,
 });
 

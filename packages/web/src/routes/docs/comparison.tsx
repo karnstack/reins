@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/comparison")({
-  head: () => ({ meta: [{ title: "How it compares · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "How it compares · reins",
+      description:
+        "How reins compares to agent-browser, dev3000, and playwright-mcp — and when to pick each for agent-driven browser automation.",
+      path: "/docs/comparison",
+    }),
+  }),
   component: ComparisonPage,
 });
 

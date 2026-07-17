@@ -1,8 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment } from "react";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/architecture")({
-  head: () => ({ meta: [{ title: "Architecture · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Architecture · reins",
+      description:
+        "How the reins CLI, local daemon, and Chrome extension fit together — one WebSocket on 127.0.0.1, no cloud, nothing to keep running.",
+      path: "/docs/architecture",
+    }),
+  }),
   component: ArchitecturePage,
 });
 

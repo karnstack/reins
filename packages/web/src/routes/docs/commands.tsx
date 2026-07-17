@@ -1,9 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment } from "react";
 import { CodeBlock } from "@/components/code-block";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/commands")({
-  head: () => ({ meta: [{ title: "Commands · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Commands · reins",
+      description:
+        "The full reins command reference: tabs, snapshot, click, type, fill, screenshot, console, network, eval, and raw Chrome DevTools Protocol access.",
+      path: "/docs/commands",
+    }),
+  }),
   component: CommandsPage,
 });
 

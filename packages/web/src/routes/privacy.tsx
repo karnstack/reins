@@ -1,9 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/privacy")({
-  head: () => ({ meta: [{ title: "Privacy policy · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Privacy policy · reins",
+      description:
+        "The reins privacy policy: everything stays on your machine — no analytics, no telemetry, no remote servers.",
+      path: "/privacy",
+    }),
+  }),
   component: PrivacyPage,
 });
 

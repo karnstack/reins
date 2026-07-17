@@ -1,8 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/code-block";
+import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/permissions")({
-  head: () => ({ meta: [{ title: "Site permissions · reins" }] }),
+  head: () => ({
+    ...seo({
+      title: "Site permissions · reins",
+      description:
+        "How reins site permissions work: per-site deny, read-only, or full tiers enforced inside the extension, granted only by a click in the popup.",
+      path: "/docs/permissions",
+    }),
+  }),
   component: PermissionsPage,
 });
 
