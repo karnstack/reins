@@ -28,7 +28,8 @@ reorder freely; phases are priority order, not a calendar.
   trail landed as `reins audit` (#20), and the written threat model
   (docs/SECURITY.md) plus prompt-injection guidance in the skill completed
   the containment story Claude in Chrome set user expectations for. Phase 1
-  is done; the focus shifts to speed, proof (evals), and growth.
+  is done; the focus shifts to proof (evals) first — the ruler — then speed
+  measured against it, then growth.
 
 ## Phase 1 — Trust: a permission model (v0.3) — shipped
 
@@ -59,14 +60,67 @@ the scariest sentence in the README. Ship containment before growth.
   report instruction-shaped text to the user, never move secrets across
   origins.
 
-## Phase 2 — Speed: fewer agent turns (v0.4)
+## Phase 2 — Proof: an eval harness for the skill (v0.4)
+
+Evals come before the speed work deliberately: Phase 3 rewrites the
+agent-facing contract (error shapes, snapshot format, the skill's core
+loop), and without a baseline there is no way to prove a turn cut helped —
+or didn't regress correctness — except user bug reports. The fixture site
+built here is also the testbed the Phase 3 primitives (guarded chains,
+fill-form, paginate) are developed against. Build the ruler, then optimize.
+
+No eval suite exists today (unit/integration tests only). Skills are prompts;
+prompts regress silently when models change. Adopt the anthropics/skills
+`skill-creator` methodology — it measures three separate things:
+
+1. **Triggering** — does the skill load when it should (and not when it
+   shouldn't)? Harness: `evals/trigger-eval.json` with ~10 realistic
+   should-trigger prompts ("scrape my dashboard behind SSO", "watch what API
+   this page calls") and ~10 near-miss should-NOT-trigger prompts (generic web
+   questions, Playwright test authoring, curl-able public APIs). Run each 3×
+   via `claude -p --output-format stream-json` and detect the Skill tool_use
+   event (skill-creator's `run_eval.py` pattern). Metric: precision/recall.
+   Anthropic documents under-triggering as the default failure mode;
+   `run_loop.py` can optimize the description against a train/test split.
+2. **Execution** — once loaded, does the agent drive reins correctly?
+   Browser evals against live sites are flaky, so favor trajectory and
+   artifact assertions over output diffs:
+   - **Fixture site.** A tiny local app (login wall, paginated table, form
+     wizard, JSON API, dialog traps) served by the eval runner —
+     deterministic ground truth.
+   - **Assertions.** Did the transcript call `snapshot` before `click`? Did it
+     re-snapshot after nav? Did it produce the exact JSON the fixture defines?
+     Exit codes and artifacts, not prose grading, wherever possible.
+     Trajectory assertions encode whatever SKILL.md currently teaches — when
+     Phase 3 changes the core loop, the assertions change in the same PR.
+   - **Baselines.** Every run records tool-calls-per-task, tokens-per-task,
+     and wall-clock-per-task. These are the numbers Phase 3's turn-cutting
+     work is measured against, and the regression tripwire once it lands.
+   - The existing `integration.test.ts` (daemon + stand-in WS extension)
+     already fakes the browser end — reuse it for a cheap deterministic tier;
+     run a real-browser tier less often.
+3. **Uplift** — is the skill better than no skill? Paired runs (with-skill vs
+   `without_skill` baseline, fresh sessions, parallel subagents), graded and
+   aggregated to pass-rate / tokens / time, mean ± stddev across repeats
+   (skill-creator's `aggregate_benchmark.py` shape). Variance analysis
+   separates flaky evals from real regressions.
+
+Operationalize: `evals/` directory in-repo, `pnpm eval` runner, weekly CI run
+with pinned model IDs (silent model updates should surface as eval diffs, not
+user bug reports), plus on-demand before each skill edit. Publish the
+scorecard in the README — nobody else in the niche has public skill evals;
+it's both quality control and marketing.
+
+## Phase 3 — Speed: fewer agent turns (v0.5)
 
 The IPC chain (process spawn → daemon → WebSocket → extension → CDP → page)
 is milliseconds; the LLM inference between commands is seconds. So speed is
 measured in **agent turns and tokens-per-turn**, not wire latency — a routine
 flow (find tab, snapshot, click, re-snapshot, verify) is 5–6 full turns
 today. Cutting turns is the only lever that matters; making each turn's
-payload smaller is the second.
+payload smaller is the second. Phase 2's harness is the precondition: every
+item below lands measured against the baseline, with the execution evals as
+the regression tripwire.
 
 Explicitly rejected: broad push/pre-analysis across tabs (the extension
 pre-computing snapshots for pages the agent never asked about). It fights the
@@ -162,50 +216,12 @@ Free-text hints would be a prompt-injection amplifier; a pre-analyzed page
 is still untrusted web content, and several items above (compression,
 digests) actively *shrink* the injection surface by cutting raw page text.
 
-This phase and Phase 3 (evals) are symbiotic: the metrics here are
-tool-calls-per-task, tokens-per-task, and wall-clock-per-task, and the eval
-harness is how you prove a turn cut actually helped without regressing
-correctness. Land a lightweight per-session tool-call / token counter
-alongside this work even if the full harness comes after.
-
-## Phase 3 — Proof: an eval harness for the skill (v0.5)
-
-No eval suite exists today (unit/integration tests only). Skills are prompts;
-prompts regress silently when models change. Adopt the anthropics/skills
-`skill-creator` methodology — it measures three separate things:
-
-1. **Triggering** — does the skill load when it should (and not when it
-   shouldn't)? Harness: `evals/trigger-eval.json` with ~10 realistic
-   should-trigger prompts ("scrape my dashboard behind SSO", "watch what API
-   this page calls") and ~10 near-miss should-NOT-trigger prompts (generic web
-   questions, Playwright test authoring, curl-able public APIs). Run each 3×
-   via `claude -p --output-format stream-json` and detect the Skill tool_use
-   event (skill-creator's `run_eval.py` pattern). Metric: precision/recall.
-   Anthropic documents under-triggering as the default failure mode;
-   `run_loop.py` can optimize the description against a train/test split.
-2. **Execution** — once loaded, does the agent drive reins correctly?
-   Browser evals against live sites are flaky, so favor trajectory and
-   artifact assertions over output diffs:
-   - **Fixture site.** A tiny local app (login wall, paginated table, form
-     wizard, JSON API, dialog traps) served by the eval runner —
-     deterministic ground truth.
-   - **Assertions.** Did the transcript call `snapshot` before `click`? Did it
-     re-snapshot after nav? Did it produce the exact JSON the fixture defines?
-     Exit codes and artifacts, not prose grading, wherever possible.
-   - The existing `integration.test.ts` (daemon + stand-in WS extension)
-     already fakes the browser end — reuse it for a cheap deterministic tier;
-     run a real-browser tier less often.
-3. **Uplift** — is the skill better than no skill? Paired runs (with-skill vs
-   `without_skill` baseline, fresh sessions, parallel subagents), graded and
-   aggregated to pass-rate / tokens / time, mean ± stddev across repeats
-   (skill-creator's `aggregate_benchmark.py` shape). Variance analysis
-   separates flaky evals from real regressions.
-
-Operationalize: `evals/` directory in-repo, `pnpm eval` runner, weekly CI run
-with pinned model IDs (silent model updates should surface as eval diffs, not
-user bug reports), plus on-demand before each skill edit. Publish the
-scorecard in the README — nobody else in the niche has public skill evals;
-it's both quality control and marketing.
+The bar for shipping anything in this phase: the Phase 2 baselines
+(tool-calls / tokens / wall-clock per task) move in the right direction and
+the execution evals stay green. A speed item that doesn't move the numbers —
+or buys them by regressing correctness — doesn't ship. Separately, a
+lightweight per-session tool-call counter (local only, no telemetry) is
+still worth landing for real-world sessions the harness can't see.
 
 ## Phase 4 — Depth: close the capability gaps (v0.6)
 
@@ -216,7 +232,7 @@ Informed by the comparison table; promote by observed demand, not speculation.
   HAR-style capture (`reins network --har`, `reins network --body <id>`)
   covers reverse-engineering workflows without the `eval`-fetch detour.
 - **Downloads + PDF** as curated commands (both exist via `cdp` today).
-  (Batch mode moved to Phase 2 as guarded chains — Chrome DevTools CLI v1
+  (Batch mode moved to Phase 3 as guarded chains — Chrome DevTools CLI v1
   and agent-browser both bet on batching too; guards are the differentiator.)
 - **WebMCP watch.** Chrome 149 origin trial lets sites expose
   `navigator.modelContext` tools. When it matures, `reins tools <tab>` —
