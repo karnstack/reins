@@ -21,8 +21,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.png">
-    <img src=".github/assets/hero-light.png" alt="An agent driving a real browser through reins: a login page with e3/e7 element refs, and an agent session running reins snapshot then reins click --ref e7" width="820">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/browser-dark.png">
+    <img src=".github/assets/browser-light.png" alt="An agent driving a real browser through reins: a login page with e3/e7 element refs, and an agent session running reins snapshot then reins click --ref e7" width="820">
   </picture>
 </p>
 
