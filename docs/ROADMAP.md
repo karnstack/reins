@@ -1,6 +1,6 @@
 # reins roadmap
 
-Date: 2026-07-11 (updated; first written 2026-07-08). Living document —
+Date: 2026-07-18 (updated; first written 2026-07-08). Living document —
 reorder freely; phases are priority order, not a calendar.
 
 ## Where reins stands
@@ -28,7 +28,7 @@ reorder freely; phases are priority order, not a calendar.
   trail landed as `reins audit` (#20), and the written threat model
   (docs/SECURITY.md) plus prompt-injection guidance in the skill completed
   the containment story Claude in Chrome set user expectations for. Phase 1
-  is done; the focus shifts to proof (evals) and growth.
+  is done; the focus shifts to speed, proof (evals), and growth.
 
 ## Phase 1 — Trust: a permission model (v0.3) — shipped
 
@@ -59,7 +59,106 @@ the scariest sentence in the README. Ship containment before growth.
   report instruction-shaped text to the user, never move secrets across
   origins.
 
-## Phase 2 — Proof: an eval harness for the skill (v0.4)
+## Phase 2 — Speed: fewer agent turns (v0.4)
+
+The IPC chain (process spawn → daemon → WebSocket → extension → CDP → page)
+is milliseconds; the LLM inference between commands is seconds. So speed is
+measured in **agent turns and tokens-per-turn**, not wire latency — a routine
+flow (find tab, snapshot, click, re-snapshot, verify) is 5–6 full turns
+today. Cutting turns is the only lever that matters; making each turn's
+payload smaller is the second.
+
+Explicitly rejected: broad push/pre-analysis across tabs (the extension
+pre-computing snapshots for pages the agent never asked about). It fights the
+one-debugger-per-tab limit, wastes work on the 38 of 40 tabs the agent never
+touches, and reads sites before the user or agent directed it — quietly
+violating the Phase 1 permission tiers. Also rejected: a long-lived `reins
+repl` — agent harnesses are one-command-per-turn, and everything a REPL would
+buy (session state, diffs) lives correctly in the daemon, which already
+exists. Everything below is pull-shaped and per-driven-tab.
+
+Ship-now, in win-per-effort order:
+
+1. **Every error is an observe.** A failed action returns the context the
+   agent will ask for next: stale ref → snapshot delta since last look;
+   element not found → nearest role/name candidates; dialog open → the dialog
+   text. Failure loops (fail → snapshot → retry = 3 turns) become 1+1.
+   Response-shape change only; the extension has the data at failure time.
+   Rule: a `deny`-tier failure returns zero page-derived context.
+2. **Guarded chains.** `reins run` executes a short action list against one
+   tab, each step carrying optional postconditions (`expect: url~=…`,
+   `visible: <sel>`, `text~=…`, `network: POST /api/x`). Halt at first failed
+   guard and return the full observe-delta at the halt point. Guards are
+   assertions, not branching — that's the line that keeps it deterministic
+   instead of a mini-agent, and what makes batching trustworthy enough to be
+   the default pattern SKILL.md teaches. Routine flow: 5–6 turns → 2;
+   multi-step forms: 8–10 → 2. (Supersedes the Phase 4 `reins run` note.)
+3. **SKILL.md as a zero-code turn compiler.** Teach turn-frugal patterns that
+   need no code: batch independent commands in one shell line (`reins text …
+   && reins network …`) and read both outputs in one turn; check `network`
+   for an API before scraping the DOM (promote the credentialed-`fetch`
+   recipe into the core loop); don't re-snapshot unless the response says the
+   page changed. Update the skill in the same PR as each primitive below so
+   it never teaches stale patterns.
+4. **Snapshot epochs + delta-by-default + structural compression.** Refs
+   anchor to element identity and survive re-render; snapshots are tagged
+   (`snap@3`) and second-and-later snapshots on a driven tab return only the
+   delta (`+e71 button "Confirm" / -e12`) unless `--full`. Epoch resets
+   (navigation) are loud: all prior refs invalid, full snapshot follows.
+   Orthogonally, collapse repeated sibling structures — `e20..e69: 50×
+   listitem {link, price, button "Add"}` with one expanded exemplar, never
+   collapsing rows whose structure differs. 70–95% token cut on the heaviest
+   payloads, and the substrate `observe` is built on.
+5. **`reins observe` + anticipatory payloads.** One compound call answers
+   "what's the page now": url, title, ref delta, key text, new console
+   errors, requests since last look. Then apply one policy to every acting
+   command (`click`/`type`/`nav`/`open`): inline whatever the agent would
+   deterministically request next — small change → delta; navigation → fresh
+   compact snapshot; nothing → `no-op: page unchanged`. Collapses act→look
+   pairs generically, capped payloads, driven-tab only.
+6. **`reins fill-form`.** Declarative form fill: `--data '{"email":…}'`,
+   deterministic key→field matching (autocomplete attr > label > name >
+   placeholder), one pass, per-field match report back. Ambiguous match (2+
+   candidates) = leave unfilled and report, never guess — that rule is the
+   line before "unreliable mini-agent". Never submits without `--submit`.
+   Matching rules published verbatim in SKILL.md. Signup/checkout: 5–8 turns
+   → 1–2.
+7. **Sticky tab + digests + screenshot economics.** `reins use --tab 12`
+   pins subsequent commands to a tab (retires the default-to-active-tab
+   hazard where the user switches tabs mid-task and the agent types into
+   their email; sticky tab closed = loud error, no silent fallback).
+   `console`/`network` return digests (`23 reqs: 18× GET /api/poll (200), 1×
+   POST /api/submit (500)`) with errors always verbatim, `--all` for raw.
+   `screenshot --if-changed` returns `unchanged` instead of a new image;
+   `screenshot --ref e5` crops to the element. Small individually; together
+   they shave the per-turn tax everywhere.
+
+Phase-later, in order: **`reins paginate`** (the one bounded loop worth
+having: click next-control, wait for settle, run an extraction expr per
+page, concatenate JSON, `--max-pages` mandatory; reuses the chain runner —
+but SKILL.md should say "try `network`+`fetch` first, `paginate` is the DOM
+fallback"); **self-healing refs** (stale ref re-matched by role+name only on
+a unique candidate within the same landmark, every heal audit-logged,
+`--strict` to opt out); **per-site recipe cache** (successful chains/fills
+stored as selector maps + guards keyed by exact origin and DOM fingerprint,
+replayed with guards live so a stale recipe degrades to a normal failure —
+safe only if recipes are strictly selectors, never free text, and tier
+enforcement stays extension-side); **semantic page-model hints** (flag the
+primary form / pagination / main content / auth state with the first
+observation). Standing rule adopted now, before hints exist: hint values
+come from a closed vocabulary (`primary-form`, `auth-state:signed-in`, …) —
+the page may influence *which* enum fires, never the words the model reads.
+Free-text hints would be a prompt-injection amplifier; a pre-analyzed page
+is still untrusted web content, and several items above (compression,
+digests) actively *shrink* the injection surface by cutting raw page text.
+
+This phase and Phase 3 (evals) are symbiotic: the metrics here are
+tool-calls-per-task, tokens-per-task, and wall-clock-per-task, and the eval
+harness is how you prove a turn cut actually helped without regressing
+correctness. Land a lightweight per-session tool-call / token counter
+alongside this work even if the full harness comes after.
+
+## Phase 3 — Proof: an eval harness for the skill (v0.5)
 
 No eval suite exists today (unit/integration tests only). Skills are prompts;
 prompts regress silently when models change. Adopt the anthropics/skills
@@ -98,7 +197,7 @@ user bug reports), plus on-demand before each skill edit. Publish the
 scorecard in the README — nobody else in the niche has public skill evals;
 it's both quality control and marketing.
 
-## Phase 3 — Depth: close the capability gaps (v0.5)
+## Phase 4 — Depth: close the capability gaps (v0.6)
 
 Informed by the comparison table; promote by observed demand, not speculation.
 
@@ -106,17 +205,15 @@ Informed by the comparison table; promote by observed demand, not speculation.
   `network` records method/URL/status only — the biggest day-to-day gap.
   HAR-style capture (`reins network --har`, `reins network --body <id>`)
   covers reverse-engineering workflows without the `eval`-fetch detour.
-- **Batch mode.** Chrome DevTools CLI v1 and agent-browser both bet on
-  batching actions per invocation to cut round-trips. A
-  `reins run <script>` (or stdin) executing a short action list against one
-  tab would drop the agent's tool-call count for multi-step flows.
 - **Downloads + PDF** as curated commands (both exist via `cdp` today).
+  (Batch mode moved to Phase 2 as guarded chains — Chrome DevTools CLI v1
+  and agent-browser both bet on batching too; guards are the differentiator.)
 - **WebMCP watch.** Chrome 149 origin trial lets sites expose
   `navigator.modelContext` tools. When it matures, `reins tools <tab>` —
   list and call site-declared tools — turns a structural threat (sites
   bypassing DOM automation) into a feature.
 
-## Phase 4 — Reach: distribution and ecosystem (v0.6+)
+## Phase 5 — Reach: distribution and ecosystem (v0.7+)
 
 - **Discovery.** The funnel is installs-without-visitors; invert it: launch
   post (the CLI-vs-MCP token story + security model is the angle), demo
