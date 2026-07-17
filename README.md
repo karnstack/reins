@@ -7,8 +7,8 @@
 <p align="center"><strong>Take the reins of your real browser from any coding agent.</strong></p>
 
 <p align="center">
-  <a href="https://reins.karnstack.com">reins.karnstack.com</a> ·
-  <a href="https://reins.karnstack.com/docs">docs</a>
+  <a href="https://reins.tech">reins.tech</a> ·
+  <a href="https://reins.tech/docs">docs</a>
 </p>
 
 <p align="center">
@@ -148,7 +148,7 @@ Chrome Web Store: **[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md)**.
 - `packages/protocol` — shared zod frames + method schemas + port constants (`@reins/protocol`, private, bundled)
 - `packages/cli` — CLI + daemon, published as [`@karnstack/reins`](https://www.npmjs.com/package/@karnstack/reins) (bin: `reins`)
 - `packages/extension` — MV3 extension (Vite + crxjs)
-- `packages/web` — landing page + docs at [reins.karnstack.com](https://reins.karnstack.com) (TanStack Start, prerendered, Cloudflare)
+- `packages/web` — landing page + docs at [reins.tech](https://reins.tech) (TanStack Start, prerendered, Cloudflare)
 - `skills/reins` — the agent skill (`npx skills add karnstack/reins`)
 
 ## Security

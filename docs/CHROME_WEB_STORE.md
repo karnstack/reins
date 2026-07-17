@@ -85,7 +85,7 @@ three certification checkboxes (no sale/transfer to third parties; no use
 unrelated to the single purpose; no creditworthiness/lending use) — all
 truthfully apply, and the form requires all three.
 
-**Privacy policy URL** — `https://reins.karnstack.com/privacy` (the site in
+**Privacy policy URL** — `https://reins.tech/privacy` (the site in
 `packages/web`, deployed to Cloudflare). Until that deploy is live, use
 `https://github.com/karnstack/reins/blob/main/docs/PRIVACY.md` instead (the
 repo must be public for it to resolve).

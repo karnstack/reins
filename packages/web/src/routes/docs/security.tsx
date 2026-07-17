@@ -119,7 +119,7 @@ function SecurityPage() {
         </li>
       </ul>
       <p>
-        The full policy lives at <Link to="/privacy">reins.karnstack.com/privacy</Link>. The code is
+        The full policy lives at <Link to="/privacy">reins.tech/privacy</Link>. The code is
         MIT-licensed and auditable at{" "}
         <a href="https://github.com/karnstack/reins" target="_blank" rel="noreferrer">
           github.com/karnstack/reins

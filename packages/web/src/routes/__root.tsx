@@ -2,7 +2,7 @@ import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import appCss from "@/styles.css?url";
 
-const SITE_URL = "https://reins.karnstack.com";
+const SITE_URL = "https://reins.tech";
 const TITLE = "reins: drive your real browser from your coding agent";
 const DESCRIPTION =
   "reins lets coding agents drive the logged-in Chromium browser you already use, through a local CLI, daemon, and extension. Everything stays on 127.0.0.1.";
