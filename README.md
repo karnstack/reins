@@ -55,8 +55,9 @@ reins click --ref e5        # act: by ref
 reins text                  # check: or reins screenshot, which prints an image path
 ```
 
-Every command takes `--tab <id>` (default: active tab), `--browser <id>` (only
-when several are connected), and `--json`. `reins help` is self-describing, and
+Shared flags, on the commands that act on a page or a tab: `--tab <id>`
+(default: active tab), `--browser <id>` (only when several are connected), and
+`--json` for raw output. `reins help` is self-describing, and
 `reins cdp` reaches the full Chrome DevTools Protocol when the curated commands
 are not enough.
 

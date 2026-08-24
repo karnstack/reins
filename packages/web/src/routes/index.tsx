@@ -179,9 +179,10 @@ function Loop() {
     <>
       <H2 id="loop">The loop</H2>
       <P>
-        Every page interaction is the same three beats: look, act, check. Every command takes{" "}
-        <Code>--tab &lt;id&gt;</Code> (the active tab by default), <Code>--browser &lt;id&gt;</Code>{" "}
-        (only when more than one browser is connected) and <Code>--json</Code>.
+        Every page interaction is the same three beats: look, act, check. The commands that act on a
+        page or a tab share three flags: <Code>--tab &lt;id&gt;</Code> (the active tab by default),{" "}
+        <Code>--browser &lt;id&gt;</Code> (only when more than one browser is connected) and{" "}
+        <Code>--json</Code> for raw output.
       </P>
       <Shell lines={LOOP_LINES} />
       <Arrow href="/docs/commands">Full command reference</Arrow>

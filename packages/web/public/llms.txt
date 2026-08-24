@@ -9,7 +9,7 @@ Key facts:
 - Core loop, in three beats. Look: `reins snapshot` lists interactive elements with refs. Act: `reins click --ref e7` or `reins type --ref e3 --text "…"`. Check: `reins text` or `reins screenshot`.
 - Site permissions: every site resolves to a tier, one of deny, read, or full. The extension enforces it. Grants happen only through a click in the extension popup, and the CLI can tighten the policy but never loosen it.
 - Security: the daemon binds 127.0.0.1 and validates the Host header. Only allowlisted chrome-extension:// origins may connect. Chrome shows its native debugging banner the whole time the extension is attached.
-- Limits: Chromium only, so no Firefox and no WebKit. No headless mode. Not built for CI. With two browsers connected, commands need `--browser <id>`, because reins never guesses which one you meant.
+- Limits: Chromium only, so no Firefox and no WebKit. No headless mode. Not built for CI. With two browsers connected, the commands that act on a page or a tab need `--browser <id>`, because reins never guesses which one you meant.
 
 ## Docs
 

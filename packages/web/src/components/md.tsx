@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -107,13 +108,30 @@ export function Ol({ children }: { children: ReactNode }) {
   );
 }
 
+const LINK_CLASS = "underline underline-offset-4 hover:text-primary";
+
+/**
+ * Every link on the site.
+ *
+ * An app-relative href routes through TanStack's `Link`, so moving between
+ * pages does not reload the document and lose the router. Everything else
+ * (http, mailto, and any other scheme) is a plain anchor, and anything
+ * off-site opens in its own tab.
+ */
 export function A({ href, children }: { href: string; children: ReactNode }) {
+  if (href.startsWith("/")) {
+    return (
+      <Link to={href} className={LINK_CLASS}>
+        {children}
+      </Link>
+    );
+  }
   const external = href.startsWith("http");
   return (
     <a
       href={href}
       {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
-      className="underline underline-offset-4 hover:text-primary"
+      className={LINK_CLASS}
     >
       {children}
     </a>
@@ -167,10 +185,12 @@ export function Shell({ lines }: { lines: string[] }) {
         // Lines repeat in a transcript (blank ones, at least), so the index
         // is the only key that is honest.
         // biome-ignore lint/suspicious/noArrayIndexKey: transcript lines are not unique
-        <span key={i} className="block">
+        <span key={i} className="block" {...(line === "" ? { "aria-hidden": true } : {})}>
           {line === "" ? (
             // An empty block has no height, so a blank line in the transcript
-            // would vanish. A space under `whitespace-pre` keeps the line.
+            // would vanish. A space under `whitespace-pre` keeps the line, and
+            // the row is hidden from assistive tech so it is not announced as
+            // a spoken space.
             " "
           ) : line.startsWith("$") ? (
             <>

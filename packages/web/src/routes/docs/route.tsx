@@ -43,9 +43,11 @@ function DocsLayout() {
             <CopyMarkdown contentRef={contentRef} className="ml-auto" />
           </p>
 
-          <main ref={contentRef} data-pagefind-body className="mt-10">
+          {/* An article, not a second <main>: the layout above already opens
+              one, and two main landmarks on a page is one too many. */}
+          <article ref={contentRef} data-pagefind-body className="mt-10">
             <Outlet />
-          </main>
+          </article>
 
           <Rule />
           <p className={cn(TEXT, "mt-5 text-muted-foreground")}>Other pages</p>

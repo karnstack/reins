@@ -79,9 +79,9 @@ function GettingStarted() {
         ]}
       />
       <P>
-        Every command accepts <Code>--tab &lt;id&gt;</Code> (the active tab by default),{" "}
-        <Code>--browser &lt;id&gt;</Code> (only needed when several browsers are connected) and{" "}
-        <Code>--json</Code> for raw output.
+        The commands that act on a page or a tab share three flags: <Code>--tab &lt;id&gt;</Code>{" "}
+        (the active tab by default), <Code>--browser &lt;id&gt;</Code> (only needed when several
+        browsers are connected) and <Code>--json</Code> for raw output.
       </P>
       <Arrow href="/docs/commands">Full command reference</Arrow>
       <Arrow href="/docs/architecture">How the pieces fit together</Arrow>

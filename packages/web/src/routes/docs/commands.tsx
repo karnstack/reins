@@ -161,7 +161,10 @@ const GROUPS: Array<{ id: string; title: string; intro?: string; rows: [string, 
 function Command({ usage, summary }: { usage: string; summary: string }) {
   return (
     <div className={cn(TEXT, "mt-5 max-w-[68ch]")}>
-      <p className="overflow-x-auto whitespace-pre">{usage}</p>
+      {/* Wraps rather than scrolls. A scroll box per command would be forty
+          keyboard stops down the page, and a long flag list is still legible
+          broken across lines when the wrap is indented under the command. */}
+      <p className="whitespace-pre-wrap [text-indent:-2ch] pl-[2ch]">{usage}</p>
       <p className="text-pretty text-muted-foreground">{summary}</p>
     </div>
   );
@@ -172,10 +175,12 @@ function CommandsPage() {
     <>
       <H1>Commands</H1>
       <P>
-        The CLI is the whole interface: agents shell out to it, and so can you. Every command
-        accepts <Code>--tab &lt;id&gt;</Code> (the active tab by default),{" "}
-        <Code>--browser &lt;id&gt;</Code> (only needed when several browsers are connected, and the
-        ids come from <Code>reins tabs</Code>) and <Code>--json</Code> for raw results.
+        The CLI is the whole interface: agents shell out to it, and so can you. The commands that
+        act on a page or a tab share three flags: <Code>--tab &lt;id&gt;</Code> (the active tab by
+        default), <Code>--browser &lt;id&gt;</Code> (only needed when several browsers are
+        connected, and the ids come from <Code>reins tabs</Code>) and <Code>--json</Code> for raw
+        results. The management commands (<Code>status</Code>, <Code>doctor</Code>,{" "}
+        <Code>kill</Code>, <Code>help</Code>) take none of them.
       </P>
       {GROUPS.map((group) => (
         <Fragment key={group.id}>
