@@ -317,7 +317,7 @@ function Install() {
     <>
       <H2 id="install">Install</H2>
       <P>
-        Three pieces, and the third is the one people skip. Without the skill, your agent has the
+        Three pieces, and the second is the one people skip. Without the skill, your agent has the
         CLI installed and no idea the commands exist.
       </P>
       <Ol>
