@@ -2,12 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { BrowserMock } from "@/components/browser-mock";
 import { CopyCommand } from "@/components/copy-command";
 import {
+  A,
   Arrow,
   Code,
   Column,
   H2,
   Kbd,
   Meta,
+  Ol,
   P,
   Pre,
   Shell,
@@ -19,11 +21,8 @@ import { PopupMock } from "@/components/popup-mock";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { seo } from "@/lib/seo";
-import { INSTALL_COMMAND, REPO_URL } from "@/lib/site";
+import { CHROME_WEB_STORE_URL, INSTALL_COMMAND, REPO_URL, SKILL_COMMAND } from "@/lib/site";
 import { cn } from "@/lib/utils";
-
-const CHROME_WEB_STORE_URL =
-  "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -89,19 +88,7 @@ function Home() {
             flags, no MCP server to register.
           </P>
 
-          <CopyCommand command={INSTALL_COMMAND} className={cn(TEXT, "mt-5 max-w-[68ch]")} />
-          <P muted>
-            then add the{" "}
-            <a
-              href={CHROME_WEB_STORE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="underline underline-offset-4 hover:text-primary"
-            >
-              extension
-            </a>{" "}
-            in every browser you want agents to reach
-          </P>
+          <Install />
 
           <BrowserMock className="mt-10" />
 
@@ -111,7 +98,7 @@ function Home() {
           <Permissions />
           <Facts />
           <Limits />
-          <Install />
+          <More />
         </Column>
       </main>
       <SiteFooter />
@@ -266,6 +253,7 @@ function Facts() {
         rows={[
           ["License", "MIT"],
           ["Install", <Code key="i">{INSTALL_COMMAND}</Code>],
+          ["Skill", <Code key="s">{SKILL_COMMAND}</Code>],
           ["Browsers", "Chrome, Brave, Edge, Arc, Dia. Any Chromium that takes MV3 extensions."],
           ["Agents", "Claude Code, Cursor, Codex, Copilot, Gemini CLI. Anything with a shell."],
           ["Binds", <Code key="b">127.0.0.1</Code>],
@@ -309,19 +297,60 @@ function Limits() {
 
 /* ------------------------------------------------------------------------ */
 
+/**
+ * Install, at the top, where the reader still is.
+ *
+ * It used to close the page, under the facts and the limits, and the skill
+ * was the last line of it. People installed the CLI, installed the
+ * extension, and stopped: two visible halves that plainly do something, and
+ * a third step below the fold that reads like an optional extra. It is not.
+ * Without the skill the agent has the CLI on its PATH and no idea the
+ * commands exist.
+ *
+ * So the skill is step two, between the two shell one-liners, rather than
+ * step three on the far side of a trip to the Chrome Web Store. The order of
+ * the three does not matter to the software. It matters to whether anyone
+ * finishes.
+ */
 function Install() {
   return (
     <>
       <H2 id="install">Install</H2>
-      <Shell
-        lines={[`$ ${INSTALL_COMMAND}`, "$ npx skills add karnstack/reins", "$ reins status"]}
-      />
       <P>
-        The first line installs the CLI, and the daemon rides along inside it. The second teaches
-        any agent with skill support the command set; the rest can read <Code>reins help</Code>.
-        Then install the extension in every browser you want agents to reach, and{" "}
-        <Code>reins status</Code> shows what is connected.
+        Three pieces, and the third is the one people skip. Without the skill, your agent has the
+        CLI installed and no idea the commands exist.
       </P>
+      <Ol>
+        <li>
+          The CLI. The daemon rides inside it and starts on demand.
+          <CopyCommand command={INSTALL_COMMAND} className={cn(TEXT, "mt-3 max-w-[60ch]")} />
+        </li>
+        <li>
+          The skill, so your agent knows the command set. Agents without skill support can read{" "}
+          <Code>reins help</Code> instead, but do not skip this if yours supports it.
+          <CopyCommand command={SKILL_COMMAND} className={cn(TEXT, "mt-3 max-w-[60ch]")} />
+        </li>
+        <li>
+          The extension, in every browser you want agents to reach. It finds the daemon on its own,
+          and the toolbar icon turns green once it connects.
+          <p className={cn(TEXT, "mt-3")}>
+            <A href={CHROME_WEB_STORE_URL}>Add reins from the Chrome Web Store</A>
+          </p>
+        </li>
+      </Ol>
+      <P>
+        Then <Code>reins status</Code> shows what is connected.
+      </P>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+function More() {
+  return (
+    <>
+      <H2 id="more">More</H2>
       <P muted>
         No Chrome Web Store access? <Code>reins extension</Code> stages the bundled copy for
         Chrome's Load unpacked, with no <Code>reins allow</Code> step.
