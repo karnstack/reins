@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { A, Arrow, Code, H1, H2, P, Ul } from "@/components/md";
 import { seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/docs/security")({
@@ -15,125 +16,116 @@ export const Route = createFileRoute("/docs/security")({
 
 function SecurityPage() {
   return (
-    <article className="prose max-w-[70ch]">
-      <h1>Security</h1>
-      <p>
-        A tool that drives your logged-in browser deserves a paranoid design. reins keeps the attack
+    <>
+      <H1>Security</H1>
+      <P>
+        A tool that drives your logged-in browser has to be careful with it. reins keeps the attack
         surface small by having no cloud half at all: the pieces only ever talk to each other, on
         your machine.
-      </p>
+      </P>
 
-      <h2>Network surface</h2>
-      <ul>
+      <H2 id="network">Network surface</H2>
+      <Ul>
         <li>
-          Everything binds <code>127.0.0.1</code>; neither the daemon nor the extension is reachable
+          Everything binds <Code>127.0.0.1</Code>. Neither the daemon nor the extension is reachable
           from the network.
         </li>
         <li>
-          <code>/rpc</code> and the other daemon endpoints validate the <code>Host</code> header, so
-          web pages can't reach the daemon even through rebound DNS.
+          <Code>/rpc</Code> and the other daemon endpoints validate the <Code>Host</Code> header, so
+          web pages cannot reach the daemon even through rebound DNS.
         </li>
         <li>
           The daemon accepts extension WebSocket connections only from exact allowlisted{" "}
-          <code>chrome-extension://&lt;id&gt;</code> origins. Browsers stamp that header themselves;
-          pages and other extensions can't forge it. Dev builds are added explicitly with{" "}
-          <code>reins allow &lt;id&gt;</code>.
+          <Code>chrome-extension://&lt;id&gt;</Code> origins. The browser stamps that header itself,
+          so pages and other extensions cannot forge it. Dev builds are added explicitly with{" "}
+          <Code>reins allow &lt;id&gt;</Code>.
         </li>
-      </ul>
+      </Ul>
 
-      <h2>Visibility and control</h2>
-      <ul>
+      <H2 id="visibility">Visibility and control</H2>
+      <Ul>
         <li>
           Chrome shows its native "is being debugged" banner whenever the extension is attached to a
           tab, so you always know when an agent is acting.
         </li>
-        <li>The toolbar popup's Disconnect toggle severs the daemon connection instantly.</li>
+        <li>The toolbar popup's Disconnect toggle cuts the daemon connection at once.</li>
         <li>
           Nothing happens in the background: the extension only acts on explicit commands sent
           through the CLI on your machine.
         </li>
-      </ul>
+      </Ul>
 
-      <h2>Per-site permissions</h2>
-      <ul>
+      <H2 id="permissions">Per-site permissions</H2>
+      <Ul>
         <li>
-          Every host resolves to a tier — <code>deny</code>, <code>read</code>, or <code>full</code>{" "}
-          — and the extension enforces it before any command touches a tab. The check runs inside
-          the extension, so nothing speaking the protocol — the CLI, the daemon, or any other local
-          client — can skip or loosen it.
+          Every host resolves to a tier: <Code>deny</Code>, <Code>read</Code> or <Code>full</Code>.
+          The extension enforces it before any command touches a tab. The check runs inside the
+          extension, so nothing that speaks the protocol can skip or loosen it. That includes the
+          CLI, the daemon, and any other local client.
         </li>
         <li>
-          Grants happen only in the extension popup, a user gesture an agent can't perform from the
-          shell. The CLI (<code>reins policy</code>) can view and tighten the policy, never loosen
-          it.
+          Grants happen only in the extension popup. That is a user gesture, and an agent cannot
+          perform it from the shell. The CLI (<Code>reins policy</Code>) can view and tighten the
+          policy, never loosen it.
         </li>
         <li>
-          The shipped default is <code>full</code> everywhere — today's behavior — so tightening is
-          opt-in. <code>deny</code> also redacts the site's tabs from <code>reins tabs</code>.
+          The shipped default is <Code>full</Code> everywhere, which is today's behavior, so
+          tightening is opt-in. <Code>deny</Code> also redacts the site's tabs from{" "}
+          <Code>reins tabs</Code>.
         </li>
-      </ul>
-      <p>
-        The full model — tiers, wildcard rules, matching precedence — is on the{" "}
-        <Link to="/docs/permissions">Site permissions</Link> page.
-      </p>
+      </Ul>
+      <Arrow href="/docs/permissions">Tiers, wildcard rules and matching precedence</Arrow>
 
-      <h2>Trust boundary</h2>
-      <p>
-        The tiers contain the agent you invited in; they are not a defense against other software on
-        your machine. Anything already running as your OS user sits inside the trust boundary — it
+      <H2 id="trust-boundary">Trust boundary</H2>
+      <P>
+        The tiers contain the agent you invited in. They are not a defense against other software on
+        your machine. Anything already running as your OS user sits inside the trust boundary: it
         could talk to the daemon or rewrite the policy store directly, and no browser automation
-        tool's permission model survives local malware. The honest write-up — what the tiers protect
-        against, what they can't, prompt injection, and a hardening checklist — is the{" "}
-        <a
-          href="https://github.com/karnstack/reins/blob/main/docs/SECURITY.md"
-          target="_blank"
-          rel="noreferrer"
-        >
+        tool's permission model survives local malware. The honest write-up covers what the tiers
+        protect against, what they do not, prompt injection, and a hardening checklist. It is the{" "}
+        <A href="https://github.com/karnstack/reins/blob/main/docs/SECURITY.md">
           threat model (SECURITY.md)
-        </a>
+        </A>
         .
-      </p>
+      </P>
 
-      <h2>Audit trail</h2>
-      <ul>
+      <H2 id="audit">Audit trail</H2>
+      <Ul>
         <li>
-          Every command the daemon executes — and every one the policy blocks — appends one
-          structured line (timestamp, command, browser, tab, host, tier, outcome, duration) to{" "}
-          <code>~/.reins/logs/audit-YYYY-MM-DD.jsonl</code>. <code>reins audit</code> renders the
-          trail; <code>--denied</code> shows only what policy blocked.
+          Every command the daemon executes, and every one the policy blocks, appends one structured
+          line (timestamp, command, browser, tab, host, tier, outcome, duration) to{" "}
+          <Code>~/.reins/logs/audit-YYYY-MM-DD.jsonl</Code>. <Code>reins audit</Code> renders the
+          trail, and <Code>--denied</Code> shows only what policy blocked.
         </li>
         <li>
-          Value-bearing params — typed text, fill values, <code>eval</code> code, CDP payloads — are
-          redacted before the line is written, so the trail never stores what the agent typed, only
+          Value-bearing params are redacted before the line is written: typed text, fill values,{" "}
+          <Code>eval</Code> code and CDP payloads. The trail never stores what the agent typed, only
           that it typed.
         </li>
         <li>
           Audit files are pruned after 30 days. Writes are best-effort: a full disk never blocks a
           command.
         </li>
-      </ul>
+      </Ul>
 
-      <h2>Data handling</h2>
-      <ul>
+      <H2 id="data">Data handling</H2>
+      <Ul>
         <li>
-          Page content and tab metadata are read via the Chrome DevTools Protocol only when your
+          Page content and tab metadata are read through the Chrome DevTools Protocol only when your
           local daemon asks, and are sent only to that daemon over localhost.
         </li>
         <li>No analytics, no telemetry, no tracking, no remote servers, no remote code.</li>
         <li>
           The only stored state is the extension's own settings (auto-connect, cached daemon port,
-          connection status) and your site-permission policy, kept in <code>chrome.storage</code> on
+          connection status) and your site-permission policy, kept in <Code>chrome.storage</Code> on
           your device.
         </li>
-      </ul>
-      <p>
-        The full policy lives at <Link to="/privacy">reins.tech/privacy</Link>. The code is
-        MIT-licensed and auditable at{" "}
-        <a href="https://github.com/karnstack/reins" target="_blank" rel="noreferrer">
-          github.com/karnstack/reins
-        </a>
+      </Ul>
+      <P>
+        The full policy is at <A href="/privacy">reins.tech/privacy</A>. The code is MIT-licensed
+        and auditable at <A href="https://github.com/karnstack/reins">github.com/karnstack/reins</A>
         .
-      </p>
-    </article>
+      </P>
+    </>
   );
 }

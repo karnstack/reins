@@ -90,7 +90,7 @@ describe("listAllTabs", () => {
   it("errors on an unknown browserId, naming the roster", async () => {
     const bridge = fakeBridge();
     await expect(listAllTabs(bridge, "b9")).rejects.toThrow(
-      'unknown browserId "b9" — connected: b1 (Chrome)',
+      'unknown browserId "b9". Connected: b1 (Chrome)',
     );
   });
 });

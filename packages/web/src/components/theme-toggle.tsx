@@ -1,6 +1,5 @@
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 
 /* "system" until the visitor picks explicitly; toggling always lands on an
    explicit light/dark, which is what gets persisted. */
@@ -63,17 +62,17 @@ export function ThemeToggle() {
   }, [isDark]);
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
+    <button
+      type="button"
       aria-label={
         mounted ? (isDark ? "Switch to light theme" : "Switch to dark theme") : "Toggle theme"
       }
       title="Toggle theme (D)"
       onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="inline-flex size-8 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      <Sun className="size-4.5 dark:hidden" aria-hidden="true" />
-      <Moon className="hidden size-4.5 dark:block" aria-hidden="true" />
-    </Button>
+      <Sun className="size-4 shrink-0 dark:hidden" aria-hidden="true" />
+      <Moon className="hidden size-4 shrink-0 dark:block" aria-hidden="true" />
+    </button>
   );
 }

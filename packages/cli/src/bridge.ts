@@ -232,14 +232,14 @@ export class BridgeHost implements BridgePort {
       const entry = this.#browsers.get(browserId);
       if (!entry || entry.ws.readyState !== WebSocket.OPEN) {
         throw new Error(
-          `unknown browserId "${browserId}"${roster ? ` — connected: ${roster}` : " — no browsers connected"}`,
+          `unknown browserId "${browserId}"${roster ? `. Connected: ${roster}` : ". No browsers connected"}`,
         );
       }
       return { id: browserId, ws: entry.ws };
     }
     if (live.length === 0) throw new Error("extension not connected");
     if (live.length > 1) {
-      throw new Error(`several browsers connected — pass browserId. Connected: ${roster}`);
+      throw new Error(`several browsers connected. Pass browserId. Connected: ${roster}`);
     }
     const only = live[0] as BrowserInfo;
     const entry = this.#browsers.get(only.id) as ConnectedBrowser;

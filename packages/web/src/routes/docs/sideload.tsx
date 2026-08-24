@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CodeBlock } from "@/components/code-block";
+import { A, Code, H1, H2, Ol, P, Shell, Ul } from "@/components/md";
 import { seo } from "@/lib/seo";
+import { INSTALL_COMMAND } from "@/lib/site";
 
 export const Route = createFileRoute("/docs/sideload")({
   head: () => ({
@@ -16,83 +17,68 @@ export const Route = createFileRoute("/docs/sideload")({
 
 function SideloadPage() {
   return (
-    <article className="prose max-w-[70ch]">
-      <h1>Install without the store</h1>
-      <p>
+    <>
+      <H1>Install without the store</H1>
+      <P>
         The npm package carries a full copy of the reins extension. If you cannot (or would rather
         not) install from the{" "}
-        <a
-          href="https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <A href="https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo">
           Chrome Web Store
-        </a>
-        , one command stages it for Chrome's <strong>Load unpacked</strong>. No repo checkout, no
-        build, no <code>reins allow</code>.
-      </p>
+        </A>
+        , one command stages it for Chrome's Load unpacked. No repo checkout, no build, no{" "}
+        <Code>reins allow</Code>.
+      </P>
 
-      <h2>Install</h2>
-      <CodeBlock
-        code={`npm i -g @karnstack/reins
-reins extension`}
-      />
-      <ol>
+      <H2 id="install">Install</H2>
+      <Shell lines={[`$ ${INSTALL_COMMAND}`, "$ reins extension"]} />
+      <Ol>
         <li>
-          <code>reins extension</code> copies the bundled extension to{" "}
-          <code>~/.reins/extension</code> and prints these same steps.
+          <Code>reins extension</Code> copies the bundled extension to{" "}
+          <Code>~/.reins/extension</Code> and prints these same steps.
         </li>
         <li>
-          Open <code>chrome://extensions</code> (or <code>brave://extensions</code>,{" "}
-          <code>dia://extensions</code>, …).
+          Open <Code>chrome://extensions</Code> (or <Code>brave://extensions</Code>,{" "}
+          <Code>dia://extensions</Code>, and so on).
+        </li>
+        <li>Enable Developer mode, top right.</li>
+        <li>
+          Click Load unpacked and select <Code>~/.reins/extension</Code>.
         </li>
         <li>
-          Enable <strong>Developer mode</strong> (top right).
+          Run <Code>reins status</Code>. The extension finds the daemon and connects on its own.
         </li>
-        <li>
-          Click <strong>Load unpacked</strong> and select <code>~/.reins/extension</code>.
-        </li>
-        <li>
-          Run <code>reins status</code>; the extension finds the daemon and connects on its own.
-        </li>
-      </ol>
-      <p>
-        There is no <code>reins allow</code> step: the sideload build pins a public key in its
+      </Ol>
+      <P>
+        There is no <Code>reins allow</Code> step: the sideload build pins a public key in its
         manifest, so its extension ID is identical on every machine and ships in the CLI's built-in
         allowlist.
-      </p>
+      </P>
 
-      <h2>Updating</h2>
-      <p>Sideloaded extensions do not auto-update. After upgrading the CLI, re-stage it:</p>
-      <CodeBlock code="reins extension" />
-      <p>
-        Then click <strong>Reload</strong> on the reins card in <code>chrome://extensions</code>.
-        The path never changes, so Chrome keeps the registration.
-      </p>
+      <H2 id="updating">Updating</H2>
+      <P>Sideloaded extensions do not auto-update. After upgrading the CLI, re-stage it:</P>
+      <Shell lines={["$ reins extension"]} />
+      <P>
+        Then click Reload on the reins card in <Code>chrome://extensions</Code>. The path never
+        changes, so Chrome keeps the registration.
+      </P>
 
-      <h2>Caveats</h2>
-      <ul>
+      <H2 id="caveats">Caveats</H2>
+      <Ul>
         <li>
           Chrome shows its usual developer-mode reminders for unpacked extensions on some platforms.
-          That is inherent to sideloading; the store build has no such nag
+          That comes with sideloading. The store build does not show them.
         </li>
         <li>
-          A sideloaded and a store-installed reins can coexist, but run one at a time; disable the
-          other in <code>chrome://extensions</code> so two connections don't both drive your tabs
+          A sideloaded and a store-installed reins can coexist, but run one at a time. Disable the
+          other in <Code>chrome://extensions</Code>, so two connections do not both drive your tabs.
         </li>
         <li>
           Working from a source checkout instead? That flow uses a per-machine dev ID and{" "}
-          <code>reins allow</code>; see{" "}
-          <a
-            href="https://github.com/karnstack/reins/blob/main/docs/RUNNING.md"
-            target="_blank"
-            rel="noreferrer"
-          >
-            RUNNING.md
-          </a>{" "}
-          on GitHub
+          <Code>reins allow</Code>. See{" "}
+          <A href="https://github.com/karnstack/reins/blob/main/docs/RUNNING.md">RUNNING.md</A> on
+          GitHub.
         </li>
-      </ul>
-    </article>
+      </Ul>
+    </>
   );
 }

@@ -82,7 +82,7 @@ export function tightenPolicy(patternInput: string, tier: Tier): Promise<Policy>
       existing?.tier ?? effectiveTier(p, pattern.startsWith("*.") ? pattern.slice(2) : pattern);
     if (!tighterThan(tier, current)) {
       throw new PolicyDenied(
-        `policy_tighten can only restrict: "${pattern}" is already ${current} — grants require the extension popup`,
+        `policy_tighten can only restrict: "${pattern}" is already ${current}. Grants require the extension popup`,
       );
     }
     const rules = existing
@@ -134,8 +134,8 @@ export async function ensureAllowed(method: GatedMethod, host: string | undefine
   const label = host ?? "this tab";
   const err = new PolicyDenied(
     tier === "deny"
-      ? `blocked by policy: ${label} is denied — change its tier from the reins extension popup`
-      : `blocked by policy: ${label} is read-only — grant full access from the reins extension popup`,
+      ? `blocked by policy: ${label} is denied. Change its tier from the reins extension popup`
+      : `blocked by policy: ${label} is read-only. Grant full access from the reins extension popup`,
   );
   err.meta = { host, tier };
   throw err;

@@ -1,4 +1,5 @@
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import { A, Column, H1, P, TEXT } from "@/components/md";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { CHANGELOGS, type PackageKey } from "@/lib/changelog";
@@ -21,41 +22,47 @@ function ChangelogLayout() {
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto min-h-dvh max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-pretty">Changelog</h1>
-        <p className="mt-3 max-w-[56ch] text-base/7 text-pretty text-muted-foreground">
-          Release notes for the reins CLI and Chrome extension, straight from each package's
-          changelog.
-        </p>
+      <main>
+        <Column className="py-10">
+          <p className={TEXT}>
+            <A href="/">&larr; reins.tech</A>
+          </p>
+          <div className="mt-10">
+            <H1>Changelog</H1>
+          </div>
+          <P>
+            Release notes for the reins CLI and the Chrome extension, straight from each package's
+            changelog.
+          </P>
 
-        <div className="mt-10 flex items-end justify-between gap-4 border-b border-border">
-          <nav className="-mb-px flex gap-6">
+          <p className={cn(TEXT, "mt-5 flex flex-wrap items-center gap-x-3")}>
             {TABS.map((tab) => (
               <Link
                 key={tab.key}
                 to={tab.to}
-                className={cn(
-                  "border-b-2 pb-3 text-base sm:text-sm",
+                className={
                   tab.key === activeKey
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }
               >
+                <span aria-hidden="true">[ </span>
                 {CHANGELOGS[tab.key].label}
+                <span aria-hidden="true"> ]</span>
               </Link>
             ))}
-          </nav>
-          <a
-            href={changelog.distribution.href}
-            target="_blank"
-            rel="noreferrer"
-            className="pb-3 font-mono text-xs text-muted-foreground hover:text-foreground max-sm:hidden"
-          >
-            {changelog.packageName}
-          </a>
-        </div>
+            <a
+              href={changelog.distribution.href}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto text-muted-foreground hover:text-foreground"
+            >
+              {changelog.packageName}
+            </a>
+          </p>
 
-        <Outlet />
+          <Outlet />
+        </Column>
       </main>
       <SiteFooter />
     </>

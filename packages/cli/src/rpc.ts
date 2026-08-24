@@ -14,7 +14,7 @@ export async function listAllTabs(bridge: BridgePort, browserId?: string): Promi
   const targets = browserId ? bridge.browsers.filter((b) => b.id === browserId) : bridge.browsers;
   if (browserId !== undefined && targets.length === 0) {
     const roster = bridge.browsers.map((b) => `${b.id} (${b.browser})`).join(", ");
-    throw new Error(`unknown browserId "${browserId}"${roster ? ` — connected: ${roster}` : ""}`);
+    throw new Error(`unknown browserId "${browserId}"${roster ? `. Connected: ${roster}` : ""}`);
   }
   const results = await Promise.all(
     targets.map(async (b) => {

@@ -1,22 +1,26 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  AppWindow,
-  Braces,
-  Bug,
-  KeyRound,
-  MousePointerClick,
-  ScanSearch,
-  ShieldCheck,
-} from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { BrowserMock } from "@/components/browser-mock";
 import { CopyCommand } from "@/components/copy-command";
-import { Hero } from "@/components/hero";
-import { IdeasSection } from "@/components/ideas-section";
+import {
+  Arrow,
+  Code,
+  Column,
+  H2,
+  Kbd,
+  Meta,
+  P,
+  Pre,
+  Shell,
+  Table,
+  TEXT,
+  Ul,
+} from "@/components/md";
 import { PopupMock } from "@/components/popup-mock";
-import { Reveal } from "@/components/reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { Button } from "@/components/ui/button";
 import { seo } from "@/lib/seo";
+import { INSTALL_COMMAND, REPO_URL } from "@/lib/site";
+import { cn } from "@/lib/utils";
 
 const CHROME_WEB_STORE_URL =
   "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
@@ -26,7 +30,7 @@ export const Route = createFileRoute("/")({
     ...seo({
       title: "reins: drive your real browser from your coding agent",
       description:
-        "reins lets coding agents drive the logged-in Chromium browser you already use, through a local CLI, daemon, and extension. Everything stays on 127.0.0.1.",
+        "reins is a CLI that hands your coding agent the logged-in Chromium browser you already use. A local daemon and a Manifest V3 extension, everything on 127.0.0.1. No cloud, no telemetry, MIT.",
       path: "/",
     }),
     scripts: [
@@ -51,271 +55,281 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: LandingPage,
+  component: Home,
 });
 
-const FEATURES = [
-  {
-    icon: AppWindow,
-    title: "Every tab, every browser",
-    description:
-      "List, open, focus, and close tabs across Chrome, Brave, Edge, Arc, and Dia. One daemon serves every connected browser.",
-  },
-  {
-    icon: MousePointerClick,
-    title: "Real interaction",
-    description:
-      "Click, type, fill, select, hover, scroll, press keys, and upload files, all addressed by stable element refs, not brittle selectors.",
-  },
-  {
-    icon: ScanSearch,
-    title: "See the page",
-    description:
-      "Snapshot interactive elements, read visible text, and capture screenshots your agent can open and reason about.",
-  },
-  {
-    icon: Bug,
-    title: "Debug signals",
-    description:
-      "Read a tab's recent console messages and network requests without ever opening DevTools.",
-  },
-  {
-    icon: Braces,
-    title: "An escape hatch",
-    description:
-      "Evaluate JavaScript in the page, or issue raw Chrome DevTools Protocol commands when the curated set isn't enough.",
-  },
-  {
-    icon: KeyRound,
-    title: "Your sessions intact",
-    description:
-      "It is your real profile, with logins, cookies, and state included. No separate automation browser to babysit.",
-  },
-];
-
-function SectionDivider() {
-  return (
-    <div
-      aria-hidden="true"
-      className="mx-auto h-px max-w-6xl bg-gradient-to-r from-transparent via-border to-transparent"
-    />
-  );
-}
-
-const SECURITY_POINTS = [
-  "Everything binds 127.0.0.1; nothing is reachable from the network.",
-  "Host-header validation blocks DNS rebinding, so web pages can't reach the daemon.",
-  "Only allowlisted chrome-extension:// origins may connect, an identity pages can't forge.",
-  "Chrome shows its native debugging banner whenever the extension is attached.",
-  "The popup's Disconnect toggle severs the connection instantly.",
-];
-
-function LandingPage() {
+/**
+ * One document, top to bottom.
+ *
+ * What it is, what it does, the loop, how it reaches a tab, who is allowed to
+ * touch what, the facts, the limits, the install line. No hero, no cards, no
+ * numbered boxes. The two mocks are the only pictures, and they sit in the
+ * flow where a README would put a screenshot.
+ */
+function Home() {
   return (
     <>
       <SiteHeader />
       <main>
-        <Hero />
+        <Column className="py-10">
+          <Meta lines={["karnstack", "reins", "2026 · MIT"]} />
 
-        <SectionDivider />
-
-        <section className="py-20 sm:py-24">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <Reveal>
-              <p className="font-mono text-sm tracking-wide text-muted-foreground uppercase">
-                How it works
-              </p>
-              <h2 className="mt-3 max-w-[35ch] text-4xl font-semibold tracking-tight text-balance">
-                Install once, drive everything
-              </h2>
-              <p className="mt-4 max-w-[56ch] text-pretty text-muted-foreground">
-                Three pieces, all yours: a CLI your agent calls, a daemon it auto-spawns, and an
-                extension that dials in. Nothing to keep running, nothing to register per agent.
-              </p>
-            </Reveal>
-            {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops list semantics once list-style is none */}
-            <ol role="list" className="mt-12 grid gap-x-8 gap-y-10 md:grid-cols-3">
-              <li>
-                <Reveal>
-                  <p className="font-mono text-sm text-muted-foreground">01</p>
-                  <h3 className="mt-2 font-semibold">Install the CLI</h3>
-                  <p className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                    The daemon ships inside and starts on demand; any command spawns it.
-                  </p>
-                  <CopyCommand command="npm i -g @karnstack/reins" className="mt-4" />
-                </Reveal>
-              </li>
-              <li>
-                <Reveal delay={100}>
-                  <p className="font-mono text-sm text-muted-foreground">02</p>
-                  <h3 className="mt-2 font-semibold">Add the extension</h3>
-                  <p className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                    Install it from the Chrome Web Store in every browser you want agents to reach.
-                    It discovers the daemon on its own and the toolbar icon turns green when
-                    connected.
-                  </p>
-                  <Button asChild variant="outline" className="mt-4">
-                    <a href={CHROME_WEB_STORE_URL} target="_blank" rel="noreferrer">
-                      Get the extension
-                    </a>
-                  </Button>
-                </Reveal>
-              </li>
-              <li>
-                <Reveal delay={200}>
-                  <p className="font-mono text-sm text-muted-foreground">03</p>
-                  <h3 className="mt-2 font-semibold">Teach your agent</h3>
-                  <p className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                    The skill teaches any coding agent the command loop. From here, the agent
-                    drives.
-                  </p>
-                  <CopyCommand command="npx skills add karnstack/reins" className="mt-4" />
-                </Reveal>
-              </li>
-            </ol>
+          <div className="mt-16">
+            <h1 className={cn(TEXT, "font-semibold tracking-wide text-balance uppercase")}>
+              <span aria-hidden="true" className="mr-2 text-muted-foreground select-none">
+                #
+              </span>
+              Drive the browser you are already signed in to
+            </h1>
           </div>
-        </section>
+          <P>
+            reins is a CLI that hands your coding agent the real Chromium browser you already use.
+            Claude Code, Cursor, Codex, anything with a shell. The logins, the cookies and the
+            sessions are already there, because it is your browser. No debug profile, no launch
+            flags, no MCP server to register.
+          </P>
 
-        <SectionDivider />
+          <CopyCommand command={INSTALL_COMMAND} className={cn(TEXT, "mt-5 max-w-[68ch]")} />
+          <P muted>
+            then add the{" "}
+            <a
+              href={CHROME_WEB_STORE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4 hover:text-primary"
+            >
+              extension
+            </a>{" "}
+            in every browser you want agents to reach
+          </P>
 
-        <section className="py-20 sm:py-24">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-            <Reveal>
-              <h2 className="max-w-[35ch] text-4xl font-semibold tracking-tight text-balance">
-                Everything an agent needs to work a page
-              </h2>
-              <p className="mt-4 max-w-[56ch] text-pretty text-muted-foreground">
-                A small, curated command set covers the whole loop: look at the page, act on it,
-                verify the result.
-              </p>
-            </Reveal>
-            <dl className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {FEATURES.map((feature, i) => (
-                <Reveal key={feature.title} delay={(i % 3) * 100}>
-                  <dt className="flex items-center gap-3 font-semibold">
-                    <feature.icon
-                      aria-hidden="true"
-                      className="size-5 shrink-0 text-violet-600 dark:text-violet-400"
-                    />
-                    {feature.title}
-                  </dt>
-                  <dd className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-                    {feature.description}
-                  </dd>
-                </Reveal>
-              ))}
-            </dl>
-          </div>
-        </section>
+          <BrowserMock className="mt-10" />
 
-        <SectionDivider />
-
-        <IdeasSection />
-
-        <SectionDivider />
-
-        <section className="py-20 sm:py-24">
-          <div className="mx-auto grid max-w-6xl items-center gap-x-12 gap-y-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <Reveal>
-              <p className="font-mono text-sm tracking-wide text-muted-foreground uppercase">
-                Trust
-              </p>
-              <h2 className="mt-3 max-w-[35ch] text-4xl font-semibold tracking-tight text-balance">
-                You hold the reins
-              </h2>
-              <p className="mt-4 max-w-[56ch] text-pretty text-muted-foreground">
-                Every site your agent touches resolves to a permission tier — deny, read-only, or
-                full. The check runs inside the extension, the one place no process on your machine
-                can reach around, so even a misbehaving agent can't skip it.
-              </p>
-              <p className="mt-4 max-w-[56ch] text-pretty text-muted-foreground">
-                Granting more access takes a click in the extension popup — a user gesture no agent
-                can fake from a shell. The CLI can inspect and tighten the policy, never loosen it.
-              </p>
-              <p className="mt-4 text-sm">
-                <Link
-                  to="/docs/permissions"
-                  className="font-medium text-foreground underline underline-offset-3 decoration-foreground/30 hover:decoration-foreground"
-                >
-                  How site permissions work
-                </Link>
-              </p>
-            </Reveal>
-            <Reveal delay={150} className="flex justify-center lg:justify-end">
-              <PopupMock />
-            </Reveal>
-          </div>
-        </section>
-
-        <SectionDivider />
-
-        <section className="py-20 sm:py-24">
-          <div className="mx-auto grid max-w-6xl gap-x-12 gap-y-10 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <Reveal>
-              <h2 className="max-w-[35ch] text-4xl font-semibold tracking-tight text-balance">
-                Local by design
-              </h2>
-              <p className="mt-4 max-w-[56ch] text-pretty text-muted-foreground">
-                reins has no cloud half. The extension talks to one thing, your own daemon on
-                127.0.0.1, and collects nothing, for anyone. The whole stack is open source and
-                auditable.
-              </p>
-              <p className="mt-4 text-sm">
-                <Link
-                  to="/docs/security"
-                  className="font-medium text-foreground underline underline-offset-3 decoration-foreground/30 hover:decoration-foreground"
-                >
-                  Read the security model
-                </Link>
-              </p>
-            </Reveal>
-            <Reveal delay={100}>
-              {/* biome-ignore lint/a11y/noRedundantRoles: Safari drops list semantics once list-style is none */}
-              <ul role="list" className="space-y-4">
-                {SECURITY_POINTS.map((point) => (
-                  <li key={point} className="flex items-start gap-3">
-                    <ShieldCheck
-                      aria-hidden="true"
-                      className="size-5 shrink-0 text-violet-600 dark:text-violet-400"
-                    />
-                    <p className="text-base/6 text-pretty text-muted-foreground sm:text-sm/5">
-                      {point}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </Reveal>
-          </div>
-        </section>
-
-        <SectionDivider />
-
-        <section className="relative isolate overflow-hidden py-20 sm:py-28">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 [background:radial-gradient(42rem_26rem_at_50%_120%,--alpha(var(--color-primary)/12%),transparent_60%)] dark:[background:radial-gradient(42rem_26rem_at_50%_120%,--alpha(var(--color-primary)/20%),transparent_62%)]"
-          />
-          <div className="mx-auto max-w-6xl px-4 text-center sm:px-6 lg:px-8">
-            <Reveal>
-              <h2 className="mx-auto max-w-[30ch] font-display text-5xl font-semibold tracking-tight text-balance">
-                Hand your agent the reins
-              </h2>
-              <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-muted-foreground">
-                Two installs and a skill: your agent is driving your browser in under a minute.
-              </p>
-              <div className="mt-8 flex justify-center">
-                <CopyCommand command="npm i -g @karnstack/reins" />
-              </div>
-              <div className="mt-6">
-                <Button asChild variant="outline" size="lg">
-                  <Link to="/docs">Read the docs</Link>
-                </Button>
-              </div>
-            </Reveal>
-          </div>
-        </section>
+          <WhatItDoes />
+          <Loop />
+          <HowItWorks />
+          <Permissions />
+          <Facts />
+          <Limits />
+          <Install />
+        </Column>
       </main>
       <SiteFooter />
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+function WhatItDoes() {
+  return (
+    <>
+      <H2 id="what-it-does">What it does</H2>
+      <Ul>
+        <li>
+          Every tab, every browser. List, open, focus and close tabs across Chrome, Brave, Edge, Arc
+          and Dia. One daemon serves every browser that connects to it.
+        </li>
+        <li>
+          Act on the page. Click, type, fill, select, hover, scroll, press keys, upload files,
+          answer dialogs, resize the window.
+        </li>
+        <li>
+          Refs, not selectors. <Code>reins snapshot</Code> lists the interactive elements with
+          stable refs, and commands act by ref. A CSS <Code>--selector</Code> is there when you need
+          it.
+        </li>
+        <li>Read the page. Visible text, and screenshots your agent can open and reason about.</li>
+        <li>
+          Console and network, without opening DevTools. Recent messages and requests, filtered by
+          level, age or URL.
+        </li>
+        <li>
+          An escape hatch. <Code>reins eval</Code> runs JavaScript in the page.{" "}
+          <Code>reins cdp</Code> sends a raw Chrome DevTools Protocol command when the curated set
+          is not enough.
+        </li>
+        <li>
+          Site permissions. Every host resolves to deny, read or full, and the extension enforces it
+          before a command touches a tab.
+        </li>
+        <li>
+          An audit trail. Every command the daemon runs, and every one the policy blocks, appends
+          one line to <Code>~/.reins/logs</Code>, with the values redacted.
+        </li>
+      </Ul>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+const LOOP_LINES = [
+  "$ reins snapshot",
+  '  e3: input "Email"',
+  '  e7: button "Sign in"',
+  '$ reins type --ref e3 --text "you@work.dev"',
+  "$ reins click --ref e7",
+  "$ reins text",
+  "  Signed in as you@work.dev",
+];
+
+function Loop() {
+  return (
+    <>
+      <H2 id="loop">The loop</H2>
+      <P>
+        Every page interaction is the same three beats: look, act, check. Every command takes{" "}
+        <Code>--tab &lt;id&gt;</Code> (the active tab by default), <Code>--browser &lt;id&gt;</Code>{" "}
+        (only when more than one browser is connected) and <Code>--json</Code>.
+      </P>
+      <Shell lines={LOOP_LINES} />
+      <Arrow href="/docs/commands">Full command reference</Arrow>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+/*
+ * The whole path from a shell to a tab, drawn as one line. Nothing on it
+ * leaves the machine, which is the thing worth showing.
+ */
+const PATH = `your agent            your machine                  your browser
+shells out            daemon, starts on demand      extension, MV3
+reins <cmd>  ───────► 127.0.0.1  ──────────────────► chrome.debugger, CDP`;
+
+const PATH_LABEL =
+  "Your agent shells out to the reins CLI. The CLI talks to a daemon on 127.0.0.1, which starts on demand. The daemon holds a WebSocket to a Manifest V3 extension, which acts on your tabs through the Chrome DevTools Protocol.";
+
+function HowItWorks() {
+  return (
+    <>
+      <H2 id="how-it-works">How it works</H2>
+      <P>
+        Three pieces with one narrow contract between them, and all three run on your machine. The
+        daemon ships inside the CLI and starts on demand, so there is nothing to keep running and
+        nothing to register per agent.
+      </P>
+      <Pre label={PATH_LABEL}>{PATH}</Pre>
+      <P>
+        The extension finds the daemon by probing a small set of localhost ports, and authenticates
+        by its <Code>chrome-extension://&lt;id&gt;</Code> origin, a header the browser stamps itself
+        and a page cannot forge. Chrome shows its native debugging banner the whole time it is
+        attached.
+      </P>
+      <Arrow href="/docs/architecture">How the three pieces fit together</Arrow>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+function Permissions() {
+  return (
+    <>
+      <H2 id="permissions">Site permissions</H2>
+      <P>
+        Every site your agent touches resolves to one of three tiers. The check lives in the
+        extension, the one place no process on your machine can reach around, so a misbehaving agent
+        cannot skip it.
+      </P>
+      <Table
+        rows={[
+          ["deny", "Nothing. Commands fail, and the site's tabs are redacted from reins tabs."],
+          [
+            "read",
+            "Reading only. snapshot, text, screenshot, console, network and wait. Anything that acts on the page is blocked.",
+          ],
+          ["full", "Everything, including navigation, interaction, eval and raw CDP."],
+        ]}
+      />
+      <P>
+        Granting more access takes a click in the extension popup. That is a user gesture, and an
+        agent in your shell cannot perform one. From the CLI, <Code>reins policy</Code> can inspect
+        the policy and tighten it. It can never loosen it.
+      </P>
+      <PopupMock className="mt-10 font-sans" />
+      <Arrow href="/docs/permissions">How site permissions work</Arrow>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+function Facts() {
+  return (
+    <>
+      <H2 id="facts">Facts</H2>
+      <Table
+        rows={[
+          ["License", "MIT"],
+          ["Install", <Code key="i">{INSTALL_COMMAND}</Code>],
+          ["Browsers", "Chrome, Brave, Edge, Arc, Dia. Any Chromium that takes MV3 extensions."],
+          ["Agents", "Claude Code, Cursor, Codex, Copilot, Gemini CLI. Anything with a shell."],
+          ["Binds", <Code key="b">127.0.0.1</Code>],
+          ["Hosted service", "None"],
+          ["Account", "None"],
+          ["Telemetry", "None. No analytics, no tracking, no remote code."],
+          ["Version", "0.x. Commands and output can still change."],
+        ]}
+      />
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+function Limits() {
+  return (
+    <>
+      <H2 id="limits">Limits</H2>
+      <Table
+        rows={[
+          ["Browsers", "Chromium only. No Firefox, no WebKit."],
+          ["Headless", "Not supported. reins drives a browser you already have open."],
+          [
+            "CI",
+            "Not the target. Use Playwright or agent-browser for a machine with nobody at it.",
+          ],
+          [
+            "Two browsers",
+            <>
+              Supported, but commands then need <Code>--browser &lt;id&gt;</Code>. reins never
+              guesses which one you meant.
+            </>,
+          ],
+          ["Releases", "0.x. Commands, flags and output can still change."],
+        ]}
+      />
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+
+function Install() {
+  return (
+    <>
+      <H2 id="install">Install</H2>
+      <Shell
+        lines={[`$ ${INSTALL_COMMAND}`, "$ npx skills add karnstack/reins", "$ reins status"]}
+      />
+      <P>
+        The first line installs the CLI, and the daemon rides along inside it. The second teaches
+        any agent with skill support the command set; the rest can read <Code>reins help</Code>.
+        Then install the extension in every browser you want agents to reach, and{" "}
+        <Code>reins status</Code> shows what is connected.
+      </P>
+      <P muted>
+        No Chrome Web Store access? <Code>reins extension</Code> stages the bundled copy for
+        Chrome's Load unpacked, with no <Code>reins allow</Code> step.
+      </P>
+      <P>
+        Press <Kbd>&#8984;K</Kbd> anywhere on this site to search the docs.
+      </P>
+      <Arrow href="/docs">Setup guide</Arrow>
+      <Arrow href={REPO_URL}>Source</Arrow>
     </>
   );
 }
