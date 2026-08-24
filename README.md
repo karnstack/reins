@@ -26,9 +26,9 @@
   </picture>
 </p>
 
-reins gives your coding agent (Claude Code, Cursor, Codex, Copilot — anything
-with a shell) control of the real, logged-in Chromium browser you already use,
-through a CLI and a Manifest V3 extension. No MCP server to register, no debug
+reins gives your coding agent control of the real, logged-in Chromium browser
+you already use, through a CLI and a Manifest V3 extension. Claude Code, Cursor,
+Codex, Copilot: anything with a shell. No MCP server to register, no debug
 profile, no launch flags, no tokens.
 
 ## Quick start
@@ -38,35 +38,45 @@ npm i -g @karnstack/reins        # the CLI (daemon included, starts on demand)
 npx skills add karnstack/reins   # the skill, into your agent(s) of choice
 ```
 
-Then install the extension in every Chromium browser you want agents to reach —
-Chrome, Brave, Edge, Arc, Dia:
+Then install the extension in every Chromium browser you want agents to reach:
+Chrome, Brave, Edge, Arc, Dia.
 
-**[Add reins from the Chrome Web Store](https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo)** — it finds the local daemon and connects on its own.
+**[Add reins from the Chrome Web Store](https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo)**. It finds the local daemon and connects on its own.
 
-No store access? `reins extension` installs it via Load unpacked instead — see
-[docs/SIDELOAD.md](docs/SIDELOAD.md). That's the whole setup; `reins status`
-shows what's connected.
+No store access? `reins extension` installs it through Load unpacked instead.
+See [docs/SIDELOAD.md](docs/SIDELOAD.md). That is the whole setup, and
+`reins status` shows what is connected.
 
 ## The loop
 
 ```bash
-reins snapshot              # list interactive elements with refs → e5: button "Submit"
-reins click --ref e5        # act by ref
-reins text                  # verify (or: reins screenshot → prints an image path)
+reins snapshot              # look: interactive elements with refs → e5: button "Submit"
+reins click --ref e5        # act: by ref
+reins text                  # check: or reins screenshot, which prints an image path
 ```
 
-Every command takes `--tab <id>` (default: active tab), `--browser <id>` (only
-when several are connected), and `--json`. `reins help` is self-describing;
-`reins cdp` is the escape hatch to the full Chrome DevTools Protocol.
+Shared flags, on the commands that act on a page or a tab: `--tab <id>`
+(default: active tab), `--browser <id>` (only when several are connected), and
+`--json` for raw output. `reins help` is self-describing, and
+`reins cdp` reaches the full Chrome DevTools Protocol when the curated commands
+are not enough.
+
+## Limits
+
+Chromium only, so no Firefox and no WebKit. No headless mode: reins drives a
+browser you already have open, which also makes it the wrong tool for CI. With
+two browsers connected, commands need `--browser <id>`, because reins never
+guesses which one you meant. Releases are still `0.x`, so commands, flags, and
+output can change.
 
 ## Learn more
 
 The full story lives on the site:
 
-- **[Docs](https://reins.tech/docs)** — getting started, architecture, and the complete command reference
-- **[How it compares](https://reins.tech/docs/comparison)** — vs agent-browser, dev3000, and playwright-mcp
-- **[Security](https://reins.tech/docs/security)** — per-site permissions, `127.0.0.1`-only binding, and the threat model
-- **[Site permissions](https://reins.tech/docs/permissions)** — the `deny` / `read` / `full` tiers and how to tighten them
+- **[Docs](https://reins.tech/docs)**: getting started, architecture, and the complete command reference
+- **[How it compares](https://reins.tech/docs/comparison)**: reins next to agent-browser, dev3000, and playwright-mcp
+- **[Security](https://reins.tech/docs/security)**: per-site permissions, `127.0.0.1`-only binding, and the threat model
+- **[Site permissions](https://reins.tech/docs/permissions)**: the `deny`, `read`, and `full` tiers, and how to tighten them
 
 Report vulnerabilities privately via [GitHub security advisories](https://github.com/karnstack/reins/security/advisories/new).
 

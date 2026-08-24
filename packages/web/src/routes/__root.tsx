@@ -24,7 +24,7 @@ export const Route = createRootRoute({
       { property: "og:image:height", content: "630" },
       {
         property: "og:image:alt",
-        content: "reins — drive your real browser from your coding agent",
+        content: "reins: drive your real browser from your coding agent",
       },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#ffffff" },
@@ -53,7 +53,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static theme bootstrap */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="bg-background font-sans text-foreground">
+      <body className="bg-background font-mono text-foreground">
         <div className="isolate">{children}</div>
         <Scripts />
       </body>

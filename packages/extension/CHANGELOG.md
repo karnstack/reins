@@ -4,7 +4,7 @@
 
 ### Minor Changes
 
-- 65ce7f3: `reins audit` — a per-action audit trail. The extension stamps each response with the resolved host, permission tier, and tab; the daemon writes one redacted JSONL line per action (policy denials included) to `~/.reins/logs/audit-YYYY-MM-DD.jsonl`, pruned after 30 days. Value-bearing params (typed text, fill values, eval code, CDP payloads) are redacted before anything reaches disk.
+- 65ce7f3: `reins audit`, a per-action audit trail. The extension stamps each response with the resolved host, permission tier, and tab; the daemon writes one redacted JSONL line per action (policy denials included) to `~/.reins/logs/audit-YYYY-MM-DD.jsonl`, pruned after 30 days. Value-bearing params (typed text, fill values, eval code, CDP payloads) are redacted before anything reaches disk.
 
 ## 0.3.0
 
@@ -21,5 +21,5 @@
 
 - f6b30a4: New `reins extension` command: install the extension without the Chrome Web
   Store. The npm package now bundles the extension build with a key-pinned,
-  pre-allowlisted id — `reins extension` stages it at `~/.reins/extension` for
+  pre-allowlisted id. `reins extension` stages it at `~/.reins/extension` for
   Chrome's Load unpacked, no `reins allow` step. See docs/SIDELOAD.md.

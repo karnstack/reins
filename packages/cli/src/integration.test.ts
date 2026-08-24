@@ -78,7 +78,7 @@ function standInExtension(port: number): Promise<WebSocket> {
               error: {
                 code: "policy_denied",
                 message:
-                  "blocked by policy: x.com is read-only — grant full access from the reins extension popup",
+                  "blocked by policy: x.com is read-only. Grant full access from the reins extension popup",
               },
             }),
           );

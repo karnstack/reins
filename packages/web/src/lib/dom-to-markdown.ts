@@ -14,6 +14,10 @@ function escapeCell(text: string): string {
 function inline(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
   if (!(node instanceof HTMLElement)) return "";
+  /* Decoration, not content: the `#` before a heading and the brackets around
+     a nav link are drawn for the eye and are already implied by the markdown
+     this produces. Without this, an H2 serializes as "## ## Commands". */
+  if (node.getAttribute("aria-hidden") === "true") return "";
   const kids = () => Array.from(node.childNodes).map(inline).join("");
   switch (node.tagName) {
     case "BUTTON":

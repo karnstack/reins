@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
-    "build": "vite build && pagefind --site dist/client",
+    "build": "vite build && pagefind --site dist/client && node scripts/check-prose.mjs",
+    "check:prose": "node scripts/check-prose.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy"

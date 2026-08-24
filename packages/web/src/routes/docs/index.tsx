@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { CodeBlock } from "@/components/code-block";
+import { createFileRoute } from "@tanstack/react-router";
+import { A, Arrow, Code, H1, H2, P, Shell } from "@/components/md";
 import { seo } from "@/lib/seo";
+import { INSTALL_COMMAND } from "@/lib/site";
 
 const CHROME_WEB_STORE_URL =
   "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
@@ -19,73 +20,71 @@ export const Route = createFileRoute("/docs/")({
 
 function GettingStarted() {
   return (
-    <article className="prose max-w-[70ch]">
-      <h1>Getting started</h1>
-      <p>
-        reins gives coding agents (Claude Code, Cursor, Codex, Copilot, anything with a shell) full
-        control of your actual, logged-in Chromium browser through a CLI and a Manifest V3
-        extension. This page takes you from nothing to an agent driving a tab.
-      </p>
+    <>
+      <H1>Getting started</H1>
+      <P>
+        reins gives coding agents full control of your actual, logged-in Chromium browser, through a
+        CLI and a Manifest V3 extension. Claude Code, Cursor, Codex, Copilot, anything with a shell.
+        This page takes you from nothing to an agent driving a tab.
+      </P>
 
-      <h2>1. Install the CLI</h2>
-      <CodeBlock code="npm i -g @karnstack/reins" />
-      <p>
-        This installs the <code>reins</code> command and the daemon it manages. The daemon is
-        invisible plumbing: any command starts it on demand, it binds to <code>127.0.0.1</code>, and{" "}
-        <code>reins kill</code> stops it. There is nothing to configure and nothing to keep running.
-      </p>
+      <H2 id="install-the-cli">1. Install the CLI</H2>
+      <Shell lines={[`$ ${INSTALL_COMMAND}`]} />
+      <P>
+        This installs the <Code>reins</Code> command and the daemon it manages. You never run the
+        daemon yourself: any command starts it on demand, it binds <Code>127.0.0.1</Code>, and{" "}
+        <Code>reins kill</Code> stops it. There is nothing to configure and nothing to keep running.
+      </P>
 
-      <h2>2. Add the extension</h2>
-      <p>
-        Install the{" "}
-        <a href={CHROME_WEB_STORE_URL} target="_blank" rel="noreferrer">
-          reins extension from the Chrome Web Store
-        </a>{" "}
-        in every Chromium browser you want agents to reach: Chrome, Brave, Edge, Arc, and Dia all
-        work. The extension finds the daemon on its own through localhost port discovery; when the
-        toolbar popover turns green, it is connected.
-      </p>
-      <p>
-        Prefer to skip the store? <code>reins extension</code> stages the bundled copy for Chrome's
-        Load unpacked; the walkthrough is on{" "}
-        <Link to="/docs/sideload">Install without the store</Link>.
-      </p>
-      <p>Working from a dev build instead? Load the unpacked extension and allow its ID once:</p>
-      <CodeBlock code="reins allow <extension-id>" />
+      <H2 id="add-the-extension">2. Add the extension</H2>
+      <P>
+        Install the <A href={CHROME_WEB_STORE_URL}>reins extension from the Chrome Web Store</A> in
+        every Chromium browser you want agents to reach. Chrome, Brave, Edge, Arc and Dia all work.
+        The extension finds the daemon on its own through localhost port discovery, and the toolbar
+        popover turns green when it is connected.
+      </P>
+      <P>
+        Prefer to skip the store? <Code>reins extension</Code> stages the bundled copy for Chrome's
+        Load unpacked. The walkthrough is on <A href="/docs/sideload">Install without the store</A>.
+      </P>
+      <P>Working from a dev build instead? Load the unpacked extension and allow its ID once:</P>
+      <Shell lines={["$ reins allow <extension-id>"]} />
 
-      <h2>3. Teach your agent</h2>
-      <CodeBlock code="npx skills add karnstack/reins" />
-      <p>
+      <H2 id="teach-your-agent">3. Teach your agent</H2>
+      <Shell lines={["$ npx skills add karnstack/reins"]} />
+      <P>
         The skill teaches agents the command set and the loop below. Agents without skill support
-        can run <code>reins help</code>; the CLI is self-describing.
-      </p>
+        can run <Code>reins help</Code>; the CLI is self-describing.
+      </P>
 
-      <h2>4. Verify</h2>
-      <CodeBlock
-        code={`reins status   # daemon state, port, connected browsers
-reins tabs     # every tab across every connected browser
-reins doctor   # diagnostic checks when something looks off`}
+      <H2 id="check">4. Check</H2>
+      <Shell
+        lines={[
+          "$ reins status   # daemon state, port, connected browsers",
+          "$ reins tabs     # every tab across every connected browser",
+          "$ reins doctor   # diagnostic checks when something looks off",
+        ]}
       />
 
-      <h2>The loop agents use</h2>
-      <p>Every page interaction follows the same three-beat rhythm: look, act, verify.</p>
-      <CodeBlock
-        code={`reins snapshot                      # interactive elements with refs
-  e3: input "Email"
-  e7: button "Sign in"
-reins type --ref e3 --text "you@work.dev"
-reins click --ref e7                # act by ref
-reins text                          # verify, or reins screenshot`}
+      <H2 id="the-loop">The loop agents use</H2>
+      <P>Every page interaction is the same three beats: look, act, check.</P>
+      <Shell
+        lines={[
+          "$ reins snapshot",
+          '  e3: input "Email"',
+          '  e7: button "Sign in"',
+          '$ reins type --ref e3 --text "you@work.dev"',
+          "$ reins click --ref e7",
+          "$ reins text",
+        ]}
       />
-      <p>
-        Every command accepts <code>--tab &lt;id&gt;</code> (defaults to the active tab),{" "}
-        <code>--browser &lt;id&gt;</code> (only needed when several browsers are connected), and{" "}
-        <code>--json</code> for raw output.
-      </p>
-      <p>
-        Next: the full <Link to="/docs/commands">command reference</Link>, or how the pieces fit in{" "}
-        <Link to="/docs/architecture">architecture</Link>.
-      </p>
-    </article>
+      <P>
+        The commands that act on a page or a tab share three flags: <Code>--tab &lt;id&gt;</Code>{" "}
+        (the active tab by default), <Code>--browser &lt;id&gt;</Code> (only needed when several
+        browsers are connected) and <Code>--json</Code> for raw output.
+      </P>
+      <Arrow href="/docs/commands">Full command reference</Arrow>
+      <Arrow href="/docs/architecture">How the pieces fit together</Arrow>
+    </>
   );
 }
