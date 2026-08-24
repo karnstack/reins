@@ -1,10 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { A, Arrow, Code, H1, H2, P, Shell } from "@/components/md";
 import { seo } from "@/lib/seo";
-import { INSTALL_COMMAND } from "@/lib/site";
-
-const CHROME_WEB_STORE_URL =
-  "https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo";
+import { CHROME_WEB_STORE_URL, INSTALL_COMMAND, SKILL_COMMAND } from "@/lib/site";
 
 export const Route = createFileRoute("/docs/")({
   head: () => ({
@@ -36,7 +33,19 @@ function GettingStarted() {
         <Code>reins kill</Code> stops it. There is nothing to configure and nothing to keep running.
       </P>
 
-      <H2 id="add-the-extension">2. Add the extension</H2>
+      {/* Before the extension, not after it. The extension step sends the
+          reader to the Chrome Web Store, and the ones who do not come back
+          are exactly the ones running an agent that does not know the
+          commands exist. */}
+      <H2 id="teach-your-agent">2. Teach your agent</H2>
+      <Shell lines={[`$ ${SKILL_COMMAND}`]} />
+      <P>
+        The skill teaches agents the command set and the loop below. This is the step people skip,
+        and skipping it is why an agent with reins installed still says it cannot open a browser.
+        Agents without skill support can run <Code>reins help</Code>; the CLI is self-describing.
+      </P>
+
+      <H2 id="add-the-extension">3. Add the extension</H2>
       <P>
         Install the <A href={CHROME_WEB_STORE_URL}>reins extension from the Chrome Web Store</A> in
         every Chromium browser you want agents to reach. Chrome, Brave, Edge, Arc and Dia all work.
@@ -49,13 +58,6 @@ function GettingStarted() {
       </P>
       <P>Working from a dev build instead? Load the unpacked extension and allow its ID once:</P>
       <Shell lines={["$ reins allow <extension-id>"]} />
-
-      <H2 id="teach-your-agent">3. Teach your agent</H2>
-      <Shell lines={["$ npx skills add karnstack/reins"]} />
-      <P>
-        The skill teaches agents the command set and the loop below. Agents without skill support
-        can run <Code>reins help</Code>; the CLI is self-describing.
-      </P>
 
       <H2 id="check">4. Check</H2>
       <Shell

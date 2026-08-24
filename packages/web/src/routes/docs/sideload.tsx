@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { A, Code, H1, H2, Ol, P, Shell, Ul } from "@/components/md";
 import { seo } from "@/lib/seo";
-import { INSTALL_COMMAND } from "@/lib/site";
+import { CHROME_WEB_STORE_URL, INSTALL_COMMAND } from "@/lib/site";
 
 export const Route = createFileRoute("/docs/sideload")({
   head: () => ({
@@ -21,11 +21,8 @@ function SideloadPage() {
       <H1>Install without the store</H1>
       <P>
         The npm package carries a full copy of the reins extension. If you cannot (or would rather
-        not) install from the{" "}
-        <A href="https://chromewebstore.google.com/detail/reins/hnjcfgochepemjndccfblpmfmlblkofo">
-          Chrome Web Store
-        </A>
-        , one command stages it for Chrome's Load unpacked. No repo checkout, no build, no{" "}
+        not) install from the <A href={CHROME_WEB_STORE_URL}>Chrome Web Store</A>, one command
+        stages it for Chrome's Load unpacked. No repo checkout, no build, no{" "}
         <Code>reins allow</Code>.
       </P>
 
