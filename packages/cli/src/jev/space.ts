@@ -1,0 +1,252 @@
+// Port of browser-use/jev-ultrafast model.py action_space/choose (MIT), with
+// one fill question per text field instead of a text model.
+import type { JevAction, JevObservation } from "@reins/protocol";
+import type { ChoiceQuestion, Questions } from "@typesafe-ai/sdk";
+import { type JevBody, validateChoice } from "./client.js";
+import { FILL, NEXT_ACTION, TARGET } from "./prompts.js";
+import type { HistoryEntry } from "./types.js";
+
+export type TargetOp = "CLICK" | "TYPE_TEXT" | "SELECT";
+export type ControlOp = "SCROLL_DOWN" | "SCROLL_UP" | "WAIT";
+export type Operation = TargetOp | ControlOp | "DONE" | "BLOCKED";
+
+export const MAX_FILL_HEADS = 8;
+
+export interface SpaceElement {
+  index: string;
+  label: string;
+  role?: string;
+  value?: string;
+  checked?: string;
+  selected?: string;
+  expanded?: string;
+  operations: TargetOp[];
+  options?: Array<{ index: string; label: string; value: string }>;
+}
+
+export interface ActionSpace {
+  elements: SpaceElement[];
+  targets: Partial<Record<TargetOp, Record<string, JevAction>>>;
+  controls: Partial<Record<ControlOp, JevAction>>;
+}
+
+export interface RequestPlan {
+  body: JevBody;
+  space: ActionSpace;
+  operations: string[];
+  fillHeads: string[];
+  fillNames: string[];
+}
+
+export interface Decision {
+  operation: Operation;
+  action?: JevAction;
+  targetIndex?: string;
+  /** Fill name; null = Jev chose NONE; undefined = no fill question was asked. */
+  fill?: string | null;
+  confidence: number;
+}
+
+const OPS: Record<"click" | "fill" | "select", TargetOp> = {
+  click: "CLICK",
+  fill: "TYPE_TEXT",
+  select: "SELECT",
+};
+
+const OP_LABELS: Record<TargetOp, string> = {
+  CLICK: "Click an element, button, menu option, autocomplete suggestion, or calendar day.",
+  TYPE_TEXT: "Enter or replace text in an editable field with one of the values the user supplied.",
+  SELECT: "Select an observed dropdown value.",
+};
+
+/** JSON-safe copy (drops undefined), as the SDK's state type requires. */
+const json = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+/** What a target question shows for one candidate; only the states the element has. */
+function targetCriterion(index: string, a: JevAction): Record<string, string> {
+  const out: Record<string, string> = {
+    element: `[${index}] ${a.label}`,
+    current_value: a.current_value ?? a.value ?? "",
+  };
+  for (const key of ["role", "checked", "selected", "expanded"] as const) {
+    const v = a[key];
+    if (v !== undefined) out[key] = v;
+  }
+  return out;
+}
+
+export function actionSpace(actions: JevAction[]): ActionSpace {
+  const elements: SpaceElement[] = [];
+  const indices = new Map<number, string>();
+  const targets: ActionSpace["targets"] = {};
+  const controls: ActionSpace["controls"] = {};
+  for (const action of actions) {
+    if (action.kind === "scroll" || action.kind === "wait") {
+      controls[action.id.toUpperCase() as ControlOp] = action;
+      continue;
+    }
+    if (action.node === undefined) continue;
+    let index = indices.get(action.node);
+    if (index === undefined) {
+      index = String(elements.length + 1);
+      indices.set(action.node, index);
+      const { role, checked, selected, expanded } = action;
+      elements.push({
+        index,
+        label: action.label.split(" → ")[0] ?? action.label,
+        operations: [],
+        ...(role !== undefined ? { role } : {}),
+        ...(checked !== undefined ? { checked } : {}),
+        ...(selected !== undefined ? { selected } : {}),
+        ...(expanded !== undefined ? { expanded } : {}),
+        ...(action.kind === "select"
+          ? { value: action.current_value ?? "", options: [] }
+          : action.value !== undefined
+            ? { value: action.value }
+            : {}),
+      });
+    }
+    const element = elements[Number(index) - 1] as SpaceElement;
+    const op = OPS[action.kind];
+    if (!element.operations.includes(op)) element.operations.push(op);
+    let target = index;
+    if (action.kind === "select") {
+      element.options ??= [];
+      target = `${index}:${element.options.length + 1}`;
+      element.options.push({ index: target, label: action.label, value: action.value ?? "" });
+    }
+    targets[op] ??= {};
+    targets[op][target] = action;
+  }
+  return { elements, targets, controls };
+}
+
+function stateOf(
+  obs: JevObservation,
+  space: ActionSpace,
+  history: HistoryEntry[],
+  fills: Record<string, string>,
+): unknown {
+  return json({
+    page: { url: obs.url, title: obs.title, text: obs.text },
+    elements: space.elements,
+    recent_actions: history.slice(-10).map((h) => ({
+      action: h.label,
+      kind: h.op,
+      fill: h.fill ?? null,
+      page_changed: h.pageChanged,
+    })),
+    supplied_values: fills,
+  });
+}
+
+function fillQuestion(
+  goal: string,
+  index: string,
+  space: ActionSpace,
+  fills: Record<string, string>,
+): ChoiceQuestion {
+  const field = space.targets.TYPE_TEXT?.[index];
+  const criteria: Record<string, string> = {};
+  for (const [name, value] of Object.entries(fills)) criteria[name] = `${name}: ${value}`;
+  criteria.NONE = "None of the supplied values belongs in this field.";
+  return {
+    type: "choice",
+    criteria,
+    instructions: json({
+      goal,
+      field: `[${index}] ${field?.label ?? ""}`,
+      current_value: field?.value ?? "",
+      rules: FILL,
+    }),
+  };
+}
+
+export function buildRequest(
+  obs: JevObservation,
+  goal: string,
+  history: HistoryEntry[],
+  fills: Record<string, string>,
+): RequestPlan {
+  const space = actionSpace(obs.actions);
+  const operations: Record<string, string> = {};
+  for (const op of ["CLICK", "TYPE_TEXT", "SELECT"] as const) {
+    if (space.targets[op]) operations[op] = OP_LABELS[op];
+  }
+  for (const [id, a] of Object.entries(space.controls)) operations[id] = a.label;
+  operations.DONE = "Every requirement is visibly satisfied.";
+  operations.BLOCKED = "No supported operation can progress.";
+
+  const questions: Questions = {
+    operation: { type: "choice", criteria: operations, instructions: { goal, rules: NEXT_ACTION } },
+  };
+  for (const [op, candidates] of Object.entries(space.targets)) {
+    questions[`${op.toLowerCase()}_target`] = {
+      type: "choice",
+      criteria: Object.fromEntries(
+        Object.entries(candidates).map(([index, a]) => [index, targetCriterion(index, a)]),
+      ),
+      instructions: { goal, operation: op, rules: [NEXT_ACTION, TARGET] },
+    };
+  }
+  const fillNames = Object.keys(fills);
+  const fillHeads =
+    fillNames.length === 0
+      ? []
+      : Object.keys(space.targets.TYPE_TEXT ?? {}).slice(0, MAX_FILL_HEADS);
+  for (const index of fillHeads)
+    questions[`fill_for_${index}`] = fillQuestion(goal, index, space, fills);
+  return {
+    body: { state: stateOf(obs, space, history, fills), questions },
+    space,
+    operations: Object.keys(operations),
+    fillHeads,
+    fillNames,
+  };
+}
+
+/** A second, rare request: the fill for a field beyond the first MAX_FILL_HEADS. */
+export function fillOnlyRequest(
+  obs: JevObservation,
+  goal: string,
+  history: HistoryEntry[],
+  fills: Record<string, string>,
+  index: string,
+): JevBody {
+  const space = actionSpace(obs.actions);
+  return {
+    state: stateOf(obs, space, history, fills),
+    questions: { [`fill_for_${index}`]: fillQuestion(goal, index, space, fills) },
+  };
+}
+
+export function interpretFill(
+  answers: Record<string, unknown>,
+  fillNames: string[],
+  index: string,
+): string | null {
+  const a = validateChoice(answers[`fill_for_${index}`], [...fillNames, "NONE"]);
+  return a.choice === "NONE" ? null : a.choice;
+}
+
+export function interpret(answers: Record<string, unknown>, plan: RequestPlan): Decision {
+  const op = validateChoice(answers.operation, plan.operations);
+  const operation = op.choice as Operation;
+  if (operation === "CLICK" || operation === "TYPE_TEXT" || operation === "SELECT") {
+    const candidates = plan.space.targets[operation] ?? {};
+    // Only the chosen operation's head can act; the others were speculative.
+    const t = validateChoice(answers[`${operation.toLowerCase()}_target`], Object.keys(candidates));
+    const decision: Decision = {
+      operation,
+      action: candidates[t.choice],
+      targetIndex: t.choice,
+      confidence: Math.min(op.confidence, t.confidence),
+    };
+    if (operation === "TYPE_TEXT" && plan.fillHeads.includes(t.choice)) {
+      decision.fill = interpretFill(answers, plan.fillNames, t.choice);
+    }
+    return decision;
+  }
+  const control = plan.space.controls[operation as ControlOp];
+  return { operation, ...(control ? { action: control } : {}), confidence: op.confidence };
+}
