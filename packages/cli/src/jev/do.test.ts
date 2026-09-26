@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditRecord } from "../audit.js";
 import type { BridgePort } from "../bridge.js";
+import { RpcBadRequest } from "../rpc.js";
 import { writeKey } from "./credentials.js";
 import { handleDo } from "./do.js";
 import { RunStore } from "./runs.js";
@@ -59,6 +60,35 @@ const doneAsk = () => async (body: AskBody) => {
   };
 };
 
+/** Clicks the first target on the first ask, then says DONE. */
+const clickThenDone = (onAsk?: (n: number) => void) => {
+  let n = 0;
+  return async (body: AskBody) => {
+    onAsk?.(n);
+    const op = n++ === 0 ? "CLICK" : "DONE";
+    const ids = Object.keys(body.questions.operation?.criteria ?? {});
+    const target = body.questions.click_target
+      ? Object.keys(body.questions.click_target.criteria)
+      : [];
+    return {
+      operation: {
+        choice: op,
+        confidence: 0.9,
+        probabilities: Object.fromEntries(ids.map((id) => [id, id === op ? 1 : 0])),
+      },
+      ...(target.length > 0
+        ? {
+            click_target: {
+              choice: target[0],
+              confidence: 0.9,
+              probabilities: Object.fromEntries(target.map((id, i) => [id, i === 0 ? 1 : 0])),
+            },
+          }
+        : {}),
+    };
+  };
+};
+
 const params = {
   goal: "find it",
   fills: {},
@@ -69,6 +99,70 @@ const params = {
 };
 
 describe("handleDo", () => {
+  it.each([
+    ["an uppercase fill name", { ...params, fills: { From: "Zurich" } }, /fills/],
+    ["maxSteps 0", { ...params, maxSteps: 0 }, /maxSteps/],
+    ["timeoutSec 1", { ...params, timeoutSec: 1 }, /timeoutSec/],
+  ])("rejects %s as a bad request naming the field", async (_name, bad, field) => {
+    const b = bridge();
+    const promise = handleDo(b, bad, {
+      runs: new RunStore(),
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+    });
+    await expect(promise).rejects.toBeInstanceOf(RpcBadRequest);
+    await expect(promise).rejects.toThrow(/^invalid reins do params: /);
+    await expect(promise).rejects.toThrow(field);
+    const message = await promise.catch((e: Error) => e.message);
+    expect(message).not.toContain("\n");
+    expect(b.requestFull).not.toHaveBeenCalled();
+  });
+
+  it("returns interrupted before its first observation when already aborted", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const b = bridge();
+    const ctrl = new AbortController();
+    ctrl.abort(new Error("daemon restarting"));
+    const r = await handleDo(b, params, {
+      runs: new RunStore(),
+      credentialsDir: dir,
+      signal: ctrl.signal,
+    });
+    expect(r).toMatchObject({
+      status: "interrupted",
+      reason: "daemon restarting",
+      steps: [],
+      step: 0,
+      maxSteps: 30,
+    });
+    expect(b.requestFull).not.toHaveBeenCalled();
+  });
+
+  it("pins the tab from the first observation and keeps it for every later call", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const b = bridge();
+    let n = 0;
+    (b.requestFull as ReturnType<typeof vi.fn>).mockImplementation(async (method: string) => ({
+      result: method === "jev_observe" ? OBS : { ok: true },
+      // A later reply claiming another tab must not move the run.
+      meta: { tabId: n++ === 0 ? 5 : 9, host: "x.com", tier: "full" },
+      browserId: "b1",
+    }));
+    const runs = new RunStore();
+    const r = await handleDo(b, params, {
+      runs,
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+      createAsk: () => clickThenDone() as never,
+    });
+    expect(r.status).toBe("done");
+    expect(runs.get("b1:5")).toBeDefined();
+    expect(runs.get("b1:9")).toBeUndefined();
+    const calls = (b.requestFull as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThan(1);
+    for (const [, payload] of calls.slice(1)) expect(payload).toMatchObject({ tabId: 5 });
+  });
+
   it("refuses without a key, pointing at both ways to add one", async () => {
     const r = await handleDo(bridge(), params, {
       runs: new RunStore(),
@@ -269,28 +363,7 @@ describe("handleDo", () => {
     writeKey(dir, "ts_live_abcd1234");
     const records: AuditRecord[] = [];
     const b = bridge();
-    const clickAsk = async (body: AskBody) => {
-      const ids = Object.keys(body.questions.operation?.criteria ?? {});
-      const target = body.questions.click_target
-        ? Object.keys(body.questions.click_target.criteria)
-        : [];
-      return {
-        operation: {
-          choice: "CLICK",
-          confidence: 0.9,
-          probabilities: Object.fromEntries(ids.map((id) => [id, id === "CLICK" ? 1 : 0])),
-        },
-        ...(target.length > 0
-          ? {
-              click_target: {
-                choice: target[0],
-                confidence: 0.9,
-                probabilities: Object.fromEntries(target.map((id, i) => [id, i === 0 ? 1 : 0])),
-              },
-            }
-          : {}),
-      };
-    };
+    const clickAsk = clickThenDone();
     (b.requestFull as ReturnType<typeof vi.fn>).mockImplementation(async (method: string) => {
       if (method === "jev_act") throw Object.assign(new Error("boom"), { browserId: "b1" });
       return { result: OBS, meta: { tabId: 5, host: "x.com", tier: "full" }, browserId: "b1" };
@@ -315,13 +388,14 @@ describe("handleDo", () => {
   it("reports interrupted with the abort reason and keeps the run for --continue", async () => {
     writeKey(dir, "ts_live_abcd1234");
     const ctrl = new AbortController();
-    ctrl.abort(new Error("daemon restarting"));
     const runs = new RunStore();
+    // The shutdown lands while Jev is answering: nothing more is acted on.
+    const ask = clickThenDone(() => ctrl.abort(new Error("daemon restarting")));
     const r = await handleDo(bridge(), params, {
       runs,
       credentialsDir: dir,
       signal: ctrl.signal,
-      createAsk: doneAsk as never,
+      createAsk: () => ask as never,
     });
     expect(r).toMatchObject({
       status: "interrupted",

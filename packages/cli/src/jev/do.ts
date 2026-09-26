@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { type AuditHook, redactParams } from "../audit.js";
 import type { BridgePort } from "../bridge.js";
+import { RpcBadRequest } from "../rpc.js";
 import { createJevAsk, type JevAsk } from "./client.js";
 import { readKey } from "./credentials.js";
 import { nextCommand } from "./format.js";
@@ -42,24 +43,36 @@ export interface DoContext {
 /** An extension from before PR2 answers jev_* with "unknown method". */
 const TOO_OLD = /unknown method: jev_/;
 
+function abortReason(signal: AbortSignal): string {
+  const r = signal.reason as unknown;
+  return r instanceof Error ? r.message : typeof r === "string" ? r : "stopped";
+}
+
 type BridgeError = Error & { code?: string; meta?: ResponseMeta; browserId?: string };
 
 /**
  * One `reins do` invocation, daemon-side: key check → first observation
  * (which also settles the tab) → run memory (--continue) → the loop →
- * the result with its next command. Never throws: every failure is a
- * `DoResult` with status `error`, so the CLI always has something to print.
+ * the result with its next command. Never throws, except `RpcBadRequest`
+ * for malformed params (a 400); every other failure is a `DoResult` with
+ * status `error`, so the CLI always has something to print.
  */
 export async function handleDo(
   bridge: BridgePort,
   raw: unknown,
   ctx: DoContext,
 ): Promise<DoResult> {
-  const p = DoParams.parse(raw ?? {});
+  const parsed = DoParams.safeParse(raw ?? {});
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const path = issue?.path.join(".") || "params";
+    throw new RpcBadRequest(`invalid reins do params: ${path}: ${issue?.message ?? "invalid"}`);
+  }
+  const p = parsed.data;
   const now = ctx.now ?? Date.now;
   const started = now();
-  const fail = (reason: string): DoResult => ({
-    status: "error",
+  const stop = (status: "error" | "interrupted", reason: string): DoResult => ({
+    status,
     reason,
     steps: [],
     url: "",
@@ -70,6 +83,7 @@ export async function handleDo(
     maxSteps: p.maxSteps,
     pageChanges: 0,
   });
+  const fail = (reason: string): DoResult => stop("error", reason);
 
   const key = readKey(ctx.credentialsDir);
   if (!key) {
@@ -77,9 +91,12 @@ export async function handleDo(
       "no TypeSafe key — run `reins key set typesafe`, or add one in the extension popup",
     );
   }
+  // A shutdown or hang-up that lands before the first observation: no action
+  // was taken, so say so without touching the browser.
+  if (ctx.signal.aborted) return stop("interrupted", abortReason(ctx.signal));
 
-  // The first observation resolves the browser and tab; every later call
-  // pins them so the run can't drift to another tab.
+  // The first observation resolves the browser and tab; they are pinned
+  // once, so a later reply can't drift the run to another tab.
   let browserId = p.browserId;
   let tabId = p.tabId;
   const call = async (
@@ -90,8 +107,8 @@ export async function handleDo(
     const payload = { ...params, ...(tabId !== undefined ? { tabId } : {}) };
     try {
       const reply = await bridge.requestFull(method, payload, browserId ? { browserId } : {});
-      browserId = reply.browserId;
-      tabId = reply.meta?.tabId ?? tabId;
+      browserId ??= reply.browserId;
+      tabId ??= reply.meta?.tabId;
       if (method === "jev_act") {
         audit(ctx, {
           method,

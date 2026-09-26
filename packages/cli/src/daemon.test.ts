@@ -1,8 +1,14 @@
+import { mkdtempSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import type { AuditRecord } from "./audit.js";
 import { BridgeHost } from "./bridge.js";
 import { startDaemon } from "./daemon.js";
+import { handleDo } from "./jev/do.js";
+import { RunStore } from "./jev/runs.js";
 
 type DaemonContext = NonNullable<Parameters<typeof startDaemon>[0]["context"]>;
 
@@ -311,6 +317,40 @@ describe("reins do lifecycle", () => {
       result: { status: "interrupted", reason: "daemon restarting" },
     });
     await vi.waitFor(() => expect(onShutdown).toHaveBeenCalledOnce());
+  });
+
+  it("answers malformed do params with a 400 and a single-line error", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "reins-daemon-do-"));
+    try {
+      const records: AuditRecord[] = [];
+      bridge = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: silent });
+      daemon = await startDaemon({
+        port: 0,
+        bridge,
+        log: silent,
+        audit: (r) => records.push(r),
+        context: {
+          doRun: (params, signal) =>
+            handleDo(bridge as BridgeHost, params, {
+              runs: new RunStore(),
+              credentialsDir: dir,
+              signal,
+            }),
+        },
+      });
+      const { status, json } = await rpc(daemon.port, {
+        method: "do",
+        params: { goal: "g", fills: { From: "Zurich" } },
+      });
+      expect(status).toBe(400);
+      expect(json.error).toMatch(/^invalid reins do params: fills/);
+      expect(json.error).not.toContain("\n");
+      expect(records).toHaveLength(1);
+      expect(records[0]?.error).toBe(json.error);
+      expect(JSON.stringify(records)).not.toContain("Zurich");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("shuts down within ~1 s even when a run ignores its abort", async () => {

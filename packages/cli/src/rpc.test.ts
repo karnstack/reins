@@ -145,6 +145,26 @@ describe("handleRpc", () => {
     expect(records[0]?.denied).toBeUndefined();
   });
 
+  it("turns malformed do params into one readable RpcBadRequest line, audited as such", async () => {
+    const records: AuditRecord[] = [];
+    const doRun = vi.fn(async () => {
+      throw new RpcBadRequest("invalid reins do params: fills: Invalid");
+    });
+    const promise = handleRpc(
+      fakeBridge(),
+      { method: "do", params: { goal: "g", fills: { From: "Zurich" } } },
+      (r) => records.push(r),
+      { doRun },
+    );
+    await expect(promise).rejects.toBeInstanceOf(RpcBadRequest);
+    expect(records[0]).toMatchObject({
+      method: "do",
+      ok: false,
+      error: "invalid reins do params: fills: Invalid",
+    });
+    expect(JSON.stringify(records)).not.toContain("Zurich");
+  });
+
   it("refuses do when the daemon has no doRun", async () => {
     await expect(handleRpc(fakeBridge(), { method: "do", params: { goal: "g" } })).rejects.toThrow(
       "reins do is not available in this daemon",
