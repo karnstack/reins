@@ -4,7 +4,6 @@ import type {
   ListGroupsResult,
   OkResult,
   TabGroupColor,
-  UngroupTabsParams,
   UpdateGroupParams,
 } from "@reins/protocol";
 
@@ -96,12 +95,12 @@ export async function updateGroup(p: UpdateGroupParams): Promise<OkResult> {
   return { ok: true };
 }
 
-/** Handle `ungroup_tabs`: the given tabs, or every tab in `groupId`. The
- *  dispatch gate pins `tabIds` for a group, so gate and handler act on the
- *  same set. Tabs stay open. */
-export async function ungroupTabs(p: UngroupTabsParams): Promise<OkResult> {
+/** Handle `ungroup_tabs`. The dispatch gate resolves `--group` to tab ids
+ *  (via `groupTabIds`) and policy-checks each one; this handler acts only on
+ *  that gate-resolved set and never re-resolves, so an unchecked tab can't
+ *  slip in. Tabs stay open. */
+export async function ungroupTabs(p: { tabIds: number[] }): Promise<OkResult> {
   requireGroups();
-  const tabIds = p.tabIds ?? (p.groupId !== undefined ? await groupTabIds(p.groupId) : []);
-  if (tabIds.length > 0) await chrome.tabs.ungroup(tabIds as [number, ...number[]]);
+  if (p.tabIds.length > 0) await chrome.tabs.ungroup(p.tabIds as [number, ...number[]]);
   return { ok: true };
 }

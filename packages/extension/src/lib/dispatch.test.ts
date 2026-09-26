@@ -462,8 +462,12 @@ describe("tab group gate", () => {
 
     vi.mocked(ensureAllowed).mockReset();
     vi.mocked(ensureAllowed).mockResolvedValue("read");
+    vi.mocked(chrome.tabs.query).mockClear();
     await dispatchWithMeta("ungroup_tabs", { groupId: 7 });
     expect(chrome.tabs.ungroup).toHaveBeenCalledWith([1, 2]);
+    // The gate resolved the group once; the handler acted on that pinned set
+    // rather than querying again.
+    expect(chrome.tabs.query).toHaveBeenCalledTimes(1);
   });
 
   it("update_group has no host gate", async () => {

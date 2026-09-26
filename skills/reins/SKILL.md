@@ -113,12 +113,15 @@ cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
 ```
 
 Page commands take `--tab <id>` (default: the active tab); `tabs` and
-`groups` take no tab. Every command takes `--json` (raw result).
+`groups` take no tab; `group` and `ungroup` take a repeatable `--tab <id>`
+list (no default). Every command takes `--json` (raw result).
 `reins help <command>` shows exact usage.
 
 **Tab groups.** You can put the tabs you open for a task into a group
 (`reins group --tab 12 --tab 13 --title reins --color blue`) so the user sees
-which tabs are yours. Don't regroup the user's own tabs unless they ask.
+which tabs are yours. Grouping moves tabs into the group's window (a new group
+stays in the first tab's window). Don't regroup the user's own tabs unless they
+ask.
 Arc and Dia have no tab groups; those commands answer `unsupported` there.
 
 ## Recipes for the powerful stuff

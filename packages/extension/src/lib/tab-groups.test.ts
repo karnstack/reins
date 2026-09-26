@@ -115,25 +115,18 @@ describe("updateGroup", () => {
 });
 
 describe("ungroupTabs / groupTabIds", () => {
-  it("ungroups the given tabs", async () => {
+  it("ungroups exactly the gate-resolved ids, never re-resolving (tabs stay open)", async () => {
     stubGroups();
-    expect(await ungroupTabs({ tabIds: [1] })).toEqual({ ok: true });
-    expect(chrome.tabs.ungroup).toHaveBeenCalledWith([1]);
-  });
-
-  it("dissolves a group by ungrouping its tabs (never closes them)", async () => {
-    stubGroups();
-    const query = vi.fn(async () => [{ id: 1 }, { id: 2 }]);
+    const query = vi.fn(async () => [{ id: 1 }, { id: 2 }, { id: 3 }]);
     (chrome.tabs as { query: unknown }).query = query;
-    await ungroupTabs({ groupId: 7 });
-    expect(query).toHaveBeenCalledWith({ groupId: 7 });
+    expect(await ungroupTabs({ tabIds: [1, 2] })).toEqual({ ok: true });
     expect(chrome.tabs.ungroup).toHaveBeenCalledWith([1, 2]);
+    expect(query).not.toHaveBeenCalled();
   });
 
-  it("an empty group is a no-op", async () => {
+  it("an empty set is a no-op", async () => {
     stubGroups();
-    (chrome.tabs as { query: unknown }).query = async () => [];
-    await ungroupTabs({ groupId: 7 });
+    await ungroupTabs({ tabIds: [] });
     expect(chrome.tabs.ungroup).not.toHaveBeenCalled();
   });
 
