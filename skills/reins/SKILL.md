@@ -89,6 +89,9 @@ reins status
 ```
 tabs / open <url> / close / focus / nav <url|back|forward|reload>
 groups          tab groups (id, title, color); `tabs` shows g<id> per grouped tab
+group           --tab <id> [--tab …] [--group <gid>] [--title T] [--color blue] [--collapse|--expand]
+                no --tab + --group <gid>: edit that group
+ungroup         --tab <id> [--tab …] | --group <gid>   (tabs stay open)
 snapshot        interactive elements + refs
 click           --ref|--selector [--button right|middle] [--count 2]
 type            --text "…" [--enter]      keystrokes into an element
@@ -112,6 +115,11 @@ cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
 Page commands take `--tab <id>` (default: the active tab); `tabs` and
 `groups` take no tab. Every command takes `--json` (raw result).
 `reins help <command>` shows exact usage.
+
+**Tab groups.** You can put the tabs you open for a task into a group
+(`reins group --tab 12 --tab 13 --title reins --color blue`) so the user sees
+which tabs are yours. Don't regroup the user's own tabs unless they ask.
+Arc and Dia have no tab groups; those commands answer `unsupported` there.
 
 ## Recipes for the powerful stuff
 
