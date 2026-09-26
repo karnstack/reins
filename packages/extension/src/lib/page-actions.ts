@@ -9,7 +9,14 @@ import type {
   SelectOptionParams,
   UploadParams,
 } from "@reins/protocol";
-import { resolveTabId, selectorFor, send, withDebugger } from "./cdp.js";
+import {
+  actionablePoint,
+  ensureVisible,
+  resolveTabId,
+  selectorFor,
+  send,
+  withDebugger,
+} from "./cdp.js";
 import { parseKeySpec } from "./keys.js";
 
 type Evaluated<T> = {
@@ -35,17 +42,25 @@ async function evaluate<T>(tabId: number, expression: string): Promise<T> {
 export async function pressKey(params: PressKeyParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const spec = parseKeySpec(params.key);
+  const key = {
+    key: spec.key,
+    code: spec.code,
+    windowsVirtualKeyCode: spec.keyCode,
+    nativeVirtualKeyCode: spec.keyCode,
+    modifiers: spec.modifiers,
+  };
   return withDebugger(tabId, async () => {
-    for (const type of ["keyDown", "keyUp"]) {
-      await send(tabId, "Input.dispatchKeyEvent", {
-        type,
-        key: spec.key,
-        code: spec.code,
-        windowsVirtualKeyCode: spec.keyCode,
-        nativeVirtualKeyCode: spec.keyCode,
-        modifiers: spec.modifiers,
-      });
-    }
+    await ensureVisible(tabId);
+    // With text, keyDown also generates the keypress (Enter submits, letters
+    // type); without it, rawKeyDown is the plain key-down — as Puppeteer does.
+    await send(
+      tabId,
+      "Input.dispatchKeyEvent",
+      spec.text === undefined
+        ? { type: "rawKeyDown", ...key }
+        : { type: "keyDown", ...key, text: spec.text, unmodifiedText: spec.text },
+    );
+    await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...key });
     return { ok: true };
   });
 }
@@ -54,12 +69,9 @@ export async function hover(params: HoverParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
   return withDebugger(tabId, async () => {
-    const center = await evaluate<{ x: number; y: number } | null>(
-      tabId,
-      `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return null; el.scrollIntoView({block:"center"}); const r = el.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 }; })()`,
-    );
-    if (!center) throw new Error(`element not found: ${css}`);
-    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: center.x, y: center.y });
+    await ensureVisible(tabId);
+    const { x, y } = await actionablePoint(tabId, css, "hover", false);
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     return { ok: true };
   });
 }

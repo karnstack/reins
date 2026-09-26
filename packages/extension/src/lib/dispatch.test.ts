@@ -13,6 +13,7 @@ vi.mock("./monitor.js", () => ({
 vi.mock("./cdp.js", () => ({
   resolveTabId: vi.fn(async (tabId?: number) => tabId ?? 1),
   cdpNavigate: vi.fn(async () => ({ url: "https://x/" })),
+  cdpOpenTab: vi.fn(async () => ({ tabId: 11 })),
   cdpSnapshot: vi.fn(async () => ({ content: "", refs: [] })),
   cdpClick: vi.fn(async () => ({ ok: true })),
   cdpType: vi.fn(async () => ({ ok: true })),

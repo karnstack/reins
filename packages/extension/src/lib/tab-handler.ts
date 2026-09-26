@@ -1,12 +1,4 @@
-import type {
-  CloseTabParams,
-  OkResult,
-  OpenTabParams,
-  OpenTabResult,
-  ResizeParams,
-  SelectTabParams,
-  Tab,
-} from "@reins/protocol";
+import type { CloseTabParams, OkResult, ResizeParams, SelectTabParams, Tab } from "@reins/protocol";
 
 /** Handle the `list_tabs` bridge method using chrome.tabs. */
 export async function listTabs(): Promise<{ tabs: Tab[] }> {
@@ -19,12 +11,6 @@ export async function listTabs(): Promise<{ tabs: Tab[] }> {
       active: t.active ?? false,
     })),
   };
-}
-
-/** Handle the `open_tab` bridge method using chrome.tabs. */
-export async function openTab({ url, activate }: OpenTabParams): Promise<OpenTabResult> {
-  const created = await chrome.tabs.create({ url, active: activate });
-  return { tabId: created.id ?? -1 };
 }
 
 /** Handle the `close_tab` bridge method using chrome.tabs. */
