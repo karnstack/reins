@@ -9,7 +9,15 @@ import type {
   SelectOptionParams,
   UploadParams,
 } from "@reins/protocol";
-import { resolveTabId, selectorFor, send, withDebugger } from "./cdp.js";
+import {
+  actionablePoint,
+  drivePage,
+  ensureVisible,
+  resolveTabId,
+  selectorFor,
+  send,
+  withDebugger,
+} from "./cdp.js";
 import { parseKeySpec } from "./keys.js";
 
 type Evaluated<T> = {
@@ -35,17 +43,25 @@ async function evaluate<T>(tabId: number, expression: string): Promise<T> {
 export async function pressKey(params: PressKeyParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const spec = parseKeySpec(params.key);
-  return withDebugger(tabId, async () => {
-    for (const type of ["keyDown", "keyUp"]) {
-      await send(tabId, "Input.dispatchKeyEvent", {
-        type,
-        key: spec.key,
-        code: spec.code,
-        windowsVirtualKeyCode: spec.keyCode,
-        nativeVirtualKeyCode: spec.keyCode,
-        modifiers: spec.modifiers,
-      });
-    }
+  const key = {
+    key: spec.key,
+    code: spec.code,
+    windowsVirtualKeyCode: spec.keyCode,
+    nativeVirtualKeyCode: spec.keyCode,
+    modifiers: spec.modifiers,
+  };
+  return drivePage(tabId, async () => {
+    await ensureVisible(tabId);
+    // With text, keyDown also generates the keypress (Enter submits, letters
+    // type); without it, rawKeyDown is the plain key-down — as Puppeteer does.
+    await send(
+      tabId,
+      "Input.dispatchKeyEvent",
+      spec.text === undefined
+        ? { type: "rawKeyDown", ...key }
+        : { type: "keyDown", ...key, text: spec.text, unmodifiedText: spec.text },
+    );
+    await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...key });
     return { ok: true };
   });
 }
@@ -53,13 +69,10 @@ export async function pressKey(params: PressKeyParams): Promise<{ ok: true }> {
 export async function hover(params: HoverParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
-    const center = await evaluate<{ x: number; y: number } | null>(
-      tabId,
-      `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return null; el.scrollIntoView({block:"center"}); const r = el.getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 }; })()`,
-    );
-    if (!center) throw new Error(`element not found: ${css}`);
-    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x: center.x, y: center.y });
+  return drivePage(tabId, async () => {
+    await ensureVisible(tabId);
+    const { x, y } = await actionablePoint(tabId, css, "hover", false);
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     return { ok: true };
   });
 }
@@ -77,7 +90,7 @@ export async function scroll(params: ScrollParams): Promise<{ ok: true }> {
   } else {
     expression = "(window.scrollTo(0, document.documentElement.scrollHeight), true)";
   }
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const found = await evaluate<boolean>(tabId, expression);
     if (!found) throw new Error(`element not found: ${selectorFor(params.ref, params.selector)}`);
     return { ok: true };
@@ -104,7 +117,7 @@ export async function fill(params: FillParams): Promise<{ ok: true }> {
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   })()`;
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const found = await evaluate<boolean>(tabId, expression);
     if (!found) throw new Error(`element not found: ${css}`);
     return { ok: true };
@@ -130,7 +143,7 @@ export async function selectOption(params: SelectOptionParams): Promise<{ ok: tr
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return "ok";
   })()`;
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const outcome = await evaluate<string>(tabId, expression);
     if (outcome === "missing") throw new Error(`element not found: ${css}`);
     if (outcome === "notselect") throw new Error(`not a <select> element: ${css}`);
@@ -142,7 +155,7 @@ export async function selectOption(params: SelectOptionParams): Promise<{ ok: tr
 export async function upload(params: UploadParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const doc = await send<{ root: { nodeId: number } }>(tabId, "DOM.getDocument", { depth: 0 });
     const { nodeId } = await send<{ nodeId: number }>(tabId, "DOM.querySelector", {
       nodeId: doc.root.nodeId,
@@ -172,8 +185,10 @@ export async function readText(params: ReadTextParams): Promise<{ text: string }
 
 export async function handleDialog(params: DialogParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
+  // No Page.enable here: it hangs while a dialog is open, and a dialog is only
+  // answerable if Page was already enabled when it opened — which the
+  // commands that drive the page do (via the autofill guard).
   return withDebugger(tabId, async () => {
-    await send(tabId, "Page.enable", {});
     try {
       await send(tabId, "Page.handleJavaScriptDialog", {
         accept: params.accept,

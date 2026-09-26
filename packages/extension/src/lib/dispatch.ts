@@ -10,6 +10,7 @@ import {
   cdpClick,
   cdpEval,
   cdpNavigate,
+  cdpOpenTab,
   cdpScreenshot,
   cdpSnapshot,
   cdpType,
@@ -29,7 +30,7 @@ import {
   upload,
 } from "./page-actions.js";
 import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
-import { closeTab, listTabs, openTab, resizeWindow, selectTab } from "./tab-handler.js";
+import { closeTab, listTabs, resizeWindow, selectTab } from "./tab-handler.js";
 
 const NAV_HISTORY = new Set(["back", "forward", "reload"]);
 
@@ -102,7 +103,7 @@ async function runHandler(method: GatedMethod, gated: Record<string, unknown>): 
       };
     }
     case "open_tab":
-      return openTab(gated as Parameters<typeof openTab>[0]);
+      return cdpOpenTab(gated as Parameters<typeof cdpOpenTab>[0]);
     case "close_tab":
       return closeTab(gated as Parameters<typeof closeTab>[0]);
     case "select_tab":

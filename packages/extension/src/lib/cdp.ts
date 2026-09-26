@@ -2,11 +2,15 @@ import type {
   ClickParams,
   EvalParams,
   NavigateParams,
+  OpenTabParams,
+  OpenTabResult,
   ScreenshotParams,
   SnapshotParams,
   TypeParams,
   WaitForParams,
 } from "@reins/protocol";
+import { actionPoint, type ProbeResult, readProbe } from "./actionability.js";
+import { autofillGuard } from "./autofill-guard.js";
 import { isMonitored } from "./monitor.js";
 
 const PROTOCOL = "1.3";
@@ -38,6 +42,9 @@ async function attachErrorMessage(tabId: number, attempt: number, msg: string): 
     const t = targets.find((x) => x.tabId === tabId);
     if (t?.attached) {
       return `cannot drive tab ${tabId}: another debugger is already attached to it (DevTools, or an extension like Claude-in-Chrome, or the browser's own AI). Chrome allows only one debugger per tab. Close the other tool, or run reins in a separate browser profile.`;
+    }
+    if (/different extension/i.test(msg)) {
+      return `cannot drive tab ${tabId}: another extension has a frame in it — usually a password manager's autofill menu (1Password, Bitwarden, …) that opened before reins could clear it. Chrome blocks debugging while it's there. Close the menu (Escape, or click elsewhere on the page), then retry — or reopen the page with \`reins open\`, which guards it from the first load.`;
     }
     const detail = t ? `attached=${t.attached} url=${t.url}` : "not in getTargets";
     return `attach tab ${tabId} failed after ${attempt} tries: ${msg} [${detail}]`;
@@ -75,6 +82,10 @@ interface DebugSession {
 }
 
 const SESSIONS = new Map<number, DebugSession>();
+// Per tab: the current debugger session has Page enabled for the autofill
+// guard, and (once registered) the id of its new-document script. Cleared
+// whenever that session ends — its scripts die with it.
+const GUARD_SCRIPTS = new Map<number, string | undefined>();
 const IDLE_DETACH_MS = 4000;
 
 // Purge our cache whenever a tab detaches for any reason — tab closed, DevTools
@@ -86,6 +97,7 @@ export function initDebugSessionListeners(): void {
     const session = SESSIONS.get(tabId);
     if (session?.idleTimer) clearTimeout(session.idleTimer);
     SESSIONS.delete(tabId);
+    GUARD_SCRIPTS.delete(tabId);
   });
 }
 
@@ -103,18 +115,73 @@ function releaseAfterIdle(tabId: number, session: DebugSession): void {
     if (SESSIONS.get(tabId) !== session || session.inflight > 0) return;
     SESSIONS.delete(tabId);
     // If the monitor adopted the tab meanwhile, leave it attached for monitoring.
-    if (!isMonitored(tabId)) void chrome.debugger.detach({ tabId }).catch(() => {});
+    if (!isMonitored(tabId)) {
+      GUARD_SCRIPTS.delete(tabId);
+      void chrome.debugger.detach({ tabId }).catch(() => {});
+    }
   }, IDLE_DETACH_MS);
 }
 
-export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+/** How long the autofill guard stays up after the last command. */
+const AUTOFILL_LEASE_MS = 30_000;
+
+/**
+ * Renew the in-page autofill guard's lease (see autofill-guard.ts), and have
+ * this session install it in every new document too: a page reached by a
+ * click (a login screen that autofocuses its field) would otherwise open the
+ * autofill menu before the next command could arm it. New documents only get
+ * what's left of this lease — never a fresh one — so the guard stands down on
+ * schedule even when a session outlives the agent (the monitor keeps its).
+ */
+async function armAutofillGuard(tabId: number): Promise<void> {
+  const until = Date.now() + AUTOFILL_LEASE_MS;
+  try {
+    if (!GUARD_SCRIPTS.has(tabId)) {
+      // New-document scripts only fire once the Page domain is enabled.
+      await send(tabId, "Page.enable", {});
+      GUARD_SCRIPTS.set(tabId, undefined);
+    }
+    const previous = GUARD_SCRIPTS.get(tabId);
+    if (previous !== undefined) {
+      await send(tabId, "Page.removeScriptToEvaluateOnNewDocument", { identifier: previous });
+    }
+    const added = await send<{ identifier?: string } | undefined>(
+      tabId,
+      "Page.addScriptToEvaluateOnNewDocument",
+      { source: `(${autofillGuard})(${until} - Date.now())` },
+    );
+    GUARD_SCRIPTS.set(tabId, added?.identifier);
+    await send(tabId, "Runtime.evaluate", {
+      expression: `(${autofillGuard})(${AUTOFILL_LEASE_MS})`,
+      returnByValue: true,
+    });
+  } catch {
+    // Mid-navigation or an unscriptable page — the command itself still runs.
+  }
+}
+
+/**
+ * Run `fn` with a debugger session on the tab. `guard` arms the autofill guard
+ * first — for commands that drive the page. Everything else leaves the page
+ * untouched: reads must not mutate it, and a command that has to work under a
+ * JS dialog (which blocks every evaluate) can't wait on one.
+ */
+export async function withDebugger<T>(
+  tabId: number,
+  fn: () => Promise<T>,
+  opts: { guard?: boolean } = {},
+): Promise<T> {
   // If the monitor (read_console / read_network) holds this tab, reuse its
   // persistent session untouched.
-  if (isMonitored(tabId)) return fn();
+  if (isMonitored(tabId)) {
+    if (opts.guard) await armAutofillGuard(tabId);
+    return fn();
+  }
 
   let session = SESSIONS.get(tabId);
   if (!session) {
     // Share one attach promise so concurrent commands never double-attach.
+    GUARD_SCRIPTS.delete(tabId); // a fresh session starts with no scripts
     session = { attach: attachWithRetry(tabId), inflight: 0 };
     SESSIONS.set(tabId, session);
   } else if (session.idleTimer) {
@@ -134,6 +201,7 @@ export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Prom
   }
 
   try {
+    if (opts.guard) await armAutofillGuard(tabId);
     return await fn();
   } finally {
     session.inflight--;
@@ -143,12 +211,18 @@ export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Prom
   }
 }
 
+/** `withDebugger` for commands that drive the page: arms the autofill guard. */
+export function drivePage<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+  return withDebugger(tabId, fn, { guard: true });
+}
+
 /** Test-only: drop all cached debugger sessions + timers between cases. */
 export function __resetDebugSessions(): void {
   for (const session of SESSIONS.values()) {
     if (session.idleTimer) clearTimeout(session.idleTimer);
   }
   SESSIONS.clear();
+  GUARD_SCRIPTS.clear();
 }
 
 // chrome.debugger.sendCommand returns Promise<object|undefined> (loosely typed).
@@ -161,9 +235,30 @@ export function send<T = unknown>(
   return chrome.debugger.sendCommand({ tabId }, method, params) as unknown as Promise<T>;
 }
 
+/**
+ * Open `url` in a new tab with the autofill guard in place before the page's
+ * first script. Creating the tab at the URL directly would let a login page
+ * autofocus its field — and a password manager open its menu, locking the
+ * debugger out — before reins ever attached.
+ */
+export async function cdpOpenTab({ url, activate }: OpenTabParams): Promise<OpenTabResult> {
+  const created = await chrome.tabs.create({ url: "about:blank", active: activate });
+  const tabId = created.id;
+  if (tabId === undefined) return { tabId: -1 };
+  try {
+    // A failed load (network error, a download) already shows in the tab;
+    // navigating again would repeat it.
+    await drivePage(tabId, () => send(tabId, "Page.navigate", { url }));
+  } catch {
+    // The debugger can't drive this tab: open the URL plainly.
+    await chrome.tabs.update(tabId, { url });
+  }
+  return { tabId };
+}
+
 export async function cdpNavigate(params: NavigateParams): Promise<{ url: string }> {
   const tabId = await resolveTabId(params.tabId);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     if (params.to === "reload") {
       await send(tabId, "Page.reload", {});
     } else if (params.to === "back" || params.to === "forward") {
@@ -218,26 +313,71 @@ export function selectorFor(ref?: string, selector?: string): string {
   throw new Error("requires a ref or selector");
 }
 
+/** How long click/hover wait for their target to become actionable. */
+const ACTION_TIMEOUT_MS = 5000;
+
+/**
+ * Make sure the tab can receive trusted input, bringing it to the front if not.
+ * Chromium holds CDP input for a hidden tab — the command hangs, and the queued
+ * click or keypress fires whenever the tab is next shown. Never queue it.
+ */
+export async function ensureVisible(tabId: number): Promise<void> {
+  const visible = async () => {
+    const { result } = await send<{ result: { value: string } }>(tabId, "Runtime.evaluate", {
+      expression: "document.visibilityState",
+      returnByValue: true,
+    });
+    return result.value === "visible";
+  };
+  if (await visible()) return;
+  await chrome.tabs.update(tabId, { active: true });
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    if (await visible()) return;
+  }
+  throw new Error(
+    `tab ${tabId} is not visible (is its window minimized?) — the browser only delivers clicks and key presses to visible tabs. Restore the window, then retry.`,
+  );
+}
+
+/** Resolve a point where trusted pointer input will land on the element. */
+export async function actionablePoint(
+  tabId: number,
+  css: string,
+  action: string,
+  forClick: boolean,
+): Promise<{ x: number; y: number }> {
+  const { result } = await send<{
+    result: { value: { x: number; y: number } | { error: string } };
+  }>(tabId, "Runtime.evaluate", {
+    expression: `(${actionPoint})(${JSON.stringify(css)}, ${ACTION_TIMEOUT_MS}, ${forClick})`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  const point = result.value;
+  if ("error" in point) {
+    if (point.error === "notfound") throw new Error(`element not found: ${css}`);
+    throw new Error(`cannot ${action} ${css}: ${point.error}`);
+  }
+  return point;
+}
+
 export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
-    // Resolve element center, then dispatch a trusted click there.
-    const { result } = await send<{ result: { value: { x: number; y: number } | null } }>(
-      tabId,
-      "Runtime.evaluate",
-      {
-        expression: `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return null; const r = el.getBoundingClientRect(); el.scrollIntoView({block:"center"}); const r2 = el.getBoundingClientRect(); return { x: r2.x + r2.width/2, y: r2.y + r2.height/2 }; })()`,
-        returnByValue: true,
-      },
-    );
-    if (!result.value) throw new Error(`element not found: ${css}`);
-    const { x, y } = result.value;
+  return drivePage(tabId, async () => {
+    await ensureVisible(tabId);
+    const { x, y } = await actionablePoint(tabId, css, "click", true);
+    // The CLI omits button/count unless flagged, and nothing applies the schema
+    // defaults on the way in. They must be explicit: CDP's own defaults
+    // (button "none", clickCount 0) move the pointer but never press.
+    const button = params.button ?? "left";
+    const clickCount = params.clickCount ?? 1;
     // CDP synthesizes a real click only when the pressed-button bitmask is set
     // (button alone isn't enough — the target never sees a `click`). Move the
     // pointer first so hit-testing lands on the element under (x, y).
-    const buttonBit = params.button === "right" ? 2 : params.button === "middle" ? 4 : 1;
-    const base = { x, y, button: params.button, clickCount: params.clickCount };
+    const buttonBit = button === "right" ? 2 : button === "middle" ? 4 : 1;
+    const base = { x, y, button, clickCount };
     await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y, buttons: 0 });
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mousePressed",
@@ -249,6 +389,23 @@ export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
       ...base,
       buttons: 0,
     });
+    // Confirm the press reached the element — never report a click that missed.
+    // A throw or a vanished probe means the click navigated: that's success.
+    const probe = await send<{ result: { value: ProbeResult | null } }>(tabId, "Runtime.evaluate", {
+      expression: `(${readProbe})()`,
+      returnByValue: true,
+    }).then(
+      (r) => r.result.value,
+      () => null,
+    );
+    // Only a press seen landing elsewhere is a failure. Seeing nothing proves
+    // nothing — a page listener may have stopped the event first — and
+    // failing a click that landed makes the agent click twice.
+    if (probe?.state === "missed") {
+      throw new Error(
+        `click on ${css} landed on ${probe.by} instead — the page changed under the pointer. Re-snapshot and retry.`,
+      );
+    }
     return { ok: true };
   });
 }
@@ -256,7 +413,8 @@ export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
 export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
+    await ensureVisible(tabId);
     const { result } = await send<{ result: { value: boolean } }>(tabId, "Runtime.evaluate", {
       expression: `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return false; el.focus(); return true; })()`,
       returnByValue: true,
@@ -264,14 +422,15 @@ export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
     if (!result.value) throw new Error(`element not found: ${css}`);
     await send(tabId, "Input.insertText", { text: params.text });
     if (params.submit) {
-      for (const type of ["keyDown", "keyUp"]) {
-        await send(tabId, "Input.dispatchKeyEvent", {
-          type,
-          key: "Enter",
-          code: "Enter",
-          windowsVirtualKeyCode: 13,
-        });
-      }
+      // Enter needs its text, or no keypress is generated and nothing submits.
+      const enter = { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 };
+      await send(tabId, "Input.dispatchKeyEvent", {
+        type: "keyDown",
+        ...enter,
+        text: "\r",
+        unmodifiedText: "\r",
+      });
+      await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...enter });
     }
     return { ok: true };
   });

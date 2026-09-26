@@ -22,17 +22,34 @@ type Call = { method: string; params?: Record<string, unknown> };
 /** Fake chrome with a scripted CDP: respond(method, params) → result. */
 function stubChrome(respond: (method: string, params?: Record<string, unknown>) => unknown) {
   const calls: Call[] = [];
+  // Commands that drive the page first set up the autofill guard (covered in
+  // cdp.test.ts): Page.enable + (re)register a new-document script + an
+  // evaluate. Keep those out of the per-action call log. A Page.enable is
+  // only the guard's if the new-document registration follows it.
+  let heldEnable: Call | undefined;
   vi.stubGlobal("chrome", {
     debugger: {
       attach: async () => {},
       detach: async () => {},
       sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
+        if (method === "Page.enable") {
+          heldEnable = { method, params };
+          return {};
+        }
+        const guardSetup =
+          method === "Page.addScriptToEvaluateOnNewDocument" ||
+          method === "Page.removeScriptToEvaluateOnNewDocument" ||
+          String(params?.expression).includes("autofillGuard");
+        if (heldEnable && !guardSetup) calls.push(heldEnable);
+        heldEnable = undefined;
+        if (guardSetup) return {};
         calls.push({ method, params });
         return respond(method, params);
       },
     },
     tabs: {
       query: async () => [{ id: 7, active: true }],
+      update: vi.fn(async () => ({})),
       get: async (tabId: number) => ({ id: tabId, windowId: 99 }),
     },
     windows: { update: vi.fn(async () => ({})) },
@@ -42,18 +59,54 @@ function stubChrome(respond: (method: string, params?: Record<string, unknown>) 
 
 const evalOk = (value: unknown) => ({ result: { value } });
 
+/**
+ * Scripted page for pointer/key input: tab visibility (one entry per check,
+ * the last one repeating), the actionability verdict, and the pointer probe.
+ */
+function page(opts: { visible?: boolean[]; point?: unknown; probe?: unknown } = {}) {
+  const visible = [...(opts.visible ?? [true])];
+  return (method: string, params?: Record<string, unknown>) => {
+    if (method !== "Runtime.evaluate") return {};
+    const expr = String(params?.expression);
+    if (expr.includes("visibilityState")) {
+      const v = visible.length > 1 ? visible.shift() : visible[0];
+      return evalOk(v ? "visible" : "hidden");
+    }
+    if (expr.includes("actionPoint")) return evalOk(opts.point ?? { x: 10, y: 20 });
+    if (expr.includes("readProbe")) return evalOk(opts.probe ?? { state: "hit" });
+    return evalOk(null);
+  };
+}
+
 afterEach(() => {
   __resetDebugSessions();
   vi.unstubAllGlobals();
 });
 
 describe("pressKey", () => {
-  it("dispatches keyDown+keyUp with parsed key and modifiers", async () => {
-    const calls = stubChrome(() => ({}));
+  it("dispatches a shortcut as rawKeyDown+keyUp with parsed key and modifiers", async () => {
+    const calls = stubChrome(page());
     await pressKey({ key: "Meta+A", tabId: 1 });
     const keyEvents = calls.filter((c) => c.method === "Input.dispatchKeyEvent");
-    expect(keyEvents.map((c) => c.params?.type)).toEqual(["keyDown", "keyUp"]);
+    expect(keyEvents.map((c) => c.params?.type)).toEqual(["rawKeyDown", "keyUp"]);
     expect(keyEvents[0]?.params).toMatchObject({ key: "A", code: "KeyA", modifiers: 4 });
+    expect(keyEvents[0]?.params?.text).toBeUndefined();
+  });
+
+  it("sends Enter with its text so it submits forms and activates buttons", async () => {
+    const calls = stubChrome(page());
+    await pressKey({ key: "Enter", tabId: 1 });
+    const keyEvents = calls.filter((c) => c.method === "Input.dispatchKeyEvent");
+    expect(keyEvents.map((c) => c.params?.type)).toEqual(["keyDown", "keyUp"]);
+    expect(keyEvents[0]?.params).toMatchObject({ key: "Enter", text: "\r", unmodifiedText: "\r" });
+    expect(keyEvents[1]?.params?.text).toBeUndefined();
+  });
+
+  it("brings a background tab to the front before pressing", async () => {
+    const calls = stubChrome(page({ visible: [false, true] }));
+    await pressKey({ key: "Enter", tabId: 1 });
+    expect(chrome.tabs.update).toHaveBeenCalledWith(1, { active: true });
+    expect(calls.filter((c) => c.method === "Input.dispatchKeyEvent")).toHaveLength(2);
   });
 
   it("rejects bad key specs before touching the debugger", async () => {
@@ -64,20 +117,26 @@ describe("pressKey", () => {
 });
 
 describe("hover", () => {
-  it("resolves the element center then dispatches mouseMoved", async () => {
-    const calls = stubChrome((method) =>
-      method === "Runtime.evaluate" ? evalOk({ x: 10, y: 20 }) : {},
-    );
+  it("resolves an actionable point then dispatches mouseMoved", async () => {
+    const calls = stubChrome(page());
     await hover({ ref: "e1", tabId: 1 });
     const move = calls.find((c) => c.method === "Input.dispatchMouseEvent");
     expect(move?.params).toMatchObject({ type: "mouseMoved", x: 10, y: 20 });
   });
 
   it("errors when the element is missing", async () => {
-    stubChrome((method) => (method === "Runtime.evaluate" ? evalOk(null) : {}));
+    stubChrome(page({ point: { error: "notfound" } }));
     await expect(hover({ selector: "#gone", tabId: 1 })).rejects.toThrow(
       "element not found: #gone",
     );
+  });
+
+  it("reports why the element can't be hovered instead of moving blindly", async () => {
+    const calls = stubChrome(page({ point: { error: "covered by div.modal-backdrop" } }));
+    await expect(hover({ selector: "#menu", tabId: 1 })).rejects.toThrow(
+      "cannot hover #menu: covered by div.modal-backdrop",
+    );
+    expect(calls.some((c) => c.method === "Input.dispatchMouseEvent")).toBe(false);
   });
 });
 
@@ -187,11 +246,11 @@ describe("readText", () => {
 });
 
 describe("handleDialog", () => {
-  it("enables Page and answers the dialog", async () => {
+  it("answers the dialog without first enabling Page (that hangs under a dialog)", async () => {
     const calls = stubChrome(() => ({}));
     await handleDialog({ accept: true, promptText: "yes", tabId: 1 });
-    expect(calls.map((c) => c.method)).toEqual(["Page.enable", "Page.handleJavaScriptDialog"]);
-    expect(calls[1]?.params).toEqual({ accept: true, promptText: "yes" });
+    expect(calls.map((c) => c.method)).toEqual(["Page.handleJavaScriptDialog"]);
+    expect(calls[0]?.params).toEqual({ accept: true, promptText: "yes" });
   });
 
   it("maps the no-dialog CDP error to a friendly message", async () => {

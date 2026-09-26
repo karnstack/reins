@@ -6,10 +6,16 @@ export interface KeyEventSpec {
   keyCode: number;
   /** CDP modifier bitmask: Alt=1, Ctrl=2, Meta=4, Shift=8. */
   modifiers: number;
+  /**
+   * What the keypress types. Chromium only generates the keypress — which is
+   * what submits a form on Enter or puts a character in an input — when the
+   * keyDown carries text. Absent for non-typing keys and for shortcuts.
+   */
+  text?: string;
 }
 
 const NAMED: Record<string, Omit<KeyEventSpec, "modifiers">> = {
-  enter: { key: "Enter", code: "Enter", keyCode: 13 },
+  enter: { key: "Enter", code: "Enter", keyCode: 13, text: "\r" },
   escape: { key: "Escape", code: "Escape", keyCode: 27 },
   esc: { key: "Escape", code: "Escape", keyCode: 27 },
   tab: { key: "Tab", code: "Tab", keyCode: 9 },
@@ -23,7 +29,7 @@ const NAMED: Record<string, Omit<KeyEventSpec, "modifiers">> = {
   end: { key: "End", code: "End", keyCode: 35 },
   pageup: { key: "PageUp", code: "PageUp", keyCode: 33 },
   pagedown: { key: "PageDown", code: "PageDown", keyCode: 34 },
-  space: { key: " ", code: "Space", keyCode: 32 },
+  space: { key: " ", code: "Space", keyCode: 32, text: " " },
 };
 
 const MODS: Record<string, number> = {
@@ -46,14 +52,24 @@ export function parseKeySpec(spec: string): KeyEventSpec {
     if (bit === undefined) throw new Error(`unknown modifier: ${part}`);
     modifiers |= bit;
   }
+  const key = resolveKey(keyPart);
+  // A held modifier makes it a shortcut, not typing.
+  if (modifiers !== 0 || key.text === undefined) {
+    const { text: _text, ...rest } = key;
+    return { ...rest, modifiers };
+  }
+  return { ...key, modifiers };
+}
+
+function resolveKey(keyPart: string): Omit<KeyEventSpec, "modifiers"> {
   const named = NAMED[keyPart.toLowerCase()];
-  if (named) return { ...named, modifiers };
+  if (named) return named;
   if (/^[a-zA-Z]$/.test(keyPart)) {
     const upper = keyPart.toUpperCase();
-    return { key: keyPart, code: `Key${upper}`, keyCode: upper.charCodeAt(0), modifiers };
+    return { key: keyPart, code: `Key${upper}`, keyCode: upper.charCodeAt(0), text: keyPart };
   }
   if (/^[0-9]$/.test(keyPart)) {
-    return { key: keyPart, code: `Digit${keyPart}`, keyCode: keyPart.charCodeAt(0), modifiers };
+    return { key: keyPart, code: `Digit${keyPart}`, keyCode: keyPart.charCodeAt(0), text: keyPart };
   }
   throw new Error(`unknown key: ${keyPart || "(empty)"}`);
 }

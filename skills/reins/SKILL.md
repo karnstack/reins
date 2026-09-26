@@ -186,6 +186,20 @@ otherwise, never guess. `reins browsers` shows who's connected.
 - `type` sends real keystrokes (triggers autocomplete etc.); `fill` sets the
   value in one step and fires input/change — prefer it for forms.
 - Errors like `element not found` usually mean a stale ref — `snapshot` again.
+- `click`/`hover` wait for the target to stop moving and check nothing sits
+  on top of it. `cannot click …: covered by <el>` means a modal, cookie
+  banner, or overlay is in the way — dismiss it, then retry. `element is
+  disabled` means the control isn't usable yet (often a form that's still
+  invalid) — fix the inputs first. `landed on … instead` means the page
+  changed under the pointer and something else got the click — `snapshot`
+  again before retrying.
+- While reins drives a tab it hides password-manager autofill menus
+  (1Password, Bitwarden, …): Chrome blocks debugging while another
+  extension's frame is in the tab. `another extension has a frame in it`
+  means one opened before reins could clear it — close it or reopen the page
+  with `reins open`.
+- `click`, `hover`, and `press` bring a background tab to the front: the
+  browser only delivers real input to visible tabs.
 - Commands can fail with `blocked by policy: <host> is read-only/denied`.
   The user's site-permission policy blocks that action tier. Do not retry
   and do not try to change the policy yourself — `reins policy` can only
