@@ -2,6 +2,11 @@ import type { DoResult } from "./types.js";
 
 const MANUAL = "switch to manual (reins snapshot → click/type)";
 
+/** POSIX single-quoted string: nothing inside expands, so a page-controlled label is inert. */
+export function shellQuote(s: string): string {
+  return `'${s.replaceAll("'", "'\\''")}'`;
+}
+
 /** Turns a field label into a `--fill` key: "Where to?" → "where_to". */
 export function fillName(label: string): string {
   const name = label
@@ -22,13 +27,13 @@ export function nextCommand(
     case "done":
       return "reins snapshot   # verify before trusting DONE";
     case "risky_action":
-      return `reins do --continue --confirm ${JSON.stringify(r.pending?.label ?? "")}${route}`;
+      return `reins do --continue --confirm ${shellQuote(r.pending?.label ?? "")}${route}`;
     case "needs_text":
       return `reins do --continue --fill ${fillName(r.pending?.label ?? "")}="…"${route}`;
     case "dialog":
       return `reins dialog --accept (or --dismiss), then reins do --continue${route}`;
     case "left_site":
-      return `reins do ${JSON.stringify(p.goal)}${route}   # from this page, if the new site is expected`;
+      return `reins do ${shellQuote(p.goal)}${route}   # from this page, if the new site is expected`;
     case "interrupted":
     case "budget":
       return `reins do --continue${route}`;
