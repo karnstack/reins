@@ -60,6 +60,10 @@ describe("helpText", () => {
     expect(helpText("1.2.3", TOOL_COMMANDS)).toContain("audit");
   });
 
+  it("lists `do` under a Delegate section", () => {
+    expect(helpText("1.2.3", TOOL_COMMANDS)).toMatch(/Delegate:\n\s+do\s+hand a small task to Jev/);
+  });
+
   it("describes restart as the thing to run after an upgrade or `reins allow`", () => {
     expect(helpText("1.2.3", TOOL_COMMANDS)).toContain(
       "restart the background daemon (after an upgrade or `reins allow`)",

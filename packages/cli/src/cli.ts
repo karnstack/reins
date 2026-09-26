@@ -31,12 +31,13 @@ async function rpc(
   port: number,
   method: string,
   params: Record<string, unknown>,
+  timeoutMs = 30_000,
 ): Promise<unknown> {
   const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ method, params }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const body = (await res.json().catch(() => ({}))) as { result?: unknown; error?: string };
   if (!res.ok) throw new Error(body.error ?? `daemon replied ${res.status}`);
@@ -67,7 +68,12 @@ async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<
     await waitForBrowsers(ensured.port);
   }
 
-  const result = await rpc(ensured.port, cmd.methodFor?.(params) ?? cmd.method, params);
+  const result = await rpc(
+    ensured.port,
+    cmd.methodFor?.(params) ?? cmd.method,
+    params,
+    cmd.timeoutMs?.(params),
+  );
 
   if (name === "screenshot") {
     const shot = result as { data: string; mimeType: string };
@@ -82,9 +88,11 @@ async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<
 
   if (a.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
-    return;
+  } else {
+    console.log(cmd.format ? cmd.format(result, a) : JSON.stringify(result, null, 2));
   }
-  console.log(cmd.format ? cmd.format(result, a) : JSON.stringify(result, null, 2));
+  const code = cmd.exitCode?.(result) ?? 0;
+  if (code !== 0) process.exitCode = code;
 }
 
 async function main(): Promise<void> {
