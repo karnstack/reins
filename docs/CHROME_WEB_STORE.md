@@ -129,7 +129,7 @@ Take the reins of your real, logged-in browser from your coding agent.
 
 reins lets AI coding agents — Claude Code, Cursor, Codex, GitHub Copilot, and any tool with a shell — drive the actual Chromium browser you already use, with all your sessions and logins intact. No separate automation profile, no launch flags, no signing in again. Your agent lists tabs, opens pages, clicks, types, fills forms, scrolls, screenshots, reads the page, runs JavaScript, and inspects console and network activity — right in your everyday browser.
 
-Everything stays on your machine. The extension talks only to a small companion program running locally on 127.0.0.1. Nothing is ever sent to a remote server, and no page data leaves your computer.
+Everything stays on your machine. The extension talks only to a small companion program running locally on 127.0.0.1. Nothing is sent to a remote server, and no page data leaves your computer, unless you opt in to reins do by saving a TypeSafe API key; then the local companion program (never the extension) sends page state to TypeSafe while a reins do run is working. See https://reins.tech/docs/security#reins-do for exactly what is sent.
 
 HOW IT WORKS
 

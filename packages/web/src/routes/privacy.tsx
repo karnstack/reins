@@ -9,7 +9,7 @@ export const Route = createFileRoute("/privacy")({
     ...seo({
       title: "Privacy policy · reins",
       description:
-        "The reins privacy policy: everything stays on your machine. No analytics, no telemetry, no remote servers.",
+        "The reins privacy policy: everything stays on your machine. No analytics, no telemetry. The only remote service is TypeSafe, and only if you opt in to reins do.",
       path: "/privacy",
     }),
   }),
@@ -28,7 +28,7 @@ function PrivacyPage() {
           <div className="mt-10">
             <H1>Privacy policy</H1>
           </div>
-          <P muted>Last updated: July 11, 2026</P>
+          <P muted>Last updated: September 27, 2026</P>
           <P>
             reins is a browser extension that lets a local daemon on your own machine (installed by
             you, via the <Code>@karnstack/reins</Code> CLI) drive your browser. It is a developer
@@ -54,8 +54,9 @@ function PrivacyPage() {
           <H2 id="what-it-does-not">What reins does not do</H2>
           <Ul>
             <li>
-              No data is sent to the developer or to any remote server. There is no analytics,
-              telemetry, tracking or advertising of any kind.
+              No data is sent to the developer. The only remote service reins can talk to is
+              TypeSafe, and only when you've opted in (see below). There is no analytics, telemetry,
+              tracking or advertising of any kind.
             </li>
             <li>No data is sold or shared with third parties.</li>
             <li>
@@ -64,6 +65,32 @@ function PrivacyPage() {
             </li>
             <li>The extension loads no remote code.</li>
           </Ul>
+
+          <H2 id="reins-do">Optional: reins do with Jev</H2>
+          <P>
+            <Code>reins do</Code> is off until you save a TypeSafe API key (
+            <Code>reins key set typesafe</Code>, or the Jev section of the extension popup). The key
+            is stored in <Code>~/.reins/credentials.json</Code> on your machine (readable only by
+            you). Only the local reins daemon reads that file; the popup passes the key to the
+            daemon once when you save it.
+          </P>
+          <P>
+            While a <Code>reins do</Code> run is working, the daemon (not the extension) sends this
+            to <Code>api.typesafe.ai</Code>, under your own TypeSafe account:
+          </P>
+          <Ul>
+            <li>
+              the goal you gave, and your <Code>--fill</Code> names and values
+            </li>
+            <li>the tab's URL and title</li>
+            <li>visible text in the viewport (up to about 6,000 characters)</li>
+            <li>labels, roles and current values of the page's interactive elements</li>
+            <li>the run's last 10 actions</li>
+          </Ul>
+          <P>
+            Never sent: password, file and hidden inputs. Nothing at all is sent unless you saved a
+            key and ran <Code>reins do</Code>. The extension itself still makes no remote requests.
+          </P>
 
           <H2 id="security">Security</H2>
           <Ul>

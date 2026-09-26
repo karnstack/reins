@@ -230,4 +230,5 @@ effect:
   harness's job (Claude Code permissions, Cursor rules, …); reins governs
   what reaches the browser.
 - **Telemetry of any kind** — see [PRIVACY.md](PRIVACY.md): no data leaves
-  your machine.
+  your machine unless you opt in to `reins do` with a TypeSafe key (see
+  "reins do and TypeSafe" above).

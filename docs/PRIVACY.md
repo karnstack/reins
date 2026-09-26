@@ -31,8 +31,9 @@ browser. It is a developer tool; you install both halves yourself.
 
 `reins do` is off until you save a TypeSafe API key (`reins key set typesafe`,
 or the Jev section of the extension popup). The key is stored in
-`~/.reins/credentials.json` on your machine (readable only by you) and is read
-only by the local reins daemon.
+`~/.reins/credentials.json` on your machine (readable only by you). Only the
+local reins daemon reads that file; the popup passes the key to the daemon
+once when you save it.
 
 While a `reins do` run is working, the **daemon** (not the extension) sends
 this to `api.typesafe.ai`, under your own TypeSafe account:
@@ -43,7 +44,7 @@ this to `api.typesafe.ai`, under your own TypeSafe account:
 - labels, roles and current values of the page's interactive elements
 - the run's last 10 actions
 
-Never sent: password, file and hidden inputs, and nothing at all unless you
+Never sent: password, file and hidden inputs. Nothing at all is sent unless you
 saved a key and ran `reins do`. The extension itself still makes no remote
 requests.
 

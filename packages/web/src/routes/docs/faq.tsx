@@ -7,7 +7,7 @@ const FAQS = [
     id: "remote",
     question: "Is anything ever sent to a remote server?",
     answer:
-      "Nothing reins reads goes anywhere. The extension talks to exactly one thing: the reins daemon on 127.0.0.1 on your machine. There is no analytics, no telemetry, and no remote code. Your browser still reaches the internet the way it always did, because reins drives the browser you already use rather than replacing it.",
+      "Not by default. The extension talks to exactly one thing: the reins daemon on 127.0.0.1 on your machine. There is no analytics, no telemetry, and no remote code. The one exception is opt-in: once you save a TypeSafe API key, reins do sends page state (the goal, the tab's URL and title, visible text, interactive element labels and values, recent actions) from the daemon to TypeSafe. The security page lists exactly what is sent. Your browser still reaches the internet the way it always did, because reins drives the browser you already use rather than replacing it.",
   },
   {
     id: "browsers",
