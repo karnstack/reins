@@ -39,6 +39,15 @@ describe("key service", () => {
     expect(await keys.handle("key_clear", {})).toEqual({ provider: "typesafe", set: false });
   });
 
+  it("turns a too-short key into a plain one-line error before validating", async () => {
+    const validate = vi.fn(async () => {});
+    const keys = createKeyService({ dir, validate });
+    const err: unknown = await keys.handle("key_set", { key: "short" }).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe("that doesn't look like an API key");
+    expect(validate).not.toHaveBeenCalled();
+  });
+
   it("rejects other methods", async () => {
     const keys = createKeyService({ dir, validate: async () => {} });
     await expect(keys.handle("click", {})).rejects.toThrow("unknown key method");
