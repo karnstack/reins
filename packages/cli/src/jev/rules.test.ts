@@ -53,6 +53,18 @@ describe("riskyReason", () => {
     expect(riskyReason(click("Pay (now)"), "pay (now) please", [])).toBeUndefined();
   });
 
+  it("non-ASCII letters are not word boundaries in the goal", () => {
+    expect(riskyReason(click("Pay"), "prépay the bill", [])).toBeDefined();
+    expect(riskyReason(click("Pay"), "日本語pay", [])).toBeDefined();
+    expect(riskyReason(click("Pay"), "please pay – merci", [])).toBeUndefined();
+    expect(riskyReason(click("Pay"), "café pay", [])).toBeUndefined();
+  });
+
+  it("punctuated labels never throw under unicode matching", () => {
+    expect(riskyReason(click("Re-order / send.*+?^{$}|[]\\"), "x", [])).toBeDefined();
+    expect(riskyReason(click("Pay-now/today"), "pay-now/today please", [])).toBeUndefined();
+  });
+
   it("only clicks are risky", () => {
     const fill: JevAction = { id: "e2", kind: "fill", node: 2, role: "textbox", label: "Send to" };
     expect(riskyReason(fill, "x", [])).toBeUndefined();

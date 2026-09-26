@@ -32,11 +32,13 @@ export function normalizeLabel(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** True when the goal says the whole label, bounded by non-alphanumerics:
- *  "pay now for the flight" says "pay now"; "reorder the list" does not say "order". */
+/** True when the goal says the whole label, bounded by non-letters/digits in
+ *  any script: "pay now for the flight" says "pay now"; "reorder the list" and
+ *  "prépay the bill" do not say "order" / "pay". Only regex syntax characters
+ *  are escaped: escaping anything else throws under the `u` flag. */
 function goalSaysLabel(goal: string, label: string): boolean {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(goal);
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "u").test(goal);
 }
 
 /** Why this click must be confirmed first, or undefined when it may go ahead.
