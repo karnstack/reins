@@ -19,6 +19,22 @@ export const Route = createFileRoute("/docs/commands")({
 /** Every group is a heading and a table: the usage, and what it does. */
 const GROUPS: Array<{ id: string; title: string; intro?: string; rows: [string, string][] }> = [
   {
+    id: "delegate",
+    title: "Delegate",
+    intro:
+      "reins do hands a small task to TypeSafe's Jev model, which picks each click and field in about 0.2 s. The agent supplies every typed value and verifies the result. Page labels are single-quoted so a $ or a backtick in them never expands. Needs a TypeSafe key (reins key set typesafe).",
+    rows: [
+      [
+        "reins do '<goal>' [--fill name=value]... [--confirm '<label>']... [--max-steps 30] [--timeout 60] [--tab <id>] [--browser <id>] [--json]",
+        "Run the task. Exit 0 when Jev says done (verify it), 2 when it stops for input, 1 on error. Every stop prints the exact next command.",
+      ],
+      [
+        "reins do --continue [--fill ...] [--confirm ...]",
+        "Resume the tab's last run with the missing value or approval. Runs are remembered for 15 minutes.",
+      ],
+    ],
+  },
+  {
     id: "tabs",
     title: "Tabs and pages",
     rows: [

@@ -84,6 +84,35 @@ reins status
    `reins screenshot --tab 12` (prints an image path — Read the file to view
    it). Refs go stale after navigation; re-run `snapshot`.
 
+## Delegate a whole task: `reins do` (when a TypeSafe key is set)
+
+For a multi-step form, search, filter or navigation task, hand it over instead
+of snapshot → click → snapshot. It's much faster: Jev picks each action in
+~0.2 s, and you only think twice.
+
+    reins do 'one-way flights Zurich → London, Sep 20 2026, 1 adult; stop when results show' \
+      --fill from=Zurich --fill to=London --tab 12
+
+- Pass **every value the goal mentions** as `--fill name=value`. Jev picks which
+  field gets which value; it never invents text.
+- If the user already asked for the final action (book, send, pay), pre-approve
+  it: `--confirm 'Book'`. Otherwise risky clicks stop the run.
+- Single-quote goals and labels, as `reins do` itself does in every `next:`
+  line: page labels can contain `$` or backticks, and single quotes keep the
+  shell from expanding them.
+- Exit 0 = `done`. **DONE is Jev's opinion — always verify** with
+  `reins snapshot` / `reins text` (the printed `next:` line does exactly that).
+- Exit 2 = a stop. Run the printed `next:` line exactly (usually
+  `reins do --continue …`). `--continue` resumes the same run on the same tab.
+- Exit 1 = an error; no `next:` line is printed.
+- `stuck` or `blocked` → switch to manual commands for that part.
+- The risky-label stop is a heuristic (English words; unlabeled buttons stop).
+  Don't rely on it for anything you wouldn't do yourself.
+- Takes `--tab <id>`, `--browser <id>` and `--json` like every page command.
+- No key (`reins do` says so)? Ask the user to run `reins key set typesafe`
+  themselves, or to save it in the reins extension popup. Never ask them to
+  paste a key into the chat.
+
 ## Commands
 
 ```
@@ -110,6 +139,7 @@ console         [--level error] recent console messages
 network         [--url pattern] recent requests (method/URL/status only)
 eval            'document.title' [--await]   JS in the page's own origin
 cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
+do              '<goal>' [--fill name=value] [--confirm '<label>'] [--continue]   hand a task to Jev (see above)
 ```
 
 Page commands take `--tab <id>` (default: the active tab); `tabs` and
