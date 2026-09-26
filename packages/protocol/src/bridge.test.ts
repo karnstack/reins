@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ListTabsResult, RequestFrame, ResponseFrame, Tab, WelcomeFrame } from "./bridge.js";
+import {
+  ListGroupsResult,
+  ListTabsResult,
+  RequestFrame,
+  ResponseFrame,
+  Tab,
+  TabGroup,
+  WelcomeFrame,
+} from "./bridge.js";
 
 describe("bridge frames", () => {
   it("accepts a valid request frame", () => {
@@ -66,5 +74,26 @@ describe("ResponseMeta", () => {
     });
     expect(frame.meta?.host).toBe("bank.com");
     expect(frame.meta?.tabId).toBeUndefined();
+  });
+});
+
+describe("tab groups", () => {
+  it("Tab accepts an optional groupId", () => {
+    expect(Tab.parse({ tabId: 1, title: "t", url: "u", active: true, groupId: 7 }).groupId).toBe(7);
+    expect(Tab.parse({ tabId: 1, title: "t", url: "u", active: true }).groupId).toBeUndefined();
+  });
+
+  it("TabGroup parses a group and rejects unknown colors", () => {
+    const g = {
+      groupId: 7,
+      title: "reins",
+      color: "blue",
+      collapsed: false,
+      windowId: 1,
+      tabCount: 2,
+    };
+    expect(TabGroup.parse(g)).toEqual(g);
+    expect(() => TabGroup.parse({ ...g, color: "magenta" })).toThrow();
+    expect(ListGroupsResult.parse({ groups: [g] }).groups).toHaveLength(1);
   });
 });
