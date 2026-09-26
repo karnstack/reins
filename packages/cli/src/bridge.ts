@@ -3,6 +3,8 @@ import type { Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   type BrowserInfo,
+  CALL_METHODS,
+  CallFrame,
   HelloFrame,
   RequestFrame,
   ResponseFrame,
@@ -64,10 +66,16 @@ export class BridgeHost implements BridgePort {
   #nextBrowserId = 1;
   readonly #browsers = new Map<string, ConnectedBrowser>();
   readonly #pending = new Map<string, Pending>();
+  readonly #onCall?: (method: string, params: unknown, browserId: string) => Promise<unknown>;
 
-  constructor(opts: { allowedOrigins: ReadonlySet<string>; log?: Log }) {
+  constructor(opts: {
+    allowedOrigins: ReadonlySet<string>;
+    log?: Log;
+    onCall?: (method: string, params: unknown, browserId: string) => Promise<unknown>;
+  }) {
     this.#allowedOrigins = opts.allowedOrigins;
     this.#log = opts.log ?? ((message) => process.stderr.write(`${message}\n`));
+    this.#onCall = opts.onCall;
   }
 
   /** Own a socket (stdio mode): bind 127.0.0.1:port. */
@@ -173,7 +181,10 @@ export class BridgeHost implements BridgePort {
       const response = ResponseFrame.safeParse(msg);
       if (response.success) {
         this.#settle(response.data.id, response.data);
+        return;
       }
+      const call = CallFrame.safeParse(msg);
+      if (call.success) void this.#answerCall(ws, browserId, call.data);
     });
     ws.on("close", (code) => {
       this.#log(`reins: connection closed (${browserId ?? "unauthed"}, code=${code})`);
@@ -182,6 +193,35 @@ export class BridgeHost implements BridgePort {
         this.#rejectPendingFor(browserId, "browser disconnected");
       }
     });
+  }
+
+  /** Extension → daemon: only the key methods, answered with a ResponseFrame. */
+  async #answerCall(ws: WebSocket, browserId: string, frame: CallFrame): Promise<void> {
+    let reply: ResponseFrame;
+    if (!this.#onCall || !(CALL_METHODS as readonly string[]).includes(frame.method)) {
+      reply = {
+        type: "response",
+        id: frame.id,
+        ok: false,
+        error: {
+          code: "METHOD_NOT_ALLOWED",
+          message: `${frame.method} can't be called from the extension`,
+        },
+      };
+    } else {
+      try {
+        const result = await this.#onCall(frame.method, frame.params, browserId);
+        reply = { type: "response", id: frame.id, ok: true, result };
+      } catch (err) {
+        reply = {
+          type: "response",
+          id: frame.id,
+          ok: false,
+          error: { code: "CALL_FAILED", message: err instanceof Error ? err.message : String(err) },
+        };
+      }
+    }
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
   }
 
   #rejectPendingFor(browserId: string, message: string): void {

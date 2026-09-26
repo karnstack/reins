@@ -72,6 +72,13 @@ describe("redactParams", () => {
     );
   });
 
+  it("never writes an API key", () => {
+    expect(redactParams("key_set", { provider: "typesafe", key: "ts_live_abcd1234" })).toEqual({
+      provider: "typesafe",
+      key: "[redacted]",
+    });
+  });
+
   it("does not mutate its input", () => {
     const input = { text: "abc" };
     redactParams("type", input);

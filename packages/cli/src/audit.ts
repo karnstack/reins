@@ -41,6 +41,8 @@ export function redactParams(
     } else if (method === "cdp" && key === "params" && value !== undefined) {
       // Arbitrary CDP payloads can carry anything (Input.insertText, …).
       out[key] = "[redacted]";
+    } else if (method === "key_set" && key === "key") {
+      out[key] = "[redacted]";
     } else {
       out[key] = value;
     }
