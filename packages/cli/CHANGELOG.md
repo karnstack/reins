@@ -1,5 +1,27 @@
 # @karnstack/reins
 
+## 0.5.0
+
+### Minor Changes
+
+- f7669b6: `reins extension --reload` re-stages the bundled extension and has a connected unpacked build (a dev checkout or the `reins extension` sideload) reload itself, then waits for it to reconnect. That replaces the manual ⟳ Reload click in `chrome://extensions`. A Chrome Web Store install refuses, because it updates itself.
+
+  The extension now announces its version to the daemon, so `--reload` reports the version that came back up. The extension also connects on every service-worker start if nothing is connected: Chrome can drop the install event during a reload, and re-enabling the extension fires none, which left it silently disconnected.
+
+- 9c7fb71: `reins groups` lists tab groups (title, color, collapsed, tab count) across connected browsers, and `reins tabs` marks each grouped tab with `g<id>`. A browser without the tab-group API answers with an error that names it (`<browser> (b2) doesn't support tab groups …`), and `reins groups` lists such browsers as skipped instead of dropping them silently. Dia supports tab groups. The extension asks for the `tabGroups` permission, which shows no install prompt.
+- 1033778: `reins group` puts tabs in a new or existing tab group and edits a group's title, color, and collapsed state. `reins ungroup` takes tabs out of their group or dissolves a whole group, and never closes tabs. reins groups nothing on its own; the agent decides. Group operations count as reading: read-only sites can be grouped, denied sites cannot.
+
+### Patch Changes
+
+- 3ddece9: `click`, `hover`, and `press` no longer silently no-op.
+
+  - **Plain `reins click` never pressed.** The CLI omits `button`/`clickCount` unless flagged, and nothing applied the protocol defaults, so CDP received `button: "none"`, `clickCount: 0`: the pointer moved but no press or click fired. Clicks now default to a single left click.
+  - **Clicks land where the element is.** The target is scrolled instantly (smooth scroll no longer leaves stale coordinates) and must hold still across two frames with no pending animation. It's hit-tested so an overlay is named (`cannot click #buy: covered by div#cookie-banner`), and must be enabled (`element is disabled` instead of an `ok` that did nothing). A press seen landing on something else is reported. An element that never stops animating is clicked anyway if its center still hits it.
+  - **Password managers no longer lock reins out.** Chrome refuses to debug a tab holding another extension's frame, and 1Password/Bitwarden/… inject one as their autofill menu when a field gets focus. While reins drives a tab it hides those menus, including on pages it navigates to or opens. It stands down 30s after the last command.
+  - **Background tabs.** Chrome holds CDP input for hidden tabs and replays it whenever the tab is next shown; click/hover/press now bring the tab to the front first.
+  - **`press Enter` and `type --enter`** now submit forms and activate buttons, and `press <letter>` types into the focused input.
+  - **`dialog`** no longer enables the Page domain first, which hung while a dialog was open.
+
 ## 0.4.0
 
 ### Minor Changes
