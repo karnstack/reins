@@ -340,17 +340,22 @@ export async function ensureVisible(tabId: number): Promise<void> {
   );
 }
 
-/** Resolve a point where trusted pointer input will land on the element. */
+/**
+ * Resolve a point where trusted pointer input will land on the element.
+ * `opts.node` targets a Jev node id instead of the selector (which then only
+ * names the element in errors); `opts.timeoutMs` overrides the default wait.
+ */
 export async function actionablePoint(
   tabId: number,
   css: string,
   action: string,
   forClick: boolean,
+  opts: { node?: number; timeoutMs?: number } = {},
 ): Promise<{ x: number; y: number }> {
   const { result } = await send<{
     result: { value: { x: number; y: number } | { error: string } };
   }>(tabId, "Runtime.evaluate", {
-    expression: `(${actionPoint})(${JSON.stringify(css)}, ${ACTION_TIMEOUT_MS}, ${forClick})`,
+    expression: `(${actionPoint})(${JSON.stringify(css)}, ${opts.timeoutMs ?? ACTION_TIMEOUT_MS}, ${forClick}, ${opts.node ?? null})`,
     returnByValue: true,
     awaitPromise: true,
   });
@@ -362,50 +367,62 @@ export async function actionablePoint(
   return point;
 }
 
+/**
+ * Press at (x, y) and confirm the press reached the element `actionablePoint`
+ * armed the probe on. Only a press seen landing elsewhere fails; `what` names
+ * the target in that error.
+ *
+ * `button` and `clickCount` default here because the CLI omits them unless
+ * flagged, and nothing applies the schema defaults on the way in. They must be
+ * explicit: CDP's own defaults (button "none", clickCount 0) move the pointer
+ * but never press.
+ */
+export async function pressAt(
+  tabId: number,
+  x: number,
+  y: number,
+  what: string,
+  button: "left" | "right" | "middle" = "left",
+  clickCount = 1,
+): Promise<void> {
+  // CDP synthesizes a real click only when the pressed-button bitmask is set
+  // (button alone isn't enough — the target never sees a `click`). Move the
+  // pointer first so hit-testing lands on the element under (x, y).
+  const buttonBit = button === "right" ? 2 : button === "middle" ? 4 : 1;
+  const base = { x, y, button, clickCount };
+  await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y, buttons: 0 });
+  await send(tabId, "Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    ...base,
+    buttons: buttonBit,
+  });
+  await send(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", ...base, buttons: 0 });
+  // Confirm the press reached the element — never report a click that missed.
+  // A throw or a vanished probe means the click navigated: that's success.
+  const probe = await send<{ result: { value: ProbeResult | null } }>(tabId, "Runtime.evaluate", {
+    expression: `(${readProbe})()`,
+    returnByValue: true,
+  }).then(
+    (r) => r.result.value,
+    () => null,
+  );
+  // Only a press seen landing elsewhere is a failure. Seeing nothing proves
+  // nothing — a page listener may have stopped the event first — and
+  // failing a click that landed makes the agent click twice.
+  if (probe?.state === "missed") {
+    throw new Error(
+      `click on ${what} landed on ${probe.by} instead — the page changed under the pointer. Re-snapshot and retry.`,
+    );
+  }
+}
+
 export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
   return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     const { x, y } = await actionablePoint(tabId, css, "click", true);
-    // The CLI omits button/count unless flagged, and nothing applies the schema
-    // defaults on the way in. They must be explicit: CDP's own defaults
-    // (button "none", clickCount 0) move the pointer but never press.
-    const button = params.button ?? "left";
-    const clickCount = params.clickCount ?? 1;
-    // CDP synthesizes a real click only when the pressed-button bitmask is set
-    // (button alone isn't enough — the target never sees a `click`). Move the
-    // pointer first so hit-testing lands on the element under (x, y).
-    const buttonBit = button === "right" ? 2 : button === "middle" ? 4 : 1;
-    const base = { x, y, button, clickCount };
-    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y, buttons: 0 });
-    await send(tabId, "Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      ...base,
-      buttons: buttonBit,
-    });
-    await send(tabId, "Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      ...base,
-      buttons: 0,
-    });
-    // Confirm the press reached the element — never report a click that missed.
-    // A throw or a vanished probe means the click navigated: that's success.
-    const probe = await send<{ result: { value: ProbeResult | null } }>(tabId, "Runtime.evaluate", {
-      expression: `(${readProbe})()`,
-      returnByValue: true,
-    }).then(
-      (r) => r.result.value,
-      () => null,
-    );
-    // Only a press seen landing elsewhere is a failure. Seeing nothing proves
-    // nothing — a page listener may have stopped the event first — and
-    // failing a click that landed makes the agent click twice.
-    if (probe?.state === "missed") {
-      throw new Error(
-        `click on ${css} landed on ${probe.by} instead — the page changed under the pointer. Re-snapshot and retry.`,
-      );
-    }
+    await pressAt(tabId, x, y, css, params.button ?? "left", params.clickCount ?? 1);
     return { ok: true };
   });
 }

@@ -4,6 +4,7 @@ vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import {
   __resetDebugSessions,
+  actionablePoint,
   cdpClick,
   cdpOpenTab,
   cdpType,
@@ -307,6 +308,27 @@ describe("cdpClick", () => {
     await vi.advanceTimersByTimeAsync(5000);
     await done;
     expect(events).toHaveLength(0);
+  });
+});
+
+describe("actionablePoint for a Jev node", () => {
+  it("passes the node id and the short timeout into the page check", async () => {
+    const sendCommand = vi.fn(async () => ({ result: { value: { x: 5, y: 6 } } }));
+    vi.stubGlobal("chrome", {
+      debugger: {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        onDetach: { addListener: () => {} },
+        sendCommand,
+      },
+    });
+    await expect(
+      actionablePoint(7, "node 12", "click", true, { node: 12, timeoutMs: 500 }),
+    ).resolves.toEqual({ x: 5, y: 6 });
+    const expr = (
+      sendCommand.mock.calls[0] as unknown as [unknown, string, { expression: string }]
+    )[2].expression;
+    expect(expr).toMatch(/\("node 12", 500, true, 12\)$/);
   });
 });
 

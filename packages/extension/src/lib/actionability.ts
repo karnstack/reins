@@ -25,12 +25,26 @@ export type ProbeResult = { state: "hit" } | { state: "none" } | { state: "misse
  * still receives the press, so the click would "land" and do nothing — and a
  * one-shot capture listener is armed recording whether the next pointerdown
  * reaches the element; read it back with `readProbe`.
+ *
+ * With `node`, the target is the Jev node cache entry (`reins do` observed it
+ * by id); `selector` then only names it in messages.
  */
 export async function actionPoint(
   selector: string,
   timeoutMs: number,
   forClick: boolean,
+  node: number | null = null,
 ): Promise<ActionPoint> {
+  // A Jev node id points at the exact element reins do observed; otherwise
+  // the CSS selector is re-queried (frameworks may swap nodes while we wait).
+  const find = (): Element | null => {
+    if (node === null) return document.querySelector(selector);
+    const cache = (
+      window as unknown as Record<symbol, { nodes?: Map<number, Element> } | undefined>
+    )[Symbol.for("reins.jev")];
+    const el = cache?.nodes?.get(node);
+    return el?.isConnected ? el : null;
+  };
   const describe = (n: Element | null): string => {
     if (!n) return "nothing (the point is outside the viewport)";
     let s = n.tagName.toLowerCase();
@@ -84,7 +98,7 @@ export async function actionPoint(
   let reason = "";
   for (let first = true; ; first = false) {
     // Re-query every attempt: frameworks may swap the node while we wait.
-    const el = document.querySelector(selector);
+    const el = find();
     if (!el) {
       if (first) return { error: "notfound" };
       reason = "element was removed from the page";
@@ -119,7 +133,7 @@ export async function actionPoint(
               const at = e.composedPath()[0];
               // Frameworks re-mount nodes on hover; the element the selector
               // finds now counts as the target too.
-              const now = document.querySelector(selector);
+              const now = find();
               const path = e.composedPath();
               state.result =
                 path.includes(el) || (now !== null && path.includes(now))
