@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { BrowserInfo, SkippedBrowser, Tab, TabGroup } from "@reins/protocol";
 import type { ToolCommand } from "./commands.js";
 import type { ReinsConfig } from "./config.js";
-import { wantsRestart } from "./ensure.js";
+import { isOlderVersion, wantsRestart } from "./ensure.js";
 
 export interface DaemonHealth {
   ok: boolean;
@@ -199,9 +199,38 @@ export function groupsText(groups: TabGroup[], skipped: SkippedBrowser[] = []): 
   return lines.join("\n");
 }
 
-export interface DoctorReport {
-  checks: Array<{ name: string; ok: boolean; detail: string }>;
+export interface DoctorCheck {
+  name: string;
   ok: boolean;
+  detail: string;
+}
+
+export interface DoctorReport {
+  checks: DoctorCheck[];
+  ok: boolean;
+}
+
+/**
+ * Daemon vs CLI version. Older daemon: left over from before an upgrade, so
+ * restart it. Newer daemon: this CLI is the stale one (a second install, or
+ * an old copy earlier on PATH) — restarting from it would downgrade the daemon.
+ */
+function versionCheck(daemon: string, cli: string): DoctorCheck {
+  if (isOlderVersion(daemon, cli)) {
+    return {
+      name: "version",
+      ok: false,
+      detail: `daemon v${daemon}, CLI v${cli} — run \`reins restart\``,
+    };
+  }
+  if (isOlderVersion(cli, daemon)) {
+    return {
+      name: "version",
+      ok: false,
+      detail: `daemon v${daemon} is newer than this CLI (v${cli}) — upgrade it (\`npm i -g @karnstack/reins@latest\`) or check \`which -a reins\` for a second install`,
+    };
+  }
+  return { name: "version", ok: true, detail: `daemon and CLI both v${cli}` };
 }
 
 /** Diagnostic checks for `reins doctor`. `cliVersion` is compared against the daemon's. */
@@ -221,17 +250,8 @@ export function doctorReport(
         ? `running (v${health.version})`
         : "not running — starts on demand (`reins tabs`), or run `reins daemon`",
     },
-    // A daemon left over from before an upgrade runs the old code until restarted.
     ...(health && knownVersion(health.version) && knownVersion(cliVersion)
-      ? [
-          health.version === cliVersion
-            ? { name: "version", ok: true, detail: `daemon and CLI both v${cliVersion}` }
-            : {
-                name: "version",
-                ok: false,
-                detail: `daemon v${health.version}, CLI v${cliVersion} — run \`reins restart\``,
-              },
-        ]
+      ? [versionCheck(health.version, cliVersion)]
       : []),
     {
       name: "browser",

@@ -299,6 +299,22 @@ describe("doctorReport", () => {
     });
   });
 
+  it("points at the CLI, not a restart, when the daemon is newer", () => {
+    // A restart from this older CLI would downgrade the daemon.
+    const report = doctorReport(cfg(), { ...HEALTH, version: "0.6.0" }, "0.5.0");
+    expect(report.ok).toBe(false);
+    const detail = check(report, "version")?.detail ?? "";
+    expect(detail).toBe(
+      "daemon v0.6.0 is newer than this CLI (v0.5.0) — upgrade it (`npm i -g @karnstack/reins@latest`) or check `which -a reins` for a second install",
+    );
+    expect(detail).not.toContain("reins restart");
+  });
+
+  it("passes when only a pre-release tag differs", () => {
+    const report = doctorReport(cfg(), { ...HEALTH, version: "0.5.0-next.1" }, "0.5.0");
+    expect(check(report, "version")?.ok).toBe(true);
+  });
+
   it("skips the version check when either side is the unknown 0.0.0", () => {
     expect(
       check(doctorReport(cfg(), { ...HEALTH, version: "0.0.0" }, "0.5.0"), "version"),
