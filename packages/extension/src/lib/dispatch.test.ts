@@ -22,6 +22,10 @@ vi.mock("./cdp.js", () => ({
   cdpWaitFor: vi.fn(async () => ({ ok: true })),
 }));
 
+vi.mock("./reload.js", () => ({
+  reloadExtension: vi.fn(async () => ({ reloading: true, version: "9.9.9" })),
+}));
+
 vi.mock("./page-actions.js", () => ({
   pressKey: vi.fn(async () => ({ ok: true })),
   hover: vi.fn(async () => ({ ok: true })),
@@ -333,6 +337,12 @@ describe("dispatchWithMeta", () => {
     const err = await dispatchWithMeta("click", { tabId: 7 }).catch((e) => e);
     expect(err.code).toBe("policy_denied");
     expect(err.meta).toBeUndefined();
+  });
+
+  it("routes extension_reload without a tab or policy gate", async () => {
+    const out = await dispatchWithMeta("extension_reload", {});
+    expect(out).toEqual({ result: { reloading: true, version: "9.9.9" } });
+    expect(ensureAllowed).not.toHaveBeenCalled();
   });
 
   it("leaves meta undefined for policy_get", async () => {

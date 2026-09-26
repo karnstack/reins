@@ -27,6 +27,8 @@ export interface BridgeClientOptions {
   /** Candidate ws:// URLs, best guess first (sticky port, then the shared range). */
   urls: () => string[];
   browser: string;
+  /** This extension's version, announced in the hello frame. */
+  version?: string;
   dispatch: Dispatch;
   createSocket: (url: string) => SocketLike;
   onStatus?: (status: ConnectionStatus) => void;
@@ -117,7 +119,13 @@ export class BridgeClient {
         resolve(welcome ? { socket, welcome } : null);
       };
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "hello", browser: this.#opts.browser }));
+        socket.send(
+          JSON.stringify({
+            type: "hello",
+            browser: this.#opts.browser,
+            ...(this.#opts.version !== undefined ? { version: this.#opts.version } : {}),
+          }),
+        );
       };
       socket.onmessage = (ev) => {
         try {

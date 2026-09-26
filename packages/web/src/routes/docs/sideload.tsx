@@ -52,11 +52,15 @@ function SideloadPage() {
       </P>
 
       <H2 id="updating">Updating</H2>
-      <P>Sideloaded extensions do not auto-update. After upgrading the CLI, re-stage it:</P>
-      <Shell lines={["$ reins extension"]} />
       <P>
-        Then click Reload on the reins card in <Code>chrome://extensions</Code>. The path never
-        changes, so Chrome keeps the registration.
+        Sideloaded extensions do not auto-update. After upgrading the CLI, re-stage it and reload:
+      </P>
+      <Shell lines={["$ reins extension --reload"]} />
+      <P>
+        That is the same as clicking Reload on the reins card in <Code>chrome://extensions</Code>,
+        which also works. The path never changes, so Chrome keeps the registration.{" "}
+        <Code>--reload</Code> only works for unpacked builds; a Chrome Web Store install updates
+        itself.
       </P>
 
       <H2 id="caveats">Caveats</H2>

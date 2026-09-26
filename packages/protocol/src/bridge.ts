@@ -20,6 +20,8 @@ export const BrowserInfo = z.object({
   id: z.string(),
   browser: z.string(),
   connectedAt: z.number(),
+  /** The connected extension's version, when its hello carried one. */
+  version: z.string().optional(),
 });
 export type BrowserInfo = z.infer<typeof BrowserInfo>;
 

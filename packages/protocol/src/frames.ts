@@ -6,5 +6,7 @@ import { z } from "zod";
 export const HelloFrame = z.object({
   type: z.literal("hello"),
   browser: z.string(),
+  /** The extension's manifest version. Optional: older extensions omit it. */
+  version: z.string().optional(),
 });
 export type HelloFrame = z.infer<typeof HelloFrame>;

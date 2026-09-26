@@ -19,14 +19,20 @@ afterEach(async () => {
 /** Connect a stand-in extension client and resolve once it is welcomed. */
 function connectClient(
   port: number,
-  opts: { origin?: string; browser?: string } = {},
+  opts: { origin?: string; browser?: string; version?: string } = {},
 ): Promise<WebSocket> {
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
     headers: { origin: opts.origin ?? ALLOWED },
   });
   return new Promise((resolve, reject) => {
     ws.on("open", () =>
-      ws.send(JSON.stringify({ type: "hello", browser: opts.browser ?? "test" })),
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          browser: opts.browser ?? "test",
+          ...(opts.version !== undefined ? { version: opts.version } : {}),
+        }),
+      ),
     );
     ws.on("message", (data) => {
       if (JSON.parse(data.toString()).type === "welcome") resolve(ws);
@@ -179,6 +185,16 @@ describe("BridgeHost (listen mode)", () => {
     const [idA, idB] = host.browsers.map((x) => x.id);
     expect(await host.request("list_tabs", {}, { browserId: idA })).toEqual({ tabs: ["from-a"] });
     expect(await host.request("list_tabs", {}, { browserId: idB })).toEqual({ tabs: ["from-b"] });
+    a.close();
+    b.close();
+  });
+
+  it("lists each browser's extension version when its hello carries one", async () => {
+    host = newHost();
+    await host.listen(0);
+    const a = await connectClient(host.port, { browser: "Chrome", version: "0.4.0" });
+    const b = await connectClient(host.port, { browser: "Brave" }); // an older extension
+    expect(host.browsers.map((x) => x.version)).toEqual(["0.4.0", undefined]);
     a.close();
     b.close();
   });

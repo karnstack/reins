@@ -57,6 +57,13 @@ id (e.g. `b1 (Chrome)`).
 To debug the daemon itself, run it in the foreground: `pnpm daemon`
 (Ctrl-C stops it). `pnpm reins kill` stops a background one.
 
+After changing code, `pnpm build`, then `pnpm reins kill` for CLI/daemon
+changes and `pnpm reins extension --reload` for extension changes — it
+reloads the unpacked extension in place, instead of clicking ⟳ Reload in
+`chrome://extensions`. (It also re-stages the sideload copy in
+`~/.reins/extension` from this checkout, so a profile that loads that copy
+picks up your dev build on its next reload.)
+
 ## 4. Hook up an agent
 
 `npx skills add karnstack/reins` installs the skill from this repo (or point

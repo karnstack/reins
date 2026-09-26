@@ -73,7 +73,13 @@ async function autoConnect(): Promise<void> {
   const settings = await loadSettings();
   if (!settings.autoConnect) return;
   await ensureOffscreen();
-  send({ type: "offscreen:connect", urls: candidateUrls(settings) });
+  // The offscreen document can't read the manifest itself (its chrome.runtime
+  // is messaging-only), so the version rides along for its hello.
+  send({
+    type: "offscreen:connect",
+    urls: candidateUrls(settings),
+    version: chrome.runtime.getManifest().version,
+  });
 }
 
 chrome.runtime.onStartup.addListener(() => {
@@ -83,6 +89,16 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(() => {
   void autoConnect();
 });
+
+// Those two events can be lost: Chrome drops a lazy event whose worker failed
+// to start (a reload can abort one mid-registration), and re-enabling the
+// extension fires neither. Then nothing would ever connect. So every worker
+// start checks too — no offscreen document means no connection. An ordinary
+// idle wake finds the document and does nothing.
+void chrome.offscreen
+  .hasDocument()
+  .then((has) => (has ? undefined : autoConnect()))
+  .catch(() => {});
 
 /**
  * Central message router for the service worker.

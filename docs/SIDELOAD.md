@@ -28,11 +28,14 @@ machine and ships in the CLI's built-in allowlist.
 Sideloaded extensions don't auto-update. After upgrading the CLI:
 
 ```bash
-reins extension       # re-stages the matching extension version
+reins extension --reload   # re-stage the matching version, then reload it
 ```
 
-then click **⟳ Reload** on the reins card in `chrome://extensions`. The
-target path never changes, so Chrome keeps the registration.
+`--reload` has the connected extension re-read its files and waits for it to
+reconnect — the same as clicking **⟳ Reload** on the reins card in
+`chrome://extensions`, which also works. The target path never changes, so
+Chrome keeps the registration. (`--reload` only works for unpacked builds; a
+Chrome Web Store install updates itself and refuses.)
 
 ## Caveats
 

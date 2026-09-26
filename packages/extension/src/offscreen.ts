@@ -2,6 +2,8 @@ import { BridgeClient, type DispatchOutcome, type SocketLike } from "./lib/bridg
 import { portFromUrl } from "./lib/settings.js";
 
 let client: BridgeClient | undefined;
+/** The daemon URLs `client` was started with. */
+let clientUrls: string[] = [];
 
 /**
  * Relay dispatch requests to the background service worker, which owns the
@@ -41,11 +43,16 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (message.type === "offscreen:connect") {
     const urls = Array.isArray(message.urls) ? (message.urls as string[]) : [];
     if (urls.length === 0) return;
+    // The worker may ask twice on one start (install event + its wake check);
+    // an identical request must not tear down a live connection.
+    if (client && urls.join() === clientUrls.join()) return;
+    clientUrls = urls;
     // Stop any existing client before creating a new one to avoid duplicate sockets.
     client?.stop();
     client = new BridgeClient({
       urls: () => urls,
       browser: browserName(),
+      ...(typeof message.version === "string" ? { version: message.version } : {}),
       // The browser WebSocket shape is compatible with SocketLike at runtime:
       // MessageEvent has .data and CloseEvent has .code, matching the interface.
       // The double-cast is intentional — the event handler signatures differ at
@@ -77,6 +84,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (message.type === "offscreen:disconnect") {
     client?.stop();
     client = undefined;
+    clientUrls = [];
     return;
   }
 });

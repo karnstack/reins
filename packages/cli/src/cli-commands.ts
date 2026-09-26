@@ -56,6 +56,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     line("audit", "per-action trail: what the agent did, what policy blocked"),
     line("status", "daemon state, port, connected browsers"),
     line("extension", "install the extension without the Chrome Web Store (load unpacked)"),
+    line("", "  --reload: re-stage, then reload an unpacked (dev/sideload) build"),
     line("allow <id>", "allow an unpacked/dev extension to connect"),
     line("kill", "stop the background daemon"),
     line("doctor", "run diagnostic checks"),
