@@ -104,6 +104,10 @@ export const METHOD_TIERS = {
   handle_dialog: "full",
   eval_js: "full",
   cdp: "full",
+  // reins do: page content leaves the machine (to TypeSafe) and the loop acts,
+  // so both need full access to the current site.
+  jev_observe: "full",
+  jev_act: "full",
 } as const satisfies Record<string, Tier>;
 export type GatedMethod = keyof typeof METHOD_TIERS;
 
