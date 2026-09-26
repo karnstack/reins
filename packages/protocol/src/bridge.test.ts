@@ -100,4 +100,18 @@ describe("tab groups", () => {
     expect(() => TabGroupColor.parse("magenta")).toThrow();
     expect(ListGroupsResult.parse({ groups: [g] }).groups).toHaveLength(1);
   });
+
+  it("ListGroupsResult accepts the daemon's skipped list and still parses without it", () => {
+    const skipped = [
+      { browserId: "b2", browser: "Dia", reason: "unsupported", message: "Dia (b2) ..." },
+      { browserId: "b3", browser: "Arc", reason: "outdated", message: "old" },
+      { browserId: "b4", browser: "Chrome", reason: "error", message: "timeout" },
+    ];
+    const parsed = ListGroupsResult.parse({ groups: [], skipped });
+    expect(parsed.skipped).toEqual(skipped);
+    expect(ListGroupsResult.parse({ groups: [] }).skipped).toBeUndefined();
+    expect(() =>
+      ListGroupsResult.parse({ groups: [], skipped: [{ ...skipped[0], reason: "nope" }] }),
+    ).toThrow();
+  });
 });

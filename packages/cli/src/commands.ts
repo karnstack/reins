@@ -1,5 +1,12 @@
 import { resolve } from "node:path";
-import type { ConsoleEntry, NetworkEntry, SnapshotRef, Tab, TabGroup } from "@reins/protocol";
+import type {
+  ConsoleEntry,
+  NetworkEntry,
+  SkippedBrowser,
+  SnapshotRef,
+  Tab,
+  TabGroup,
+} from "@reins/protocol";
 import { type ParsedArgs, UsageError } from "./args.js";
 import { groupsText, tabsText } from "./cli-commands.js";
 
@@ -93,7 +100,10 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
       const browser = flagStr(a, "browser");
       return browser !== undefined ? { browserId: browser } : {};
     },
-    format: (r) => groupsText((r as { groups: TabGroup[] }).groups),
+    format: (r) => {
+      const { groups, skipped } = r as { groups: TabGroup[]; skipped?: SkippedBrowser[] };
+      return groupsText(groups, skipped);
+    },
   },
   open: {
     method: "open_tab",
