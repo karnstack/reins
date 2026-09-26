@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   browsersText,
   doctorReport,
+  groupsText,
   healthSummary,
   helpText,
   logsInfo,
@@ -80,6 +81,32 @@ describe("browsersText / tabsText", () => {
     expect(text).toContain("tab 3 *");
     expect(text).toContain("(untitled)");
     expect(tabsText([])).toContain("no tabs");
+  });
+});
+
+describe("groupsText", () => {
+  it("renders one line per group", () => {
+    const g = {
+      groupId: 7,
+      title: "reins",
+      color: "blue" as const,
+      collapsed: true,
+      windowId: 1,
+      tabCount: 2,
+      browserId: "b1",
+    };
+    expect(groupsText([g])).toBe('  b1  group 7  "reins"  blue  2 tabs  (collapsed)  window 1');
+    expect(groupsText([{ ...g, collapsed: false, tabCount: 1 }])).toBe(
+      '  b1  group 7  "reins"  blue  1 tab  window 1',
+    );
+    expect(groupsText([])).toBe("(no groups)");
+  });
+
+  it("tabsText marks grouped tabs", () => {
+    const text = tabsText([
+      { tabId: 12, title: "T", url: "https://x", active: true, groupId: 7, browserId: "b1" },
+    ]);
+    expect(text).toBe("  b1  tab 12 *  g7  T — https://x");
   });
 });
 

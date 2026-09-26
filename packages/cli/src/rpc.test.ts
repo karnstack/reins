@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuditRecord } from "./audit.js";
 import type { BridgePort } from "./bridge.js";
-import { handleRpc, listAllTabs, RpcBadRequest } from "./rpc.js";
+import { handleRpc, listAllGroups, listAllTabs, RpcBadRequest } from "./rpc.js";
 
 function fakeBridge(overrides: Partial<BridgePort> = {}): BridgePort {
   return {
@@ -92,6 +92,63 @@ describe("listAllTabs", () => {
     await expect(listAllTabs(bridge, "b9")).rejects.toThrow(
       'unknown browserId "b9". Connected: b1 (Chrome)',
     );
+  });
+});
+
+describe("listAllGroups", () => {
+  const G = {
+    groupId: 7,
+    title: "reins",
+    color: "blue",
+    collapsed: false,
+    windowId: 1,
+    tabCount: 2,
+  };
+  const two = [
+    { id: "b1", browser: "Chrome", connectedAt: 0 },
+    { id: "b2", browser: "Dia", connectedAt: 1 },
+  ];
+
+  it("aggregates across browsers with tags, via handleRpc", async () => {
+    const bridge = fakeBridge({
+      browsers: two,
+      request: vi.fn(async () => ({ groups: [G] })),
+    });
+    const out = (await handleRpc(bridge, { method: "list_groups" })) as { groups: unknown[] };
+    expect(out.groups).toEqual([
+      { ...G, browserId: "b1", browser: "Chrome" },
+      { ...G, browserId: "b2", browser: "Dia" },
+    ]);
+  });
+
+  it("skips browsers that fail when another answers", async () => {
+    const bridge = fakeBridge({
+      browsers: two,
+      request: vi.fn(async (_m: string, _p: unknown, opts?: { browserId?: string }) => {
+        if (opts?.browserId === "b2") throw new Error("unsupported: no tab groups");
+        return { groups: [G] };
+      }),
+    });
+    const groups = await listAllGroups(bridge);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ browserId: "b1" });
+  });
+
+  it("rethrows the first error when every browser fails", async () => {
+    const bridge = fakeBridge({
+      request: vi.fn(async () => {
+        throw new Error("unsupported: this browser doesn't support tab groups");
+      }),
+    });
+    await expect(listAllGroups(bridge)).rejects.toThrow("unsupported");
+  });
+
+  it("returns [] with no browsers connected", async () => {
+    expect(await listAllGroups(fakeBridge({ browsers: [] }))).toEqual([]);
+  });
+
+  it("errors on an unknown browserId", async () => {
+    await expect(listAllGroups(fakeBridge(), "b9")).rejects.toThrow('unknown browserId "b9"');
   });
 });
 

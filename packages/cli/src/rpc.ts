@@ -1,4 +1,10 @@
-import { ListTabsResult, type ResponseMeta, type Tab } from "@reins/protocol";
+import {
+  ListGroupsResult,
+  ListTabsResult,
+  type ResponseMeta,
+  type Tab,
+  type TabGroup,
+} from "@reins/protocol";
 import { z } from "zod";
 import { type AuditHook, redactParams } from "./audit.js";
 import type { BridgePort, BridgeReply } from "./bridge.js";
@@ -8,22 +14,44 @@ const RpcBody = z.object({
   params: z.record(z.string(), z.unknown()).optional(),
 });
 
-/** List tabs across connected browsers (all, or one), tagging each tab with
- *  its browserId + browser name. */
-export async function listAllTabs(bridge: BridgePort, browserId?: string): Promise<Tab[]> {
+/** The browsers a fan-out call targets: all, or the one named. */
+function targetBrowsers(bridge: BridgePort, browserId?: string): BridgePort["browsers"] {
   const targets = browserId ? bridge.browsers.filter((b) => b.id === browserId) : bridge.browsers;
   if (browserId !== undefined && targets.length === 0) {
     const roster = bridge.browsers.map((b) => `${b.id} (${b.browser})`).join(", ");
     throw new Error(`unknown browserId "${browserId}"${roster ? `. Connected: ${roster}` : ""}`);
   }
+  return targets;
+}
+
+/** List tabs across connected browsers (all, or one), tagging each tab with
+ *  its browserId + browser name. */
+export async function listAllTabs(bridge: BridgePort, browserId?: string): Promise<Tab[]> {
   const results = await Promise.all(
-    targets.map(async (b) => {
+    targetBrowsers(bridge, browserId).map(async (b) => {
       const raw = await bridge.request("list_tabs", {}, { browserId: b.id });
       const { tabs } = ListTabsResult.parse(raw);
       return tabs.map((t) => ({ ...t, browserId: b.id, browser: b.browser }));
     }),
   );
   return results.flat();
+}
+
+/** List tab groups across connected browsers, tagged like listAllTabs. A
+ *  browser without tab groups (Arc, Dia) or with an older extension adds
+ *  nothing; only when every targeted browser fails does the error surface. */
+export async function listAllGroups(bridge: BridgePort, browserId?: string): Promise<TabGroup[]> {
+  const settled = await Promise.allSettled(
+    targetBrowsers(bridge, browserId).map(async (b) => {
+      const raw = await bridge.request("list_groups", {}, { browserId: b.id });
+      const { groups } = ListGroupsResult.parse(raw);
+      return groups.map((g) => ({ ...g, browserId: b.id, browser: b.browser }));
+    }),
+  );
+  const ok = settled.filter((s) => s.status === "fulfilled");
+  const failed = settled.find((s) => s.status === "rejected");
+  if (ok.length === 0 && failed) throw failed.reason;
+  return ok.flatMap((s) => s.value);
 }
 
 /** Split the client-facing params into routing (browserId) + browser payload. */
@@ -96,6 +124,11 @@ export async function handleRpc(
       const tabs = await listAllTabs(bridge, browserId);
       finish({ ok: true, browserId });
       return { tabs };
+    }
+    if (method === "list_groups") {
+      const groups = await listAllGroups(bridge, browserId);
+      finish({ ok: true, browserId });
+      return { groups };
     }
     const reply: BridgeReply = await bridge.requestFull(method, params, { browserId });
     finish({ ok: true, browserId: reply.browserId, meta: reply.meta });
