@@ -114,11 +114,17 @@ export async function jevAct(params: JevActParams): Promise<JevActResult> {
     // the dialog before sending anything, and let it win the race — the press
     // happened, and the next observe reports the dialog.
     const opened = dialogOpened(tabId);
+    const state: ActState = { pressed: false, abandoned: false };
     try {
-      const work = act(tabId, params);
+      const work = act(tabId, params, state);
       const outcome = await Promise.race([work, opened.promise.then(() => DIALOG_WON)]);
       if (typeof outcome !== "symbol") return outcome;
+      // The orphaned act resumes once the dialog is answered: it must send no
+      // more input, since whatever is focused by then is not our target.
+      state.abandoned = true;
       work.catch(() => {}); // the blocked commands fail once the dialog is answered
+      // A dialog from elsewhere (a page timer) before our press: nothing happened.
+      if (!state.pressed) return { stale: true, reason: "a dialog opened before the action" };
       return { ok: true };
     } finally {
       opened.cancel();
@@ -128,14 +134,22 @@ export async function jevAct(params: JevActParams): Promise<JevActResult> {
 
 const DIALOG_WON = Symbol("dialog");
 
+interface ActState {
+  /** Set right before the first command that changes the page. */
+  pressed: boolean;
+  /** Set when a dialog won the race: perform no further input. */
+  abandoned: boolean;
+}
+
 /** The mutation itself, on a tab that is already driven. */
-async function act(tabId: number, params: JevActParams): Promise<JevActResult> {
+async function act(tabId: number, params: JevActParams, state: ActState): Promise<JevActResult> {
   await ensureVisible(tabId);
   if (params.op === "scroll") {
     const { w, h } = await evaluate<{ w: number; h: number }>(
       tabId,
       "({ w: innerWidth, h: innerHeight })",
     );
+    state.pressed = true;
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseWheel",
       x: Math.round(w / 2),
@@ -143,6 +157,7 @@ async function act(tabId: number, params: JevActParams): Promise<JevActResult> {
       deltaX: 0,
       deltaY: params.delta ?? 560,
     });
+    if (state.abandoned) return { ok: true };
     await evaluate(tabId, `(${jevSettle})(null, false)`, true).catch(() => {});
     return { ok: true };
   }
@@ -152,12 +167,14 @@ async function act(tabId: number, params: JevActParams): Promise<JevActResult> {
   if (check !== "ok") return { stale: true, reason: check };
 
   if (params.op === "select") {
+    state.pressed = true;
     const r = await evaluate<string>(
       tabId,
       `(${jevSelect})(${node}, ${JSON.stringify(params.value ?? "")})`,
     );
     // A select is a mutation of uncertain outcome if it fails midway: never retry it.
     if (r !== "ok") throw new Error(`select failed: ${r} — check the page before retrying`);
+    if (state.abandoned) return { ok: true };
     await evaluate(tabId, `(${jevSettle})(${node}, false)`, true).catch(() => {});
     return { ok: true };
   }
@@ -178,8 +195,10 @@ async function act(tabId: number, params: JevActParams): Promise<JevActResult> {
     if (!ACTIONABILITY_REFUSAL.test(reason)) throw err;
     return { stale: true, reason };
   }
+  state.pressed = true;
   await pressAt(tabId, point.x, point.y, `node ${node}`);
   if (params.op === "type") {
+    if (state.abandoned) return { ok: true };
     const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
     await send(tabId, "Input.dispatchKeyEvent", {
       type: "keyDown",
@@ -194,8 +213,10 @@ async function act(tabId: number, params: JevActParams): Promise<JevActResult> {
       code: "KeyA",
       modifiers,
     });
+    if (state.abandoned) return { ok: true };
     await send(tabId, "Input.insertText", { text: params.text ?? "" });
   }
+  if (state.abandoned) return { ok: true };
   // Settling is read-only; a navigation mid-settle is fine.
   await evaluate(tabId, `(${jevSettle})(${node}, ${params.op === "type"})`, true).catch(() => {});
   return { ok: true };

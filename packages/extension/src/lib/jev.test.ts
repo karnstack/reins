@@ -101,4 +101,53 @@ describe("jevAct", () => {
     await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toEqual({ ok: true });
     expect(openDialog(3)).toEqual({ type: "confirm", message: "?" });
   });
+
+  it("a dialog from elsewhere before the press is stale, not ok", async () => {
+    const { fire, sendCommand } = stubChrome();
+    sendCommand.mockImplementation(
+      pageAnswers({
+        onPoint: () => {
+          // A page timer opens a dialog while we're still hit-testing.
+          setTimeout(
+            () => fire(3, "Page.javascriptDialogOpening", { type: "alert", message: "!" }),
+            10,
+          );
+          return new Promise(() => {});
+        },
+      }),
+    );
+    await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toEqual({
+      stale: true,
+      reason: "a dialog opened before the action",
+    });
+    const sent = sendCommand.mock.calls.map((c) => c[1]);
+    expect(sent).not.toContain("Input.dispatchMouseEvent");
+  });
+
+  it("an abandoned type sends no more input once the press resumes", async () => {
+    const { fire, sendCommand } = stubChrome();
+    let releasePress!: (v: unknown) => void;
+    sendCommand.mockImplementation(
+      pageAnswers({
+        onPress: () => {
+          setTimeout(
+            () => fire(3, "Page.javascriptDialogOpening", { type: "confirm", message: "?" }),
+            10,
+          );
+          return new Promise((r) => {
+            releasePress = r;
+          });
+        },
+      }),
+    );
+    await expect(jevAct({ tabId: 3, op: "type", node: 1, text: "hi" })).resolves.toEqual({
+      ok: true,
+    });
+    // The dialog is answered: the frozen press response arrives and the orphan resumes.
+    releasePress({});
+    await new Promise((r) => setTimeout(r, 20));
+    const sent = sendCommand.mock.calls.map((c) => c[1]);
+    expect(sent).not.toContain("Input.insertText");
+    expect(sent).not.toContain("Input.dispatchKeyEvent");
+  });
 });
