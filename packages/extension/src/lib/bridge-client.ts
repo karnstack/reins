@@ -55,9 +55,23 @@ export class BridgeClient {
   #attempt = 0;
   #stopped = false;
   #cycleToken = 0;
+  /** Extension → daemon calls awaiting a `response` frame, keyed by call id. */
+  readonly #calls = new Map<
+    string,
+    {
+      resolve: (v: unknown) => void;
+      reject: (e: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  #nextCall = 0;
 
   constructor(opts: BridgeClientOptions) {
     this.#opts = opts;
+  }
+
+  get connected(): boolean {
+    return this.#socket !== undefined;
   }
 
   start(): void {
@@ -70,6 +84,40 @@ export class BridgeClient {
     this.#cycleToken += 1;
     this.#socket?.close();
     this.#socket = undefined;
+    this.#rejectCalls("disconnected from the reins daemon");
+  }
+
+  /** Ask the daemon for one of its extension-callable methods (key_*). */
+  call(method: string, params: unknown, timeoutMs = 5000): Promise<unknown> {
+    const socket = this.#socket;
+    if (!socket) return Promise.reject(new Error("not connected to the reins daemon"));
+    const id = `c${++this.#nextCall}`;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#calls.delete(id);
+        reject(
+          new Error(
+            "the reins daemon didn't answer — update the reins CLI and run `reins restart`",
+          ),
+        );
+      }, timeoutMs);
+      this.#calls.set(id, { resolve, reject, timer });
+      try {
+        socket.send(JSON.stringify({ type: "call", id, method, params }));
+      } catch (err) {
+        clearTimeout(timer);
+        this.#calls.delete(id);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+  }
+
+  #rejectCalls(message: string): void {
+    for (const [, c] of this.#calls) {
+      clearTimeout(c.timer);
+      c.reject(new Error(message));
+    }
+    this.#calls.clear();
   }
 
   #schedule(fn: () => void, ms: number): void {
@@ -162,6 +210,7 @@ export class BridgeClient {
   #onClose(): void {
     if (!this.#socket) return; // stopped or already replaced
     this.#socket = undefined;
+    this.#rejectCalls("disconnected from the reins daemon");
     this.#opts.onStatus?.("disconnected");
     if (this.#stopped) return;
     this.#attempt += 1;
@@ -174,6 +223,18 @@ export class BridgeClient {
     try {
       msg = JSON.parse(raw) as Record<string, unknown>;
     } catch {
+      return;
+    }
+    if (msg.type === "response" && typeof msg.id === "string") {
+      const pending = this.#calls.get(msg.id);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      this.#calls.delete(msg.id);
+      if (msg.ok === true) pending.resolve(msg.result);
+      else {
+        const error = msg.error as { message?: string } | undefined;
+        pending.reject(new Error(error?.message ?? "the reins daemon refused the call"));
+      }
       return;
     }
     if (msg.type === "request" && typeof msg.id === "string" && typeof msg.method === "string") {

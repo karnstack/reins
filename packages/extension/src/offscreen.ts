@@ -36,55 +36,77 @@ function browserName(): string {
   return real ?? brands.find((b) => b.brand === "Chromium")?.brand ?? "browser";
 }
 
-chrome.runtime.onMessage.addListener((msg: unknown) => {
-  if (!msg || typeof msg !== "object") return;
-  const message = msg as Record<string, unknown>;
+chrome.runtime.onMessage.addListener(
+  (
+    msg: unknown,
+    _sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: unknown) => void,
+  ) => {
+    if (!msg || typeof msg !== "object") return;
+    const message = msg as Record<string, unknown>;
 
-  if (message.type === "offscreen:connect") {
-    const urls = Array.isArray(message.urls) ? (message.urls as string[]) : [];
-    if (urls.length === 0) return;
-    // The worker may ask twice on one start (install event + its wake check);
-    // an identical request must not tear down a live connection.
-    if (client && urls.join() === clientUrls.join()) return;
-    clientUrls = urls;
-    // Stop any existing client before creating a new one to avoid duplicate sockets.
-    client?.stop();
-    client = new BridgeClient({
-      urls: () => urls,
-      browser: browserName(),
-      ...(typeof message.version === "string" ? { version: message.version } : {}),
-      // The browser WebSocket shape is compatible with SocketLike at runtime:
-      // MessageEvent has .data and CloseEvent has .code, matching the interface.
-      // The double-cast is intentional — the event handler signatures differ at
-      // the TypeScript level but are wire-compatible.
-      createSocket: (u) => new WebSocket(u) as unknown as SocketLike,
-      dispatch: offscreenDispatch,
-      onStatus: (s) => {
-        // .catch: the worker may be waking up with no listener yet — the
-        // status lands in session storage on the next update; don't spam
-        // the offscreen console with unhandled rejections.
-        void chrome.runtime.sendMessage({ type: "reins:status-update", status: s }).catch(() => {});
-      },
-      onConnected: (url, welcome) => {
-        void chrome.runtime
-          .sendMessage({
-            type: "reins:connected-info",
-            port: portFromUrl(url),
-            version: welcome.version,
-            browserId: welcome.browserId,
-            browser: browserName(),
-          })
-          .catch(() => {});
-      },
-    });
-    client.start();
-    return;
-  }
+    if (message.type === "offscreen:connect") {
+      const urls = Array.isArray(message.urls) ? (message.urls as string[]) : [];
+      if (urls.length === 0) return;
+      // The worker may ask twice on one start (install event + its wake check);
+      // an identical request must not tear down a live connection.
+      if (client && urls.join() === clientUrls.join()) return;
+      clientUrls = urls;
+      // Stop any existing client before creating a new one to avoid duplicate sockets.
+      client?.stop();
+      client = new BridgeClient({
+        urls: () => urls,
+        browser: browserName(),
+        ...(typeof message.version === "string" ? { version: message.version } : {}),
+        // The browser WebSocket shape is compatible with SocketLike at runtime:
+        // MessageEvent has .data and CloseEvent has .code, matching the interface.
+        // The double-cast is intentional — the event handler signatures differ at
+        // the TypeScript level but are wire-compatible.
+        createSocket: (u) => new WebSocket(u) as unknown as SocketLike,
+        dispatch: offscreenDispatch,
+        onStatus: (s) => {
+          // .catch: the worker may be waking up with no listener yet — the
+          // status lands in session storage on the next update; don't spam
+          // the offscreen console with unhandled rejections.
+          void chrome.runtime
+            .sendMessage({ type: "reins:status-update", status: s })
+            .catch(() => {});
+        },
+        onConnected: (url, welcome) => {
+          void chrome.runtime
+            .sendMessage({
+              type: "reins:connected-info",
+              port: portFromUrl(url),
+              version: welcome.version,
+              browserId: welcome.browserId,
+              browser: browserName(),
+            })
+            .catch(() => {});
+        },
+      });
+      client.start();
+      return;
+    }
 
-  if (message.type === "offscreen:disconnect") {
-    client?.stop();
-    client = undefined;
-    clientUrls = [];
-    return;
-  }
-});
+    // Popup → daemon (key management). Answered here: the offscreen document
+    // owns the socket. Returning true keeps the channel open for the reply.
+    if (message.type === "reins:call") {
+      if (!client) {
+        sendResponse({ error: "not connected to the reins daemon" });
+        return;
+      }
+      client.call(String(message.method), message.params).then(
+        (result) => sendResponse({ result }),
+        (err: unknown) => sendResponse({ error: err instanceof Error ? err.message : String(err) }),
+      );
+      return true;
+    }
+
+    if (message.type === "offscreen:disconnect") {
+      client?.stop();
+      client = undefined;
+      clientUrls = [];
+      return;
+    }
+  },
+);
