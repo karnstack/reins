@@ -166,7 +166,7 @@ One file per job:
 | file | job |
 |---|---|
 | `credentials.ts` | read/write/clear `credentials.json` (0600, atomic) |
-| `client.ts` | `POST https://api.typesafe.ai/v1/systemone`; HTTP/1.1 keep-alive via global `fetch`; retry 429/503/529 twice with 0.5 s·2ⁿ backoff; validate every answer (choice ∈ offered, probabilities keyed exactly by the options, each in [0,1], sum within 0.02 of 1). Invalid → throw, nothing executes. |
+| `client.ts` | thin wrapper over the official SDK `@typesafe-ai/sdk` (MIT, zero deps, Node ≥ 20; pinned exact): `TypeSafeClient.systemOne` with the run's `AbortSignal`, the SDK's default retries (408/429/5xx, 2 retries, honours Retry-After), 8 s per attempt, logging off. On top of the SDK's typing, validate every choice answer (choice ∈ offered, probabilities keyed exactly by the options, each in [0,1], sum within 0.02 of 1). Invalid → throw, nothing executes. `AuthenticationError`/`PermissionDeniedError` → "TypeSafe rejected the API key". |
 | `space.ts` | snapshot → indexed element list + questions (port of jev `model.py` `action_space`/`choose`) |
 | `prompts.ts` | port of jev `questions.py` + fill rules |
 | `loop.ts` | the run state machine |
@@ -242,13 +242,15 @@ password, file, or hidden inputs (the snapshot skips them) and the key.
 - Kept in daemon memory after the run stops: goal, start host, fills,
   confirms, history, step count, last fingerprint. Evicted after 15 minutes or
   when a new non-continue run starts on the tab.
-- `--continue` with nothing stored (or after a daemon restart) →
-  `no run to continue on this tab — run reins do "<goal>" again`.
+- `--continue` with nothing stored →
+  `no run to continue on this tab (runs are forgotten after 15 minutes or a daemon restart) — run reins do "<goal>" again`.
 - **Loop breaker.** A `--continue` run that ends without any page change stops
   `stuck`, and marks the run. The next `--continue` on that tab is refused
   until the page's fingerprint differs from the stored one.
-- `--continue` keeps the step count and budget: it continues the same run,
-  it does not reset it.
+- `--continue` keeps the run's history and step count (numbering carries on:
+  `12/30` → `12/42`). Each invocation gets its own budget of `--max-steps` more
+  actions, its own Jev-call cap, and its own `--timeout`, so a run that stopped
+  on `budget` can actually continue.
 
 ### Daemon restarts and version skew (#39)
 
@@ -260,7 +262,7 @@ daemon older than the CLI all go through `POST /shutdown`.
   `jev_act` to return, and answers each waiting `do` with status
   `interrupted`, reason `daemon restarting`, the steps so far, and
   `next: reins do --continue`. That `--continue` then reports
-  `no run to continue on this tab (the daemon restarted) — run reins do "<goal>" again`,
+  `no run to continue on this tab (runs are forgotten after 15 minutes or a daemon restart) — run reins do "<goal>" again`,
   because run memory is in-process. The key file is on disk, so restarts never
   lose it.
 - **Older daemon, newer CLI.** Handled already: `ensureDaemon` restarts it
