@@ -24,24 +24,35 @@ export const RISKY_WORDS = [
   "accept",
 ] as const;
 
+// `\b` is the ASCII word boundary on purpose: the list is English, and the
+// heuristic is known to have holes (non-English labels are not covered).
 const RISKY_RE = new RegExp(`\\b(${RISKY_WORDS.join("|")})\\b`, "i");
 
 export function normalizeLabel(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-/** Why this click must be confirmed first, or undefined when it may go ahead. */
+/** True when the goal says the whole label, bounded by non-alphanumerics:
+ *  "pay now for the flight" says "pay now"; "reorder the list" does not say "order". */
+function goalSaysLabel(goal: string, label: string): boolean {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(goal);
+}
+
+/** Why this click must be confirmed first, or undefined when it may go ahead.
+ *  Only clicks are ever risky: a fill into a field labeled "Send to" is fine. */
 export function riskyReason(
   action: JevAction,
   goal: string,
   confirms: string[],
 ): string | undefined {
+  if (action.kind !== "click") return undefined;
   const label = normalizeLabel(action.label);
-  if (confirms.some((c) => normalizeLabel(c) === label)) return undefined;
   if (label === "" || label === normalizeLabel(action.role ?? "")) return "it has no label";
+  if (confirms.some((c) => normalizeLabel(c) === label)) return undefined;
   const m = RISKY_RE.exec(label);
   if (!m) return undefined;
-  if (normalizeLabel(goal).includes(label)) return undefined;
+  if (goalSaysLabel(normalizeLabel(goal), label)) return undefined;
   return `its label says "${(m[1] as string).toLowerCase()}"`;
 }
 

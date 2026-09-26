@@ -34,9 +34,29 @@ describe("riskyReason", () => {
     expect(riskyReason(click("Pay now"), "x", ["pay  NOW"])).toBeUndefined();
   });
 
+  it("--confirm never waives an unlabeled button", () => {
+    expect(riskyReason(click("button"), "x", ["button"])).toBe("it has no label");
+    expect(riskyReason(click(""), "x", [""])).toBe("it has no label");
+    expect(riskyReason(click(""), "x", ["   "])).toBe("it has no label");
+  });
+
   it("a label the goal says word for word is allowed; a bigger one isn't", () => {
     expect(riskyReason(click("Pay now"), "pay now for the 9:40 flight", [])).toBeUndefined();
     expect(riskyReason(click("Delete account"), "delete the spam", [])).toBeDefined();
+  });
+
+  it("a label inside another word of the goal is not allowed", () => {
+    expect(riskyReason(click("Order"), "reorder the list", [])).toBeDefined();
+    expect(riskyReason(click("Send"), "resend the code", [])).toBeDefined();
+    expect(riskyReason(click("Post"), "enter postcode 90210", [])).toBeDefined();
+    expect(riskyReason(click("Pay"), "paypal login", [])).toBeDefined();
+    expect(riskyReason(click("Pay (now)"), "pay (now) please", [])).toBeUndefined();
+  });
+
+  it("only clicks are risky", () => {
+    const fill: JevAction = { id: "e2", kind: "fill", node: 2, role: "textbox", label: "Send to" };
+    expect(riskyReason(fill, "x", [])).toBeUndefined();
+    expect(riskyReason({ ...fill, label: "" }, "x", [])).toBeUndefined();
   });
 });
 
