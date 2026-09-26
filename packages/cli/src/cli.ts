@@ -52,7 +52,7 @@ async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<
     await waitForBrowsers(ensured.port);
   }
 
-  const result = await rpc(ensured.port, cmd.method, params);
+  const result = await rpc(ensured.port, cmd.methodFor?.(params) ?? cmd.method, params);
 
   if (name === "screenshot") {
     const shot = result as { data: string; mimeType: string };

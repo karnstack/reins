@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // vi.mock is hoisted by vitest so cdp.js is stubbed before any imports run.
 vi.mock("./monitor.js", () => ({
@@ -392,5 +392,104 @@ describe("dispatchWithMeta", () => {
     stubTabs();
     const result = await dispatchMethod("read_text", { tabId: 7 });
     expect(result).not.toHaveProperty("meta");
+  });
+});
+
+describe("tab group gate", () => {
+  const URLS: Record<number, string> = {
+    1: "https://x.com/",
+    2: "https://bank.com/",
+    3: "https://docs.com/",
+  };
+  function stubGroupChrome() {
+    vi.stubGlobal("chrome", {
+      tabs: {
+        get: async (id: number) => ({ id, url: URLS[id], windowId: 1 }),
+        query: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
+        group: vi.fn(async () => 7),
+        ungroup: vi.fn(async () => undefined),
+      },
+      tabGroups: { query: async () => [], update: vi.fn(async () => ({})) },
+    });
+  }
+  function denyBank() {
+    vi.mocked(ensureAllowed).mockImplementation(async (_m, host) => {
+      if (host === "bank.com") {
+        const e = new PolicyDenied("blocked by policy: bank.com is denied");
+        e.meta = { host: "bank.com", tier: "deny" };
+        throw e;
+      }
+      return "read";
+    });
+  }
+
+  // mockImplementation (denyBank) persists across tests; clearAllMocks only
+  // wipes call history. Reset to the allow-all default before each test.
+  beforeEach(() => {
+    vi.mocked(ensureAllowed).mockReset();
+    vi.mocked(ensureAllowed).mockResolvedValue(undefined as never);
+  });
+
+  it("group_tabs checks every tab's host at the group_tabs tier", async () => {
+    stubGroupChrome();
+    const out = await dispatchWithMeta("group_tabs", { tabIds: [1, 3], title: "t" });
+    expect(out.result).toEqual({ groupId: 7 });
+    expect(vi.mocked(ensureAllowed).mock.calls).toEqual([
+      ["group_tabs", "x.com"],
+      ["group_tabs", "docs.com"],
+    ]);
+    expect(out.meta).toEqual({});
+  });
+
+  it("one denied tab refuses the whole group_tabs call, tagged with that tab", async () => {
+    stubGroupChrome();
+    denyBank();
+    const err = (await dispatchWithMeta("group_tabs", { tabIds: [1, 2] }).catch(
+      (e: unknown) => e,
+    )) as PolicyDenied;
+    expect(err).toBeInstanceOf(PolicyDenied);
+    expect(err.meta).toEqual({ host: "bank.com", tier: "deny", tabId: 2 });
+    expect(chrome.tabs.group).not.toHaveBeenCalled();
+  });
+
+  it("ungroup --group checks the group's current tabs and ungroups exactly those", async () => {
+    stubGroupChrome();
+    denyBank();
+    await expect(dispatchWithMeta("ungroup_tabs", { groupId: 7 })).rejects.toBeInstanceOf(
+      PolicyDenied,
+    );
+    expect(chrome.tabs.query).toHaveBeenCalledWith({ groupId: 7 });
+
+    vi.mocked(ensureAllowed).mockReset();
+    vi.mocked(ensureAllowed).mockResolvedValue("read");
+    vi.mocked(chrome.tabs.query).mockClear();
+    await dispatchWithMeta("ungroup_tabs", { groupId: 7 });
+    expect(chrome.tabs.ungroup).toHaveBeenCalledWith([1, 2]);
+    // The gate resolved the group once; the handler acted on that pinned set
+    // rather than querying again.
+    expect(chrome.tabs.query).toHaveBeenCalledTimes(1);
+  });
+
+  it("update_group has no host gate", async () => {
+    stubGroupChrome();
+    await dispatchWithMeta("update_group", { groupId: 7, title: "done" });
+    expect(ensureAllowed).not.toHaveBeenCalled();
+    expect(chrome.tabGroups.update).toHaveBeenCalledWith(7, { title: "done" });
+  });
+
+  it("validates params (exactly-one rule) before touching tabs", async () => {
+    stubGroupChrome();
+    await expect(dispatchWithMeta("ungroup_tabs", {})).rejects.toThrow(/exactly one/);
+    await expect(dispatchWithMeta("update_group", { groupId: 7 })).rejects.toThrow(
+      /title, color, or collapsed/,
+    );
+  });
+
+  it("unsupported browser fails before any policy check", async () => {
+    vi.stubGlobal("chrome", { tabs: { get: async () => ({}), query: async () => [] } });
+    await expect(dispatchWithMeta("ungroup_tabs", { groupId: 7 })).rejects.toThrow(
+      "doesn't support tab groups",
+    );
+    expect(ensureAllowed).not.toHaveBeenCalled();
   });
 });

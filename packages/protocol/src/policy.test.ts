@@ -84,10 +84,13 @@ describe("effectiveTier", () => {
 });
 
 describe("METHOD_TIERS", () => {
-  it("classifies exactly the 24 bridge methods", () => {
+  it("classifies exactly the 27 bridge methods", () => {
     const read = [
       "list_tabs",
       "list_groups",
+      "group_tabs",
+      "update_group",
+      "ungroup_tabs",
       "read_snapshot",
       "read_text",
       "screenshot",

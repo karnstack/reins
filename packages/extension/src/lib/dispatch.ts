@@ -1,10 +1,13 @@
 import {
   effectiveTier,
   type GatedMethod,
+  GroupTabsParams,
   hostOf,
   METHOD_TIERS,
   PolicyTightenParams,
   type ResponseMeta,
+  UngroupTabsParams,
+  UpdateGroupParams,
 } from "@reins/protocol";
 import {
   cdpClick,
@@ -31,7 +34,14 @@ import {
 } from "./page-actions.js";
 import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
 import { reloadExtension } from "./reload.js";
-import { listGroups } from "./tab-groups.js";
+import {
+  groupTabIds,
+  groupTabs,
+  listGroups,
+  requireGroups,
+  ungroupTabs,
+  updateGroup,
+} from "./tab-groups.js";
 import { closeTab, listTabs, resizeWindow, selectTab } from "./tab-handler.js";
 
 const NAV_HISTORY = new Set(["back", "forward", "reload"]);
@@ -41,17 +51,46 @@ interface Gated {
   meta: ResponseMeta;
 }
 
+/** Check every target tab's host; the first denial refuses the whole call,
+ *  tagged with that tab for the audit trail. */
+async function ensureTabsAllowed(method: GatedMethod, tabIds: number[]): Promise<void> {
+  for (const tabId of tabIds) {
+    const tab = await chrome.tabs.get(tabId);
+    try {
+      await ensureAllowed(method, hostOf(tab.url ?? ""));
+    } catch (err) {
+      if (err instanceof PolicyDenied && err.meta) err.meta = { ...err.meta, tabId };
+      throw err;
+    }
+  }
+}
+
 /**
  * Policy gate. Resolves the target tab once (so gate and handler agree),
  * checks the host's tier against the method's required tier, and returns
  * params with tabId pinned plus the resolved host/tier/tabId for the audit
  * trail. list_tabs is gated per-tab (redaction) in runHandler; open_tab has
  * no current tab and checks its destination. list_groups has no host (group
- * titles are the user's own labels).
+ * titles are the user's own labels). Group ops check every target tab (for
+ * a whole group, its current tabs) and pin that set in params; update_group
+ * only edits the group's label.
  */
 async function gate(method: GatedMethod, params: unknown): Promise<Gated> {
   const p = { ...((params ?? {}) as Record<string, unknown>) };
   if (method === "list_tabs" || method === "list_groups") return { params: p, meta: {} };
+  if (method === "update_group") {
+    requireGroups();
+    return { params: UpdateGroupParams.parse(p), meta: {} };
+  }
+  if (method === "group_tabs" || method === "ungroup_tabs") {
+    // Before any lookup: on a browser without groups, tabs.query({groupId})
+    // may ignore the filter and return every tab.
+    requireGroups();
+    const parsed = (method === "group_tabs" ? GroupTabsParams : UngroupTabsParams).parse(p);
+    const tabIds = parsed.tabIds ?? (await groupTabIds(parsed.groupId as number));
+    await ensureTabsAllowed(method, tabIds);
+    return { params: { ...parsed, tabIds }, meta: {} };
+  }
   if (method === "open_tab") {
     const host = hostOf(String(p.url ?? ""));
     const tier = await ensureAllowed("open_tab", host);
@@ -107,6 +146,12 @@ async function runHandler(method: GatedMethod, gated: Record<string, unknown>): 
     }
     case "list_groups":
       return listGroups();
+    case "group_tabs":
+      return groupTabs(gated as Parameters<typeof groupTabs>[0]);
+    case "update_group":
+      return updateGroup(gated as Parameters<typeof updateGroup>[0]);
+    case "ungroup_tabs":
+      return ungroupTabs(gated as Parameters<typeof ungroupTabs>[0]);
     case "open_tab":
       return cdpOpenTab(gated as Parameters<typeof cdpOpenTab>[0]);
     case "close_tab":

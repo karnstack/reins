@@ -10,6 +10,7 @@ import {
   EvalParams,
   EvalResult,
   FillParams,
+  GroupTabsParams,
   HoverParams,
   NavigateParams,
   NetworkEntry,
@@ -29,6 +30,8 @@ import {
   SnapshotParams,
   SnapshotResult,
   TypeParams,
+  UngroupTabsParams,
+  UpdateGroupParams,
   UploadParams,
   WaitForParams,
 } from "./cdp.js";
@@ -320,5 +323,27 @@ describe("NetworkResult schema", () => {
 
   it("rejects missing entries", () => {
     expect(() => NetworkResult.parse({})).toThrow();
+  });
+});
+
+describe("tab group params", () => {
+  it("GroupTabsParams needs at least one tab and a known color", () => {
+    expect(GroupTabsParams.parse({ tabIds: [1, 2], title: "reins", color: "blue" })).toMatchObject({
+      tabIds: [1, 2],
+    });
+    expect(() => GroupTabsParams.parse({ tabIds: [] })).toThrow();
+    expect(() => GroupTabsParams.parse({ tabIds: [1], color: "magenta" })).toThrow();
+  });
+
+  it("UpdateGroupParams needs something to change", () => {
+    expect(UpdateGroupParams.parse({ groupId: 7, collapsed: true }).collapsed).toBe(true);
+    expect(() => UpdateGroupParams.parse({ groupId: 7 })).toThrow(/title, color, or collapsed/);
+  });
+
+  it("UngroupTabsParams needs exactly one of tabIds or groupId", () => {
+    expect(UngroupTabsParams.parse({ tabIds: [1] }).tabIds).toEqual([1]);
+    expect(UngroupTabsParams.parse({ groupId: 7 }).groupId).toBe(7);
+    expect(() => UngroupTabsParams.parse({})).toThrow(/exactly one/);
+    expect(() => UngroupTabsParams.parse({ tabIds: [1], groupId: 7 })).toThrow(/exactly one/);
   });
 });

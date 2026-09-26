@@ -89,6 +89,9 @@ reins status
 ```
 tabs / open <url> / close / focus / nav <url|back|forward|reload>
 groups          tab groups (id, title, color); `tabs` shows g<id> per grouped tab
+group           --tab <id> [--tab …] [--group <gid>] [--title T] [--color blue] [--collapse|--expand]
+                no --tab + --group <gid>: edit that group
+ungroup         --tab <id> [--tab …] | --group <gid>   (tabs stay open)
 snapshot        interactive elements + refs
 click           --ref|--selector [--button right|middle] [--count 2]
 type            --text "…" [--enter]      keystrokes into an element
@@ -110,8 +113,16 @@ cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
 ```
 
 Page commands take `--tab <id>` (default: the active tab); `tabs` and
-`groups` take no tab. Every command takes `--json` (raw result).
+`groups` take no tab; `group` and `ungroup` take a repeatable `--tab <id>`
+list (no default). Every command takes `--json` (raw result).
 `reins help <command>` shows exact usage.
+
+**Tab groups.** You can put the tabs you open for a task into a group
+(`reins group --tab 12 --tab 13 --title reins --color blue`) so the user sees
+which tabs are yours. Grouping moves tabs into the group's window (a new group
+stays in the first tab's window). Don't regroup the user's own tabs unless they
+ask. A browser without the tab-group API answers with an error naming it, and
+`reins groups` lists it as skipped. Dia supports groups (cyan shows as blue).
 
 ## Recipes for the powerful stuff
 

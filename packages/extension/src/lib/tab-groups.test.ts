@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GroupsUnsupported, groupsSupported, listGroups } from "./tab-groups.js";
+import {
+  GroupsUnsupported,
+  groupsSupported,
+  groupTabIds,
+  groupTabs,
+  listGroups,
+  ungroupTabs,
+  updateGroup,
+} from "./tab-groups.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -70,5 +78,61 @@ describe("listGroups", () => {
     expect((err as Error).message).toBe(
       "this browser doesn't support tab groups (chrome.tabGroups unavailable)",
     );
+  });
+});
+
+describe("groupTabs", () => {
+  it("creates a new group in the first tab's window, then applies props", async () => {
+    stubGroups();
+    const out = await groupTabs({ tabIds: [1, 2], title: "reins", color: "blue" });
+    expect(out).toEqual({ groupId: 7 });
+    expect(chrome.tabs.group).toHaveBeenCalledWith({
+      tabIds: [1, 2],
+      createProperties: { windowId: 1 },
+    });
+    expect(chrome.tabGroups.update).toHaveBeenCalledWith(7, { title: "reins", color: "blue" });
+  });
+
+  it("adds to an existing group without createProperties, and skips update when no props", async () => {
+    stubGroups();
+    await groupTabs({ tabIds: [3], groupId: 7 });
+    expect(chrome.tabs.group).toHaveBeenCalledWith({ tabIds: [3], groupId: 7 });
+    expect(chrome.tabGroups.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses with code=unsupported on browsers without groups", async () => {
+    stubGroups({ tabGroups: undefined });
+    await expect(groupTabs({ tabIds: [1] })).rejects.toBeInstanceOf(GroupsUnsupported);
+  });
+});
+
+describe("updateGroup", () => {
+  it("passes only the given props", async () => {
+    stubGroups();
+    expect(await updateGroup({ groupId: 7, collapsed: true })).toEqual({ ok: true });
+    expect(chrome.tabGroups.update).toHaveBeenCalledWith(7, { collapsed: true });
+  });
+});
+
+describe("ungroupTabs / groupTabIds", () => {
+  it("ungroups exactly the gate-resolved ids, never re-resolving (tabs stay open)", async () => {
+    stubGroups();
+    const query = vi.fn(async () => [{ id: 1 }, { id: 2 }, { id: 3 }]);
+    (chrome.tabs as { query: unknown }).query = query;
+    expect(await ungroupTabs({ tabIds: [1, 2] })).toEqual({ ok: true });
+    expect(chrome.tabs.ungroup).toHaveBeenCalledWith([1, 2]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("an empty set is a no-op", async () => {
+    stubGroups();
+    await ungroupTabs({ tabIds: [] });
+    expect(chrome.tabs.ungroup).not.toHaveBeenCalled();
+  });
+
+  it("groupTabIds drops tabs without an id", async () => {
+    stubGroups();
+    (chrome.tabs as { query: unknown }).query = async () => [{ id: 4 }, {}];
+    expect(await groupTabIds(7)).toEqual([4]);
   });
 });

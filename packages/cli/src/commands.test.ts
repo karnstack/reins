@@ -203,6 +203,46 @@ describe("TOOL_COMMANDS: params", () => {
     expect(() => build("cdp", ["Page.enable", "not json"])).toThrow("must be valid JSON");
     expect(() => build("cdp", ["Page.enable", "[1,2]"])).toThrow("must be a JSON object");
   });
+
+  it("group: repeatable --tab creates a group; props map through", () => {
+    const p = build("group", ["--tab", "12", "--tab", "13", "--title", "reins", "--color", "blue"]);
+    expect(p).toEqual({ tabIds: [12, 13], title: "reins", color: "blue" });
+    expect(cmd("group").methodFor?.(p)).toBe("group_tabs");
+  });
+
+  it("group: --tab with --group adds to that group", () => {
+    const p = build("group", ["--tab", "14", "--group", "7", "--browser", "b1"]);
+    expect(p).toEqual({ tabIds: [14], groupId: 7, browserId: "b1" });
+    expect(cmd("group").methodFor?.(p)).toBe("group_tabs");
+  });
+
+  it("group: --group without --tab edits the group", () => {
+    const p = build("group", ["--group", "7", "--collapse"]);
+    expect(p).toEqual({ groupId: 7, collapsed: true });
+    expect(cmd("group").methodFor?.(p)).toBe("update_group");
+    expect(build("group", ["--group", "7", "--expand"])).toEqual({ groupId: 7, collapsed: false });
+  });
+
+  it("group: usage errors", () => {
+    expect(() => build("group", [])).toThrow(UsageError);
+    expect(() => build("group", ["--group", "7"])).toThrow(/--title, --color, --collapse/);
+    expect(() => build("group", ["--tab", "1", "--collapse", "--expand"])).toThrow(UsageError);
+    expect(() => build("group", ["--tab", "1", "--color", "magenta"])).toThrow(UsageError);
+    expect(() => build("group", ["--tab", "x"])).toThrow(UsageError);
+  });
+
+  it("group: formats the group id or ok", () => {
+    expect(format("group", { groupId: 7 })).toBe("group 7");
+    expect(format("group", { ok: true })).toBe("ok");
+  });
+
+  it("ungroup: exactly one of --tab or --group", () => {
+    expect(build("ungroup", ["--tab", "1", "--tab", "2"])).toEqual({ tabIds: [1, 2] });
+    expect(build("ungroup", ["--group", "7"])).toEqual({ groupId: 7 });
+    expect(() => build("ungroup", [])).toThrow(UsageError);
+    expect(() => build("ungroup", ["--tab", "1", "--group", "7"])).toThrow(UsageError);
+    expect(cmd("ungroup").method).toBe("ungroup_tabs");
+  });
 });
 
 describe("TOOL_COMMANDS: formatting", () => {

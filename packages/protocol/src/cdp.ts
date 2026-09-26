@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TabGroupColor } from "./bridge.js";
 
 /** Optional target tab; defaults (server/extension side) to the active tab. */
 const tabId = z.number().optional();
@@ -90,6 +91,46 @@ export type CloseTabParams = z.infer<typeof CloseTabParams>;
 
 export const SelectTabParams = z.object({ browserId, tabId: z.number() });
 export type SelectTabParams = z.infer<typeof SelectTabParams>;
+
+/** Group properties the agent may set (all optional). */
+const groupProps = {
+  title: z.string().optional(),
+  color: TabGroupColor.optional(),
+  collapsed: z.boolean().optional(),
+};
+
+/** `group_tabs`: put tabs in a new group (no groupId) or an existing one. */
+export const GroupTabsParams = z.object({
+  browserId,
+  tabIds: z.array(z.number()).min(1),
+  groupId: z.number().optional(),
+  ...groupProps,
+});
+export type GroupTabsParams = z.infer<typeof GroupTabsParams>;
+
+export const GroupTabsResult = z.object({ groupId: z.number() });
+export type GroupTabsResult = z.infer<typeof GroupTabsResult>;
+
+/** `update_group`: retitle / recolor / collapse a group. */
+export const UpdateGroupParams = z
+  .object({ browserId, groupId: z.number(), ...groupProps })
+  .refine((v) => v.title !== undefined || v.color !== undefined || v.collapsed !== undefined, {
+    message: "update_group needs a title, color, or collapsed",
+  });
+export type UpdateGroupParams = z.infer<typeof UpdateGroupParams>;
+
+/** `ungroup_tabs`: pull tabs out of their group, or dissolve a whole group.
+ *  Never closes tabs. */
+export const UngroupTabsParams = z
+  .object({
+    browserId,
+    tabIds: z.array(z.number()).min(1).optional(),
+    groupId: z.number().optional(),
+  })
+  .refine((v) => (v.tabIds === undefined) !== (v.groupId === undefined), {
+    message: "ungroup_tabs needs exactly one of tabIds or groupId",
+  });
+export type UngroupTabsParams = z.infer<typeof UngroupTabsParams>;
 
 export const ScreenshotParams = z.object({
   browserId,
