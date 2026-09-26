@@ -3,10 +3,25 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs, UsageError } from "./args.js";
-import { browsersText, doctorReport, healthSummary, helpText, logsInfo } from "./cli-commands.js";
+import {
+  browsersText,
+  doctorReport,
+  healthSummary,
+  helpText,
+  logsInfo,
+  RESTART_WAIT_MS,
+  runRestart,
+} from "./cli-commands.js";
 import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
-import { ensureDaemon, findDaemon, waitForBrowsers } from "./ensure.js";
+import {
+  ensureDaemon,
+  findDaemon,
+  probeHealth,
+  restartDaemon,
+  stopDaemon,
+  waitForBrowsers,
+} from "./ensure.js";
 import { logsDir } from "./log.js";
 import { packageVersion } from "./version.js";
 
@@ -92,11 +107,19 @@ async function main(): Promise<void> {
         console.log("no reins daemon running.");
         break;
       }
-      await fetch(`http://127.0.0.1:${found.port}/shutdown`, {
-        method: "POST",
-        signal: AbortSignal.timeout(3000),
-      });
+      await stopDaemon(found.port);
       console.log(`daemon on port ${found.port} stopped.`);
+      break;
+    }
+
+    case "restart": {
+      const { text, ok } = await runRestart({
+        restart: () => restartDaemon(loadOrCreateConfig()),
+        waitForBrowsers: (port) => waitForBrowsers(port, { timeoutMs: RESTART_WAIT_MS }),
+        probe: probeHealth,
+      });
+      console.log(text);
+      if (!ok) process.exitCode = 1;
       break;
     }
 
@@ -161,7 +184,7 @@ async function main(): Promise<void> {
       if (!id) throw new UsageError("usage: reins allow <extension-id>");
       const { allowExtension } = await import("./allowlist.js");
       allowExtension(loadOrCreateConfig().dir, id);
-      console.log(`allowed ${id} — restart the daemon (\`reins kill\`; it respawns on demand).`);
+      console.log(`allowed ${id} — restart the daemon (\`reins restart\`) to pick it up.`);
       break;
     }
 
@@ -198,7 +221,7 @@ async function main(): Promise<void> {
     case "status": {
       const cfg = loadOrCreateConfig();
       const found = await findDaemon(cfg);
-      console.log(healthSummary(found?.health, found?.port ?? cfg.port));
+      console.log(healthSummary(found?.health, found?.port ?? cfg.port, packageVersion()));
       console.log(`logs   : ${logsDir()}`);
       break;
     }
@@ -206,7 +229,7 @@ async function main(): Promise<void> {
     case "doctor": {
       const cfg = loadOrCreateConfig();
       const found = await findDaemon(cfg);
-      const report = doctorReport(cfg, found?.health);
+      const report = doctorReport(cfg, found?.health, packageVersion());
       for (const c of report.checks) {
         console.log(`${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`);
       }

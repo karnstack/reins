@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { BrowserInfo, SkippedBrowser, Tab, TabGroup } from "@reins/protocol";
 import type { ToolCommand } from "./commands.js";
 import type { ReinsConfig } from "./config.js";
+import { isOlderVersion, wantsRestart } from "./ensure.js";
 
 export interface DaemonHealth {
   ok: boolean;
@@ -58,6 +59,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     line("extension", "install the extension without the Chrome Web Store (load unpacked)"),
     line("", "  --reload: re-stage, then reload an unpacked (dev/sideload) build"),
     line("allow <id>", "allow an unpacked/dev extension to connect"),
+    line("restart", "restart the background daemon (after an upgrade or `reins allow`)"),
     line("kill", "stop the background daemon"),
     line("doctor", "run diagnostic checks"),
     line("logs", "show the daemon log location and recent lines"),
@@ -69,8 +71,70 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
   ].join("\n");
 }
 
-/** Human status lines for `reins status`. */
-export function healthSummary(h: DaemonHealth | undefined, port: number): string {
+/** packageVersion() falls back to "0.0.0" when package.json is unreadable — not a real version. */
+const knownVersion = (v: string) => v !== "0.0.0";
+
+/** A live daemon: its port and last /health reply. */
+export interface Daemon {
+  port: number;
+  health: DaemonHealth;
+}
+
+/** How long `reins restart` waits for previously connected browsers to come
+ *  back (the extension's reconnect backoff caps at 10s). */
+export const RESTART_WAIT_MS = 15_000;
+
+export interface RestartDeps {
+  /** Stop the live daemon (if any) and spawn a fresh one. */
+  restart(): Promise<{ previous?: Daemon; current: Daemon }>;
+  /** Resolve once a browser is on `port`; reject when RESTART_WAIT_MS runs out. */
+  waitForBrowsers(port: number): Promise<DaemonHealth>;
+  /** Fresh /health, for the final report. */
+  probe(port: number): Promise<Daemon | undefined>;
+}
+
+/**
+ * `reins restart`: restart the daemon, then report what came back. Browsers
+ * that were connected reconnect on their own, so wait for one when there was
+ * one — the next command would otherwise race the extension. `ok` is false
+ * when they don't return in time.
+ */
+export async function runRestart(deps: RestartDeps): Promise<{ text: string; ok: boolean }> {
+  const { previous, current } = await deps.restart();
+  const hadBrowsers = (previous?.health.browsers.length ?? 0) > 0;
+  // Only the wait's timeout is swallowed — the report below says so.
+  if (hadBrowsers) await deps.waitForBrowsers(current.port).catch(() => undefined);
+  // Re-probe rather than trust the spawn-time snapshot, which predates any reconnect.
+  const h = (await deps.probe(current.port))?.health ?? current.health;
+
+  const prev = previous?.health.version;
+  const head =
+    prev === undefined
+      ? `no daemon was running — started v${h.version} on 127.0.0.1:${current.port}`
+      : prev === h.version
+        ? `daemon restarted on 127.0.0.1:${current.port} (v${h.version})`
+        : `daemon restarted on 127.0.0.1:${current.port} (v${prev} → v${h.version})`;
+
+  if (h.browsers.length > 0) {
+    const names = [...new Set(h.browsers.map((b) => b.browser))].join(", ");
+    return { text: `${head}\nbrowser: ${h.browsers.length} connected (${names})`, ok: true };
+  }
+  if (hadBrowsers) {
+    const secs = Math.round(RESTART_WAIT_MS / 1000);
+    return {
+      text: `${head}\nbrowser: none reconnected within ${secs}s — check the extension (\`reins status\`)`,
+      ok: false,
+    };
+  }
+  return { text: `${head}\nbrowser: none connected (none were before the restart)`, ok: true };
+}
+
+/** Human status lines for `reins status`. `cliVersion` adds a hint when the daemon is older. */
+export function healthSummary(
+  h: DaemonHealth | undefined,
+  port: number,
+  cliVersion?: string,
+): string {
   if (!h) {
     return [
       `daemon : not running (no reins daemon answered on the candidate ports around ${port})`,
@@ -78,6 +142,11 @@ export function healthSummary(h: DaemonHealth | undefined, port: number): string
     ].join("\n");
   }
   const lines = [`daemon : running on 127.0.0.1:${port} (v${h.version})`];
+  if (cliVersion !== undefined && wantsRestart(h.version, cliVersion)) {
+    lines.push(
+      `         older than the CLI (v${cliVersion}) — \`reins restart\`, or the next tool command restarts it`,
+    );
+  }
   if (h.browsers.length === 0) {
     lines.push(
       "browser: none connected — install the reins extension (or `reins allow <id>` for dev builds)",
@@ -130,13 +199,46 @@ export function groupsText(groups: TabGroup[], skipped: SkippedBrowser[] = []): 
   return lines.join("\n");
 }
 
+export interface DoctorCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
 export interface DoctorReport {
-  checks: Array<{ name: string; ok: boolean; detail: string }>;
+  checks: DoctorCheck[];
   ok: boolean;
 }
 
-/** Diagnostic checks for `reins doctor`. */
-export function doctorReport(cfg: ReinsConfig, health?: DaemonHealth): DoctorReport {
+/**
+ * Daemon vs CLI version. Older daemon: left over from before an upgrade, so
+ * restart it. Newer daemon: this CLI is the stale one (a second install, or
+ * an old copy earlier on PATH) — restarting from it would downgrade the daemon.
+ */
+function versionCheck(daemon: string, cli: string): DoctorCheck {
+  if (isOlderVersion(daemon, cli)) {
+    return {
+      name: "version",
+      ok: false,
+      detail: `daemon v${daemon}, CLI v${cli} — run \`reins restart\``,
+    };
+  }
+  if (isOlderVersion(cli, daemon)) {
+    return {
+      name: "version",
+      ok: false,
+      detail: `daemon v${daemon} is newer than this CLI (v${cli}) — upgrade it (\`npm i -g @karnstack/reins@latest\`) or check \`which -a reins\` for a second install`,
+    };
+  }
+  return { name: "version", ok: true, detail: `daemon and CLI both v${cli}` };
+}
+
+/** Diagnostic checks for `reins doctor`. `cliVersion` is compared against the daemon's. */
+export function doctorReport(
+  cfg: ReinsConfig,
+  health: DaemonHealth | undefined,
+  cliVersion: string,
+): DoctorReport {
   const checks = [
     { name: "config-dir", ok: cfg.dir.length > 0, detail: cfg.dir },
     { name: "port", ok: Number.isInteger(cfg.port) && cfg.port > 0, detail: String(cfg.port) },
@@ -148,6 +250,9 @@ export function doctorReport(cfg: ReinsConfig, health?: DaemonHealth): DoctorRep
         ? `running (v${health.version})`
         : "not running — starts on demand (`reins tabs`), or run `reins daemon`",
     },
+    ...(health && knownVersion(health.version) && knownVersion(cliVersion)
+      ? [versionCheck(health.version, cliVersion)]
+      : []),
     {
       name: "browser",
       ok: (health?.browsers.length ?? 0) > 0,

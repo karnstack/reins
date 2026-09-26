@@ -57,10 +57,11 @@ id (e.g. `b1 (Chrome)`).
 To debug the daemon itself, run it in the foreground: `pnpm daemon`
 (Ctrl-C stops it). `pnpm reins kill` stops a background one.
 
-After changing code, `pnpm build`, then `pnpm reins kill` for CLI/daemon
-changes and `pnpm reins extension --reload` for extension changes — it
-reloads the unpacked extension in place, instead of clicking ⟳ Reload in
-`chrome://extensions`. (It also re-stages the sideload copy in
+After changing code, `pnpm build`, then `pnpm reins restart` for CLI/daemon
+changes (a dev build keeps its version number, so the automatic
+restart-on-upgrade doesn't kick in) and `pnpm reins extension --reload` for
+extension changes — it reloads the unpacked extension in place, instead of
+clicking ⟳ Reload in `chrome://extensions`. (It also re-stages the sideload copy in
 `~/.reins/extension` from this checkout, so a profile that loads that copy
 picks up your dev build on its next reload.)
 
@@ -74,12 +75,13 @@ a CLI on PATH, any agent with a shell can use it — no per-agent registration.
 
 - **Popover stays "Disconnected":** daemon not running (`reins status` —
   any tool command starts it), or the dev extension ID isn't allowlisted
-  (`reins allow <id>`, then `reins kill` — it respawns on demand).
+  (`reins allow <id>`, then `reins restart`).
 - **Port collisions:** none, normally — the daemon walks 8765–8774 and the
   extension + CLI discover it. `REINS_PORT=<port>` pins an exact port for
   everything (no walking); the popover's Advanced section can pin the
   extension too.
 - **`no browser connected`:** the extension isn't installed/allowed in any
   open browser, or it's still reconnecting (up to ~10 s after a daemon
-  restart). `reins doctor` shows what's reachable.
+  restart — `reins restart` waits 15 s for it). `reins doctor` shows what's
+  reachable, including a daemon that's older than the CLI.
 - **Anything else:** `reins logs` tails the newest daemon log.

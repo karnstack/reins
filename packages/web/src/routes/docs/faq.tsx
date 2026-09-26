@@ -34,6 +34,12 @@ const FAQS = [
       "No. Any reins command starts the daemon on demand, and the extension finds it on its own through localhost port discovery. reins kill stops it; reins status shows what is connected.",
   },
   {
+    id: "update",
+    question: "How do I update reins?",
+    answer:
+      "Run npm i -g @karnstack/reins@latest. The next tool command (reins tabs, say) notices the running daemon is older than the CLI and restarts it on the new version; reins restart does it right away. reins status and reins doctor only report the mismatch. The Chrome Web Store extension updates itself.",
+  },
+  {
     id: "mcp",
     question: "How is this different from an MCP browser server?",
     answer:

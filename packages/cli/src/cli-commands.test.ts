@@ -9,6 +9,8 @@ import {
   healthSummary,
   helpText,
   logsInfo,
+  RESTART_WAIT_MS,
+  runRestart,
   tabsText,
 } from "./cli-commands.js";
 import { TOOL_COMMANDS } from "./commands.js";
@@ -32,10 +34,19 @@ describe("helpText", () => {
     for (const name of Object.keys(TOOL_COMMANDS)) {
       expect(text, name).toContain(name);
     }
-    for (const cmd of ["browsers", "status", "allow", "kill", "doctor", "logs", "daemon"]) {
+    for (const cmd of [
+      "browsers",
+      "status",
+      "allow",
+      "restart",
+      "kill",
+      "doctor",
+      "logs",
+      "daemon",
+    ]) {
       expect(text).toContain(cmd);
     }
-    for (const gone of ["reins up", "install claude", "--stdio", "restart"]) {
+    for (const gone of ["reins up", "install claude", "--stdio"]) {
       expect(text, gone).not.toContain(gone);
     }
   });
@@ -46,6 +57,100 @@ describe("helpText", () => {
 
   it("help lists the audit command", () => {
     expect(helpText("1.2.3", TOOL_COMMANDS)).toContain("audit");
+  });
+
+  it("describes restart as the thing to run after an upgrade or `reins allow`", () => {
+    expect(helpText("1.2.3", TOOL_COMMANDS)).toContain(
+      "restart the background daemon (after an upgrade or `reins allow`)",
+    );
+  });
+});
+
+describe("runRestart", () => {
+  const NONE = { ...HEALTH, browsers: [] };
+  const daemon = (port: number, health = HEALTH) => ({ port, health });
+
+  /** Deps whose wait resolves (or times out) and whose probe answers `after`. */
+  function deps(opts: {
+    previous?: { port: number; health: typeof HEALTH };
+    after: typeof HEALTH;
+    waitTimesOut?: boolean;
+  }) {
+    const calls = { waited: 0, probed: 0 };
+    return {
+      calls,
+      restart: async () => ({
+        ...(opts.previous ? { previous: opts.previous } : {}),
+        current: daemon(8765, NONE),
+      }),
+      waitForBrowsers: async () => {
+        calls.waited++;
+        if (opts.waitTimesOut) throw new Error("no browser connected");
+        return opts.after;
+      },
+      probe: async (port: number) => {
+        calls.probed++;
+        return daemon(port, opts.after);
+      },
+    };
+  }
+
+  it("reports the browsers that came back, with the version change", async () => {
+    const d = deps({ previous: daemon(8765, { ...HEALTH, version: "0.0.9" }), after: HEALTH });
+    const { text, ok } = await runRestart(d);
+    expect(ok).toBe(true);
+    expect(text).toBe(
+      "daemon restarted on 127.0.0.1:8765 (v0.0.9 → v0.1.0)\nbrowser: 1 connected (Chrome)",
+    );
+    expect(d.calls.waited).toBe(1);
+  });
+
+  it("drops the arrow when the version is unchanged", async () => {
+    const { text } = await runRestart(deps({ previous: daemon(8765), after: HEALTH }));
+    expect(text).toContain("(v0.1.0)\n");
+  });
+
+  it("fails plainly when browsers were connected before but none came back", async () => {
+    const d = deps({ previous: daemon(8765), after: NONE, waitTimesOut: true });
+    const { text, ok } = await runRestart(d);
+    expect(ok).toBe(false);
+    expect(text).toContain(
+      `browser: none reconnected within ${RESTART_WAIT_MS / 1000}s — check the extension (\`reins status\`)`,
+    );
+    expect(text).not.toContain("~10s");
+  });
+
+  it("does not wait, and does not imply a reconnect, when nothing was connected before", async () => {
+    const d = deps({ previous: daemon(8765, NONE), after: NONE });
+    const { text, ok } = await runRestart(d);
+    expect(ok).toBe(true);
+    expect(text).toContain("browser: none connected (none were before the restart)");
+    expect(d.calls.waited).toBe(0);
+  });
+
+  it("says when no daemon was running at all", async () => {
+    const { text, ok } = await runRestart(deps({ after: NONE }));
+    expect(ok).toBe(true);
+    expect(text).toContain("no daemon was running — started v0.1.0 on 127.0.0.1:8765");
+    expect(text).toContain("none were before the restart");
+  });
+
+  it("reports fresh health rather than the spawn-time snapshot", async () => {
+    // Spawn snapshot has no browsers; the re-probe after the wait does.
+    const d = deps({ previous: daemon(8765), after: HEALTH });
+    const { text } = await runRestart(d);
+    expect(d.calls.probed).toBe(1);
+    expect(text).toContain("browser: 1 connected (Chrome)");
+  });
+
+  it("lets a restart failure through untouched", async () => {
+    const d = {
+      ...deps({ after: NONE }),
+      restart: async () => {
+        throw new Error("did not stop");
+      },
+    };
+    await expect(runRestart(d)).rejects.toThrow("did not stop");
   });
 });
 
@@ -61,6 +166,22 @@ describe("healthSummary", () => {
     const s = healthSummary(undefined, 8765);
     expect(s).toContain("not running");
     expect(s).toContain("on demand");
+  });
+
+  it("hints at `reins restart` when the daemon is older than the CLI", () => {
+    const s = healthSummary(HEALTH, 8765, "0.2.0");
+    expect(s).toContain("older than the CLI (v0.2.0) — `reins restart`");
+    expect(s.split("\n").filter((l) => l.includes("older than")).length).toBe(1);
+  });
+
+  it("stays quiet when versions match, the daemon is newer, or either is unknown", () => {
+    expect(healthSummary(HEALTH, 8765, "0.1.0")).not.toContain("older than");
+    expect(healthSummary(HEALTH, 8765, "0.0.9")).not.toContain("older than");
+    expect(healthSummary(HEALTH, 8765, "0.0.0")).not.toContain("older than");
+    expect(healthSummary({ ...HEALTH, version: "0.0.0" }, 8765, "0.2.0")).not.toContain(
+      "older than",
+    );
+    expect(healthSummary(HEALTH, 8765)).not.toContain("older than");
   });
 });
 
@@ -145,17 +266,61 @@ describe("groupsText", () => {
 });
 
 describe("doctorReport", () => {
+  const check = (r: ReturnType<typeof doctorReport>, name: string) =>
+    r.checks.find((c) => c.name === name);
+
   it("passes all checks with a healthy daemon and a browser", () => {
-    const report = doctorReport(cfg(), HEALTH);
+    const report = doctorReport(cfg(), HEALTH, "0.1.0");
     expect(report.ok).toBe(true);
-    expect(report.checks.find((c) => c.name === "daemon")?.ok).toBe(true);
-    expect(report.checks.find((c) => c.name === "browser")?.ok).toBe(true);
+    expect(check(report, "daemon")?.ok).toBe(true);
+    expect(check(report, "browser")?.ok).toBe(true);
+    expect(check(report, "version")).toEqual({
+      name: "version",
+      ok: true,
+      detail: "daemon and CLI both v0.1.0",
+    });
   });
 
   it("fails the daemon and browser checks when nothing is running", () => {
-    const report = doctorReport(cfg(), undefined);
+    const report = doctorReport(cfg(), undefined, "0.1.0");
     expect(report.ok).toBe(false);
-    expect(report.checks.find((c) => c.name === "daemon")?.ok).toBe(false);
+    expect(check(report, "daemon")?.ok).toBe(false);
+    // Nothing to compare against — no version line.
+    expect(check(report, "version")).toBeUndefined();
+  });
+
+  it("fails the version check, with the fix, when the daemon predates the CLI", () => {
+    const report = doctorReport(cfg(), { ...HEALTH, version: "0.4.0" }, "0.5.0");
+    expect(report.ok).toBe(false);
+    expect(check(report, "version")).toEqual({
+      name: "version",
+      ok: false,
+      detail: "daemon v0.4.0, CLI v0.5.0 — run `reins restart`",
+    });
+  });
+
+  it("points at the CLI, not a restart, when the daemon is newer", () => {
+    // A restart from this older CLI would downgrade the daemon.
+    const report = doctorReport(cfg(), { ...HEALTH, version: "0.6.0" }, "0.5.0");
+    expect(report.ok).toBe(false);
+    const detail = check(report, "version")?.detail ?? "";
+    expect(detail).toBe(
+      "daemon v0.6.0 is newer than this CLI (v0.5.0) — upgrade it (`npm i -g @karnstack/reins@latest`) or check `which -a reins` for a second install",
+    );
+    expect(detail).not.toContain("reins restart");
+  });
+
+  it("passes when only a pre-release tag differs", () => {
+    const report = doctorReport(cfg(), { ...HEALTH, version: "0.5.0-next.1" }, "0.5.0");
+    expect(check(report, "version")?.ok).toBe(true);
+  });
+
+  it("skips the version check when either side is the unknown 0.0.0", () => {
+    expect(
+      check(doctorReport(cfg(), { ...HEALTH, version: "0.0.0" }, "0.5.0"), "version"),
+    ).toBeUndefined();
+    expect(check(doctorReport(cfg(), HEALTH, "0.0.0"), "version")).toBeUndefined();
+    expect(doctorReport(cfg(), HEALTH, "0.0.0").ok).toBe(true);
   });
 });
 
