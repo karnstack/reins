@@ -20,6 +20,7 @@ vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
 import { __resetDebugSessions, cdpClick, cdpType } from "./cdp.js";
+import { jevSnapshot } from "./jev-snapshot.js";
 import { handleDialog, hover, pressKey } from "./page-actions.js";
 
 const CHROME = [
@@ -71,6 +72,31 @@ const LOGIN_FIXTURE = `<!doctype html><html><body>
 <com-1password-menu></com-1password-menu><input id="user" autofocus>
 </body></html>`;
 
+const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 14px sans-serif }
+  #modal { position: fixed; bottom: 10px; right: 10px }
+  #hide { display: none }
+</style></head><body>
+<h1>Flights</h1>
+<form id="f">
+  <label for="from">Where from?</label><input id="from" value="San Francisco">
+  <input id="to" aria-label="Where to?">
+  <input id="pw" type="password" aria-label="Password">
+  <input id="h" type="hidden" value="secret">
+  <select id="cabin" aria-label="Cabin"><option value="eco" selected>Economy</option><option value="biz">Business</option></select>
+  <button id="search" type="submit">Search</button>
+</form>
+<button id="off" disabled>Disabled</button>
+<button id="hide">Hidden</button>
+<div style="position:relative"><button id="covered">Covered</button><div style="position:absolute;inset:0"></div></div>
+<button id="swap">Swap me</button>
+<div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
+<script>
+  window.__log = [];
+  document.getElementById("cabin").addEventListener("change", (e) => __log.push("change:" + e.target.value));
+  document.getElementById("f").addEventListener("submit", (e) => e.preventDefault());
+</script></body></html>`;
+
 let chromeProc: ChildProcess | undefined;
 const injected: string[] = [];
 let server: http.Server | undefined;
@@ -100,8 +126,8 @@ async function evaluate<T>(expression: string): Promise<T> {
 }
 
 /** Fresh fixture per test; resolves once the page has loaded. */
-async function load(): Promise<void> {
-  await cdp("Page.navigate", { url });
+async function load(path = "/"): Promise<void> {
+  await cdp("Page.navigate", { url: new URL(path, url).href });
   for (let i = 0; i < 100; i++) {
     if ((await evaluate<string>("document.readyState").catch(() => "")) === "complete") return;
     await new Promise((r) => setTimeout(r, 20));
@@ -116,7 +142,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     server = http.createServer((q, s) => {
       s.setHeader("content-type", "text/html");
       // A login-style page whose password-manager host exists from first parse.
-      s.end(q.url === "/login" ? LOGIN_FIXTURE : FIXTURE);
+      s.end(q.url === "/login" ? LOGIN_FIXTURE : q.url === "/jev" ? JEV_FIXTURE : FIXTURE);
     });
     await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
@@ -389,5 +415,30 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     await evaluate(`document.getElementById("field").focus()`);
     await pressKey({ tabId: 1, key: "q" });
     expect(await evaluate("document.getElementById('field').value")).toBe("q");
+  });
+
+  type Snap = NonNullable<ReturnType<typeof jevSnapshot>>;
+  const snap = () => evaluate<Snap>(`(${jevSnapshot})()`);
+  const nodeOf = (s: Snap, label: string) => s.actions.find((a) => a.label === label)?.node;
+
+  it("jev: lists visible controls, including a fixed-position dialog, and skips the rest", async () => {
+    await load("/jev");
+    const s = await snap();
+    const labels = s.actions.map((a) => `${a.kind}:${a.label}`);
+    expect(labels).toContain("fill:Where from?");
+    expect(labels).toContain("fill:Where to?");
+    expect(labels).toContain("click:Accept cookies");
+    expect(labels).toContain("select:Cabin → Business");
+    expect(labels.join()).not.toMatch(/Password|Disabled|Hidden|secret/);
+    expect(s.actions.find((a) => a.label === "Where from?")?.value).toBe("San Francisco");
+    expect(s.text).toContain("Flights");
+  });
+
+  it("jev: a node keeps its id across snapshots", async () => {
+    await load("/jev");
+    const a = nodeOf(await snap(), "Search");
+    const b = nodeOf(await snap(), "Search");
+    expect(a).toBeDefined();
+    expect(a).toBe(b);
   });
 });
