@@ -255,7 +255,7 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
   do: {
     method: "do",
     usage:
-      'reins do "<goal>" [--fill name=value]... [--confirm "<label>"]... [--continue] [--max-steps 30] [--timeout 60] [--tab <id>]',
+      "reins do '<goal>' [--fill name=value]... [--confirm '<label>']... [--continue] [--max-steps 30] [--timeout 60] [--tab <id>] [--browser <id>] [--json]",
     summary:
       "hand a small task to Jev: it clicks and types until done (needs `reins key set typesafe`)",
     booleans: ["continue"],

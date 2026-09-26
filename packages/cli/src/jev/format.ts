@@ -25,7 +25,7 @@ export function nextCommand(
   const route = `${p.tabId !== undefined ? ` --tab ${p.tabId}` : ""}${p.browserId !== undefined ? ` --browser ${p.browserId}` : ""}`;
   switch (r.status) {
     case "done":
-      return "reins snapshot   # verify before trusting DONE";
+      return `reins snapshot${route}   # verify before trusting DONE`;
     case "risky_action":
       return `reins do --continue --confirm ${shellQuote(r.pending?.label ?? "")}${route}`;
     case "needs_text":

@@ -100,6 +100,15 @@ describe("nextCommand", () => {
     );
   });
 
+  it("routes the verify hint after done to the same tab and browser", () => {
+    expect(nextCommand(r("done"), { goal: "g" })).toBe(
+      "reins snapshot   # verify before trusting DONE",
+    );
+    expect(nextCommand(r("done"), { goal: "g", tabId: 7, browserId: "b1" })).toBe(
+      "reins snapshot --tab 7 --browser b1   # verify before trusting DONE",
+    );
+  });
+
   it("single-quotes a page-controlled confirm label so nothing expands", () => {
     const label = "Pay $5 for Bob's `x` $(echo x)";
     const cmd = nextCommand(r("risky_action", { pending: { op: "click", label } }), { goal: "g" });
