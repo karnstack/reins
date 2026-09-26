@@ -4,6 +4,7 @@ import pkg from "./package.json";
 // Permissions are deliberately minimal for Chrome Web Store review:
 // - debugger:  run CDP commands (click/type/screenshot/eval/monitor) on tabs
 // - tabs:      list/open/close/focus tabs; resize the tab's window
+// - tabGroups: list/create/edit tab groups for the agent (no install warning)
 // - storage:   persist settings (local) and connection status (session)
 // - offscreen: host the persistent WebSocket to the local reins daemon
 // No host_permissions: all page access goes through chrome.debugger, and the
@@ -13,7 +14,7 @@ export default defineManifest({
   name: "reins",
   version: pkg.version,
   description: "Drive your real, logged-in browser from your coding agent (via the reins CLI).",
-  permissions: ["debugger", "tabs", "storage", "offscreen"],
+  permissions: ["debugger", "tabs", "tabGroups", "storage", "offscreen"],
   icons: {
     16: "icons/icon-16.png",
     32: "icons/icon-32.png",

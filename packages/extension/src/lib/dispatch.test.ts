@@ -97,6 +97,44 @@ describe("dispatchMethod", () => {
   it("unknown method rejects with /unknown method/", async () => {
     await expect(dispatchMethod("foo_bar", {})).rejects.toThrow(/unknown method/);
   });
+
+  it("list_groups routes to listGroups without a host gate", async () => {
+    vi.stubGlobal("chrome", {
+      tabs: {
+        query: async () => [{ id: 1, groupId: 7 }],
+        group: async () => 7,
+        ungroup: async () => undefined,
+      },
+      tabGroups: {
+        query: async () => [{ id: 7, title: "x", color: "grey", collapsed: false, windowId: 1 }],
+        update: async () => ({}),
+      },
+    });
+    const out = await dispatchWithMeta("list_groups", {});
+    expect(out.result).toEqual({
+      groups: [
+        { groupId: 7, title: "x", color: "grey", collapsed: false, windowId: 1, tabCount: 1 },
+      ],
+    });
+    expect(out.meta).toEqual({});
+    expect(ensureAllowed).not.toHaveBeenCalled();
+  });
+
+  it("list_tabs redaction drops groupId from blocked tabs", async () => {
+    vi.stubGlobal("chrome", {
+      tabs: {
+        query: async () => [
+          { id: 1, title: "t", url: "https://bank.com/", active: true, groupId: 7 },
+        ],
+      },
+    });
+    vi.mocked(policy).mockResolvedValueOnce({
+      defaultTier: "full",
+      rules: [{ pattern: "bank.com", tier: "deny" }],
+    });
+    const out = (await dispatchMethod("list_tabs", {})) as { tabs: unknown[] };
+    expect(out.tabs[0]).toEqual({ tabId: 1, title: "", url: "", active: true, blocked: true });
+  });
 });
 
 describe("dispatchMethod routing (CDP)", () => {
