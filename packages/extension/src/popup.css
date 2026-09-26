@@ -680,3 +680,23 @@ body {
   font-size: 12px;
   color: var(--err);
 }
+
+.reins__btn:disabled,
+.reins__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reins__btn--primary:disabled:hover {
+  background: var(--violet-2);
+}
+
+.reins__btn--ghost:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.reins__input:disabled:hover {
+  border-color: var(--line);
+}

@@ -95,7 +95,15 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ error: "not connected to the reins daemon" });
         return;
       }
-      client.call(String(message.method), message.params).then(
+      // Callers may stretch the reply timeout (key_set awaits a TypeSafe
+      // round trip); anything else keeps the default that spots an old daemon.
+      const timeoutMs =
+        typeof message.timeoutMs === "number" &&
+        Number.isFinite(message.timeoutMs) &&
+        message.timeoutMs > 0
+          ? message.timeoutMs
+          : undefined;
+      client.call(String(message.method), message.params, timeoutMs).then(
         (result) => sendResponse({ result }),
         (err: unknown) => sendResponse({ error: err instanceof Error ? err.message : String(err) }),
       );
