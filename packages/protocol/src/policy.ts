@@ -78,6 +78,10 @@ export function effectiveTier(policy: Policy, host: string | undefined): Tier {
 export const METHOD_TIERS = {
   list_tabs: "read",
   list_groups: "read",
+  // Tab-group ops touch the tab strip, never page content: readonly sites may be grouped, denied ones may not.
+  group_tabs: "read",
+  update_group: "read",
+  ungroup_tabs: "read",
   read_snapshot: "read",
   read_text: "read",
   screenshot: "read",
