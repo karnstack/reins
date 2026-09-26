@@ -20,7 +20,7 @@ vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
 import { __resetDebugSessions, cdpClick, cdpType } from "./cdp.js";
-import { jevAct, jevObserve } from "./jev.js";
+import { initDialogTracking, jevAct, jevObserve, openDialog } from "./jev.js";
 import { jevSnapshot } from "./jev-snapshot.js";
 import { handleDialog, hover, pressKey } from "./page-actions.js";
 
@@ -91,6 +91,7 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <button id="hide">Hidden</button>
 <div style="position:relative"><button id="covered">Covered</button><div style="position:absolute;inset:0"></div></div>
 <button id="swap">Swap me</button>
+<button id="ask" onclick="confirm('Leave?')">Ask</button>
 <div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
 <script>
   window.__log = [];
@@ -106,6 +107,8 @@ let ws: WebSocket | undefined;
 let url = "";
 let nextId = 0;
 const pending = new Map<number, (msg: { result?: unknown; error?: { message: string } }) => void>();
+type EventListener = (source: { tabId?: number }, method: string, params?: unknown) => void;
+const eventListeners: EventListener[] = [];
 
 function cdp<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -182,6 +185,11 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     ws = sock;
     sock.on("message", (data) => {
       const msg = JSON.parse(String(data));
+      if (msg.id === undefined && msg.method) {
+        // A CDP event: deliver it the way chrome.debugger.onEvent would.
+        for (const listener of eventListeners) listener({ tabId: 1 }, msg.method, msg.params);
+        return;
+      }
       pending.get(msg.id)?.(msg);
       pending.delete(msg.id);
     });
@@ -193,7 +201,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
         attach: async () => {},
         detach: async () => {},
         onDetach: { addListener: () => {} },
-        onEvent: { addListener: () => {} },
+        onEvent: { addListener: (fn: EventListener) => eventListeners.push(fn) },
         sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
           const result = await cdp(method, params);
           // One real page serves every test: remember injected scripts so
@@ -211,6 +219,8 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       },
       tabs: { update: async () => ({}) },
     });
+    // jev.ts registered at import against no `chrome`; register on the stub.
+    initDialogTracking();
   }, 20_000);
 
   afterEach(async () => {
@@ -494,4 +504,19 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(await jevAct({ tabId: 1, op: "click", node })).toMatchObject({ stale: true });
     expect(Date.now() - t0).toBeLessThan(1500);
   });
+
+  it("jev: a click that opens a dialog returns ok, and the next read reports the dialog", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Ask")?.node as number;
+    const t0 = Date.now();
+    expect(await jevAct({ tabId: 1, op: "click", node })).toEqual({ ok: true });
+    expect(Date.now() - t0).toBeLessThan(2000);
+    const after = await jevObserve({ tabId: 1 });
+    expect(after.dialog).toEqual({ type: "confirm", message: "Leave?" });
+    // Dismiss it so later cases aren't blocked; Page.javascriptDialogClosed clears the record.
+    await handleDialog({ tabId: 1, accept: false });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(openDialog(1)).toBeUndefined();
+  }, 10_000);
 });

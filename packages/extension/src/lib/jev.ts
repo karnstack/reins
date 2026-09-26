@@ -12,6 +12,8 @@ import { jevCheck, jevSelect, jevSettle, jevSnapshot } from "./jev-snapshot.js";
 export const JEV_ACTION_TIMEOUT_MS = 500;
 
 const DIALOGS = new Map<number, JevDialog>();
+/** Acts in flight, waiting to hear that a dialog opened on their tab. */
+const DIALOG_WAITERS = new Map<number, Set<(dialog: JevDialog) => void>>();
 
 /**
  * Track JS dialogs per tab. An open alert/confirm/prompt blocks every
@@ -24,7 +26,9 @@ export function initDialogTracking(): void {
     if (tabId === undefined) return;
     if (method === "Page.javascriptDialogOpening") {
       const p = (params ?? {}) as { type?: string; message?: string };
-      DIALOGS.set(tabId, { type: p.type ?? "dialog", message: p.message ?? "" });
+      const dialog = { type: p.type ?? "dialog", message: p.message ?? "" };
+      DIALOGS.set(tabId, dialog);
+      for (const resolve of DIALOG_WAITERS.get(tabId) ?? []) resolve(dialog);
     } else if (method === "Page.javascriptDialogClosed") {
       DIALOGS.delete(tabId);
     }
@@ -43,6 +47,30 @@ try {
 export function openDialog(tabId: number): JevDialog | undefined {
   return DIALOGS.get(tabId);
 }
+
+/** Resolves when a dialog opens on the tab; `cancel` drops the waiter. */
+function dialogOpened(tabId: number): { promise: Promise<JevDialog>; cancel: () => void } {
+  let resolve!: (dialog: JevDialog) => void;
+  const promise = new Promise<JevDialog>((r) => {
+    resolve = r;
+  });
+  let waiters = DIALOG_WAITERS.get(tabId);
+  if (!waiters) {
+    waiters = new Set();
+    DIALOG_WAITERS.set(tabId, waiters);
+  }
+  waiters.add(resolve);
+  return {
+    promise,
+    cancel: () => {
+      waiters.delete(resolve);
+      if (waiters.size === 0 && DIALOG_WAITERS.get(tabId) === waiters) DIALOG_WAITERS.delete(tabId);
+    },
+  };
+}
+
+/** Errors actionablePoint raises about the target itself; anything else is transport. */
+const ACTIONABILITY_REFUSAL = /^(element not found|cannot )/;
 
 async function evaluate<T>(tabId: number, expression: string, awaitPromise = false): Promise<T> {
   const res = await send<{ result: { value: T }; exceptionDetails?: { text?: string } }>(
@@ -81,71 +109,94 @@ export async function jevAct(params: JevActParams): Promise<JevActResult> {
     return { ok: true };
   }
   return drivePage(tabId, async () => {
-    await ensureVisible(tabId);
-    if (params.op === "scroll") {
-      const { w, h } = await evaluate<{ w: number; h: number }>(
-        tabId,
-        "({ w: innerWidth, h: innerHeight })",
-      );
-      await send(tabId, "Input.dispatchMouseEvent", {
-        type: "mouseWheel",
-        x: Math.round(w / 2),
-        y: Math.round(h / 2),
-        deltaX: 0,
-        deltaY: params.delta ?? 560,
-      });
-      await evaluate(tabId, `(${jevSettle})(null, false)`, true).catch(() => {});
-      return { ok: true };
-    }
-    const node = params.node;
-    if (node === undefined) throw new Error(`jev_act ${params.op} needs a node`);
-    const check = await evaluate<string>(tabId, `(${jevCheck})(${node})`);
-    if (check !== "ok") return { stale: true, reason: check };
-
-    if (params.op === "select") {
-      const r = await evaluate<string>(
-        tabId,
-        `(${jevSelect})(${node}, ${JSON.stringify(params.value ?? "")})`,
-      );
-      // A select is a mutation of uncertain outcome if it fails midway: never retry it.
-      if (r !== "ok") throw new Error(`select failed: ${r} — check the page before retrying`);
-      await evaluate(tabId, `(${jevSettle})(${node}, false)`, true).catch(() => {});
-      return { ok: true };
-    }
-
-    let point: { x: number; y: number };
+    // A handler that opens alert/confirm/prompt freezes the renderer: the
+    // input's own response, the press probe and settle all block. Listen for
+    // the dialog before sending anything, and let it win the race — the press
+    // happened, and the next observe reports the dialog.
+    const opened = dialogOpened(tabId);
     try {
-      point = await actionablePoint(
-        tabId,
-        `the element reins do chose (node ${node})`,
-        params.op === "type" ? "type into" : "click",
-        true,
-        { node, timeoutMs: JEV_ACTION_TIMEOUT_MS },
-      );
-    } catch (err) {
-      // Covered, moving or gone: nothing happened yet, so re-reading is safe.
-      return { stale: true, reason: err instanceof Error ? err.message : String(err) };
+      const work = act(tabId, params);
+      const outcome = await Promise.race([work, opened.promise.then(() => DIALOG_WON)]);
+      if (typeof outcome !== "symbol") return outcome;
+      work.catch(() => {}); // the blocked commands fail once the dialog is answered
+      return { ok: true };
+    } finally {
+      opened.cancel();
     }
-    await pressAt(tabId, point.x, point.y, `node ${node}`);
-    if (params.op === "type") {
-      const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
-      await send(tabId, "Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: "a",
-        code: "KeyA",
-        modifiers,
-        commands: ["selectAll"],
-      });
-      await send(tabId, "Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: "a",
-        code: "KeyA",
-        modifiers,
-      });
-      await send(tabId, "Input.insertText", { text: params.text ?? "" });
-    }
-    // Settling is read-only; a navigation mid-settle is fine.
-    await evaluate(tabId, `(${jevSettle})(${node}, ${params.op === "type"})`, true).catch(() => {});
-    return { ok: true };
   });
+}
+
+const DIALOG_WON = Symbol("dialog");
+
+/** The mutation itself, on a tab that is already driven. */
+async function act(tabId: number, params: JevActParams): Promise<JevActResult> {
+  await ensureVisible(tabId);
+  if (params.op === "scroll") {
+    const { w, h } = await evaluate<{ w: number; h: number }>(
+      tabId,
+      "({ w: innerWidth, h: innerHeight })",
+    );
+    await send(tabId, "Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: Math.round(w / 2),
+      y: Math.round(h / 2),
+      deltaX: 0,
+      deltaY: params.delta ?? 560,
+    });
+    await evaluate(tabId, `(${jevSettle})(null, false)`, true).catch(() => {});
+    return { ok: true };
+  }
+  const node = params.node;
+  if (node === undefined) throw new Error(`jev_act ${params.op} needs a node`);
+  const check = await evaluate<string>(tabId, `(${jevCheck})(${node})`);
+  if (check !== "ok") return { stale: true, reason: check };
+
+  if (params.op === "select") {
+    const r = await evaluate<string>(
+      tabId,
+      `(${jevSelect})(${node}, ${JSON.stringify(params.value ?? "")})`,
+    );
+    // A select is a mutation of uncertain outcome if it fails midway: never retry it.
+    if (r !== "ok") throw new Error(`select failed: ${r} — check the page before retrying`);
+    await evaluate(tabId, `(${jevSettle})(${node}, false)`, true).catch(() => {});
+    return { ok: true };
+  }
+
+  let point: { x: number; y: number };
+  try {
+    point = await actionablePoint(
+      tabId,
+      `the element reins do chose (node ${node})`,
+      params.op === "type" ? "type into" : "click",
+      true,
+      { node, timeoutMs: JEV_ACTION_TIMEOUT_MS },
+    );
+  } catch (err) {
+    // Covered, moving or gone: nothing happened yet, so re-reading is safe.
+    // A transport failure (tab closed, debugger detached) is not stale.
+    const reason = err instanceof Error ? err.message : String(err);
+    if (!ACTIONABILITY_REFUSAL.test(reason)) throw err;
+    return { stale: true, reason };
+  }
+  await pressAt(tabId, point.x, point.y, `node ${node}`);
+  if (params.op === "type") {
+    const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
+    await send(tabId, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "a",
+      code: "KeyA",
+      modifiers,
+      commands: ["selectAll"],
+    });
+    await send(tabId, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "a",
+      code: "KeyA",
+      modifiers,
+    });
+    await send(tabId, "Input.insertText", { text: params.text ?? "" });
+  }
+  // Settling is read-only; a navigation mid-settle is fine.
+  await evaluate(tabId, `(${jevSettle})(${node}, ${params.op === "type"})`, true).catch(() => {});
+  return { ok: true };
 }
