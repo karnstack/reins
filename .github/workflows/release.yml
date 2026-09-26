@@ -78,13 +78,50 @@ jobs:
             echo "upload=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Upload + publish via the v1.1 API directly (not a marketplace action) so
+      # a rejection prints the store's actual response instead of a bare
+      # "HTTPError: 400". A failed publish leaves the upload as a draft: fix
+      # the cause in the dashboard and submit there — a re-run would see the
+      # draft version and skip.
       - name: Upload extension to the Chrome Web Store
         if: steps.store.outputs.upload == 'true'
-        uses: mnao305/chrome-extension-upload@v5.0.0
-        with:
-          file-path: ${{ steps.zip.outputs.path }}
-          extension-id: ${{ secrets.CWS_EXTENSION_ID }}
-          client-id: ${{ secrets.CWS_CLIENT_ID }}
-          client-secret: ${{ secrets.CWS_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CWS_REFRESH_TOKEN }}
-          publish: true
+        env:
+          ZIP: ${{ steps.zip.outputs.path }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          api=https://www.googleapis.com/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}
+          token=$(curl -sf https://oauth2.googleapis.com/token \
+            -d "client_id=${CWS_CLIENT_ID}&client_secret=${CWS_CLIENT_SECRET}&refresh_token=${CWS_REFRESH_TOKEN}&grant_type=refresh_token" \
+            | jq -r .access_token)
+          echo "::add-mask::${token}"
+
+          # $1 = what failed, $2 = response file. One annotation line with the
+          # store's reason, full body in the log.
+          fail() {
+            reason=$(jq -r '[.error.message?, (.itemError[]?.error_detail), (.statusDetail[]?)] | map(select(. != null and . != "")) | join(" / ")' "$2" 2>/dev/null)
+            echo "::error title=Chrome Web Store ${1} failed::${reason:-$(head -c 500 "$2")}"
+            exit 1
+          }
+
+          echo "uploading ${ZIP}"
+          code=$(curl -sS -o upload.json -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer ${token}" -H "x-goog-api-version: 2" \
+            -T "${ZIP}" "https://www.googleapis.com/upload/chromewebstore/v1.1/items/${CWS_EXTENSION_ID}")
+          echo "HTTP ${code}"; jq . upload.json 2>/dev/null || cat upload.json
+          if [ "$code" != 200 ] || [ "$(jq -r .uploadState upload.json)" != SUCCESS ]; then
+            fail upload upload.json
+          fi
+
+          echo "publishing"
+          code=$(curl -sS -o publish.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${token}" -H "x-goog-api-version: 2" -H "Content-Length: 0" \
+            "${api}/publish")
+          echo "HTTP ${code}"; jq . publish.json 2>/dev/null || cat publish.json
+          # status is a list: OK, or codes like ITEM_PENDING_REVIEW (an older
+          # version is still in review) with the explanation in statusDetail.
+          if [ "$code" != 200 ] || ! jq -e '.status | index("OK")' publish.json >/dev/null; then
+            fail publish publish.json
+          fi
