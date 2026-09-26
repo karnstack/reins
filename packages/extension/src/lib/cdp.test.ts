@@ -6,6 +6,7 @@ import {
   __resetDebugSessions,
   cdpClick,
   cdpOpenTab,
+  cdpType,
   initDebugSessionListeners,
   withDebugger,
 } from "./cdp.js";
@@ -80,45 +81,72 @@ describe("withDebugger session", () => {
     expect((err as Error).message).toContain("attach tab 42 failed");
   });
 
-  it("arms the autofill guard in the page on every command", async () => {
-    stubChrome();
-    const sendCommand = vi.fn(async () => ({}));
-    (chrome.debugger as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
-    await withDebugger(7, async () => "a");
-    await withDebugger(7, async () => "b");
-    const arms = sendCommand.mock.calls.filter(
-      (c) =>
-        (c as unknown[])[1] === "Runtime.evaluate" &&
-        String(((c as unknown[])[2] as { expression: string }).expression).includes(
-          "autofillGuard",
-        ),
+  /** Swap in a recording sendCommand; returns the calls made through it. */
+  function recordCommands(result: (method: string) => unknown = () => ({})) {
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+    (chrome.debugger as unknown as { sendCommand: unknown }).sendCommand = vi.fn(
+      async (_t: unknown, method: string, params: Record<string, unknown>) => {
+        calls.push({ method, params });
+        return result(method);
+      },
     );
-    expect(arms).toHaveLength(2);
+    return calls;
+  }
+  const guardEvals = (calls: Array<{ method: string; params: Record<string, unknown> }>) =>
+    calls.filter(
+      (c) =>
+        c.method === "Runtime.evaluate" && String(c.params.expression).includes("autofillGuard"),
+    );
+
+  it("arms the autofill guard for commands that drive the page", async () => {
+    stubChrome();
+    const calls = recordCommands();
+    await withDebugger(7, async () => "a", { guard: true });
+    await withDebugger(7, async () => "b", { guard: true });
+    expect(guardEvals(calls)).toHaveLength(2);
   });
 
-  it("injects the guard into new documents once per debugger session", async () => {
-    // A navigation (e.g. clicking "Login") loads a fresh document with no
-    // guard; a login page that autofocuses its field opens the autofill menu
-    // before the next command could re-arm it.
+  it("leaves the page untouched for everything else (reads, dialogs, eval)", async () => {
+    // Read-tier commands must not mutate the page, and a command that has to
+    // work under a JS dialog can't wait on an evaluate the dialog blocks.
     stubChrome();
-    const sendCommand = vi.fn(async () => ({}));
-    (chrome.debugger as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
-    const registrations = () =>
-      sendCommand.mock.calls.filter(
-        (c) => (c as unknown[])[1] === "Page.addScriptToEvaluateOnNewDocument",
-      );
-    await withDebugger(7, async () => "a");
-    await withDebugger(7, async () => "b");
-    expect(registrations()).toHaveLength(1);
-    expect(
-      String(
-        (registrations()[0] as unknown[])[2] &&
-          ((registrations()[0] as unknown[])[2] as { source: string }).source,
-      ),
-    ).toContain("autofillGuard");
+    const calls = recordCommands();
+    await withDebugger(7, async () => "read");
+    expect(calls).toEqual([]);
+  });
+
+  it("re-registers the new-document guard with an absolute expiry on every renewal", async () => {
+    // A static script would re-arm a fresh 30s lease on every page load for
+    // the life of the session — hiding the user's password manager long after
+    // reins went idle (the monitor keeps its session for the tab's lifetime).
+    stubChrome();
+    let id = 0;
+    const calls = recordCommands((m) =>
+      m === "Page.addScriptToEvaluateOnNewDocument" ? { identifier: String(++id) } : {},
+    );
+    await withDebugger(7, async () => "a", { guard: true });
+    await withDebugger(7, async () => "b", { guard: true });
+    const adds = calls.filter((c) => c.method === "Page.addScriptToEvaluateOnNewDocument");
+    const removes = calls.filter((c) => c.method === "Page.removeScriptToEvaluateOnNewDocument");
+    expect(adds).toHaveLength(2);
+    expect(removes.map((c) => c.params.identifier)).toEqual(["1"]);
+    expect(calls.filter((c) => c.method === "Page.enable")).toHaveLength(1);
+    expect(String(adds[1]?.params.source)).toMatch(/\(\d{13} - Date\.now\(\)\)/);
+  });
+
+  it("starts over with a fresh debugger session", async () => {
+    stubChrome();
+    const calls = recordCommands((m) =>
+      m === "Page.addScriptToEvaluateOnNewDocument" ? { identifier: "x" } : {},
+    );
+    await withDebugger(7, async () => "a", { guard: true });
     await vi.advanceTimersByTimeAsync(4000); // idle detach ends the session
-    await withDebugger(7, async () => "c");
-    expect(registrations()).toHaveLength(2);
+    await withDebugger(7, async () => "c", { guard: true });
+    expect(calls.filter((c) => c.method === "Page.enable")).toHaveLength(2);
+    // The old session's script died with it — nothing to remove.
+    expect(calls.filter((c) => c.method === "Page.removeScriptToEvaluateOnNewDocument")).toEqual(
+      [],
+    );
   });
 
   it("still runs the command when arming the guard fails", async () => {
@@ -127,7 +155,7 @@ describe("withDebugger session", () => {
       async () => {
         throw new Error("Execution context was destroyed.");
       };
-    expect(await withDebugger(7, async () => "ran")).toBe("ran");
+    expect(await withDebugger(7, async () => "ran", { guard: true })).toBe("ran");
   });
 
   it("names the password manager when another extension's frame blocks the tab", async () => {
@@ -239,11 +267,14 @@ describe("cdpClick", () => {
     ).rejects.toThrow(/landed on div\.toast/);
   });
 
-  it("errors when no pointer event reached the page at all", async () => {
-    stubClickChrome({ probe: { state: "none" } });
+  it("treats a press nobody saw as delivered — failing it would click twice", async () => {
+    // A page listener that stops propagation first hides the press from the
+    // probe; the click still landed.
+    const { events } = stubClickChrome({ probe: { state: "none" } });
     await expect(
       cdpClick({ tabId: 7, selector: "#buy", button: "left", clickCount: 1 }),
-    ).rejects.toThrow(/never reached the page/);
+    ).resolves.toEqual({ ok: true });
+    expect(events).toHaveLength(3);
   });
 
   it("treats a vanished probe as success — the click navigated away", async () => {
@@ -334,8 +365,54 @@ describe("cdpOpenTab", () => {
     expect(order.some((o) => o.startsWith("navigate"))).toBe(false);
   });
 
+  it("doesn't navigate a second time when the page itself fails to load", async () => {
+    // A network error or a download already shows in the tab; repeating the
+    // navigation would start the download twice.
+    const { update } = stubOpenChrome({ id: 42 });
+    (chrome.debugger as unknown as { sendCommand: unknown }).sendCommand = async (
+      _t: unknown,
+      method: string,
+    ) => (method === "Page.navigate" ? { errorText: "net::ERR_ABORTED" } : {});
+    await cdpOpenTab({ url: "https://example.com/file.zip", activate: true });
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("returns tabId -1 when the created tab has no id", async () => {
     stubOpenChrome({});
     expect(await cdpOpenTab({ url: "https://x", activate: false })).toEqual({ tabId: -1 });
+  });
+});
+
+describe("cdpType", () => {
+  it("brings a background tab to the front before typing", async () => {
+    const visible = [false, true];
+    const update = vi.fn(async () => ({}));
+    const methods: string[] = [];
+    vi.stubGlobal("chrome", {
+      debugger: {
+        attach: vi.fn(async () => {}),
+        detach: vi.fn(async () => {}),
+        onDetach: { addListener: () => {} },
+        sendCommand: vi.fn(async (_t: unknown, method: string, params: { expression?: string }) => {
+          methods.push(method);
+          if (method !== "Runtime.evaluate") return {};
+          if (String(params.expression).includes("visibilityState")) {
+            return {
+              result: {
+                value: (visible.length > 1 ? visible.shift() : visible[0]) ? "visible" : "hidden",
+              },
+            };
+          }
+          return { result: { value: true } };
+        }),
+      },
+      tabs: { update },
+    });
+    initDebugSessionListeners();
+    const done = cdpType({ tabId: 7, selector: "#q", text: "hi", submit: false });
+    await vi.advanceTimersByTimeAsync(500);
+    await done;
+    expect(update).toHaveBeenCalledWith(7, { active: true });
+    expect(methods).toContain("Input.insertText");
   });
 });

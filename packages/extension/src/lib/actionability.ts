@@ -53,8 +53,6 @@ export async function actionPoint(
       requestAnimationFrame(read);
       setTimeout(() => read(performance.now()), 100);
     });
-  // Wait for the rect to hold still across two distinct frames; null if it
-  // never does before the deadline.
   // A just-started CSS animation or transition is "pending": held at its first
   // keyframe until its start time resolves, it reads identical across frames
   // and would pass for still. Covers ancestors too — their transforms move us.
@@ -64,7 +62,9 @@ export async function actionPoint(
     }
     return false;
   };
-  const settle = async (el: Element): Promise<DOMRect | null> => {
+  // Wait for the rect to hold still across two distinct frames. At the
+  // deadline, hand back the latest rect anyway, flagged as still moving.
+  const settle = async (el: Element): Promise<{ r: DOMRect; still: boolean }> => {
     let prev = await nextFrame(el);
     for (;;) {
       const cur = await nextFrame(el);
@@ -76,8 +76,8 @@ export async function actionPoint(
         a.y === b.y &&
         a.width === b.width &&
         a.height === b.height;
-      if (still && !starting(el)) return b;
-      if (performance.now() >= deadline) return null;
+      if (still && !starting(el)) return { r: b, still: true };
+      if (performance.now() >= deadline) return { r: b, still: false };
       prev = cur;
     }
   };
@@ -90,10 +90,11 @@ export async function actionPoint(
       reason = "element was removed from the page";
     } else {
       el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
-      const r = await settle(el);
-      if (!r) {
-        reason = "element is still moving (scrolling or animating)";
-      } else if (r.width === 0 || r.height === 0) {
+      // An element that never settles (a pulsing call-to-action, an endless
+      // animation) still gets clicked at the deadline if its current center
+      // hits it — settle only returns unsettled once the deadline has passed.
+      const { r, still } = await settle(el);
+      if (r.width === 0 || r.height === 0) {
         reason = "element has zero size (hidden?)";
       } else if (forClick && (el.matches(":disabled") || el.closest('[aria-disabled="true"]'))) {
         reason = "element is disabled";
@@ -108,14 +109,22 @@ export async function actionPoint(
         }
         let n: Node | null = hit;
         while (n && n !== el) n = n.parentNode ?? (n instanceof ShadowRoot ? n.host : null);
+        // A press into a frame lands in the frame's own document, out of this
+        // window's sight — so frames get no probe.
+        const frame = /^(iframe|frame|object|embed)$/.test(el.localName);
         if (n === el) {
-          if (forClick) {
+          if (forClick && !frame) {
             const state: { result: ProbeResult } = { result: { state: "none" } };
             const onDown = (e: Event) => {
               const at = e.composedPath()[0];
-              state.result = e.composedPath().includes(el)
-                ? { state: "hit" }
-                : { state: "missed", by: describe(at instanceof Element ? at : null) };
+              // Frameworks re-mount nodes on hover; the element the selector
+              // finds now counts as the target too.
+              const now = document.querySelector(selector);
+              const path = e.composedPath();
+              state.result =
+                path.includes(el) || (now !== null && path.includes(now))
+                  ? { state: "hit" }
+                  : { state: "missed", by: describe(at instanceof Element ? at : null) };
             };
             window.addEventListener("pointerdown", onDown, { capture: true, once: true });
             (window as unknown as Record<symbol, unknown>)[Symbol.for("reins.pointerProbe")] = {
@@ -125,7 +134,9 @@ export async function actionPoint(
           }
           return { x, y };
         }
-        reason = `covered by ${describe(hit)}`;
+        reason = still
+          ? `covered by ${describe(hit)}`
+          : "element is still moving (scrolling or animating)";
       }
     }
     if (performance.now() >= deadline) return { error: reason };

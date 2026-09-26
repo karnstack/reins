@@ -82,9 +82,10 @@ interface DebugSession {
 }
 
 const SESSIONS = new Map<number, DebugSession>();
-// Tabs whose current debugger session already injects the autofill guard into
-// every new document (armAutofillGuard). Cleared whenever that session ends.
-const GUARDED_SESSIONS = new Set<number>();
+// Per tab: the current debugger session has Page enabled for the autofill
+// guard, and (once registered) the id of its new-document script. Cleared
+// whenever that session ends — its scripts die with it.
+const GUARD_SCRIPTS = new Map<number, string | undefined>();
 const IDLE_DETACH_MS = 4000;
 
 // Purge our cache whenever a tab detaches for any reason — tab closed, DevTools
@@ -96,7 +97,7 @@ export function initDebugSessionListeners(): void {
     const session = SESSIONS.get(tabId);
     if (session?.idleTimer) clearTimeout(session.idleTimer);
     SESSIONS.delete(tabId);
-    GUARDED_SESSIONS.delete(tabId);
+    GUARD_SCRIPTS.delete(tabId);
   });
 }
 
@@ -115,7 +116,7 @@ function releaseAfterIdle(tabId: number, session: DebugSession): void {
     SESSIONS.delete(tabId);
     // If the monitor adopted the tab meanwhile, leave it attached for monitoring.
     if (!isMonitored(tabId)) {
-      GUARDED_SESSIONS.delete(tabId);
+      GUARD_SCRIPTS.delete(tabId);
       void chrome.debugger.detach({ tabId }).catch(() => {});
     }
   }, IDLE_DETACH_MS);
@@ -128,35 +129,59 @@ const AUTOFILL_LEASE_MS = 30_000;
  * Renew the in-page autofill guard's lease (see autofill-guard.ts), and have
  * this session install it in every new document too: a page reached by a
  * click (a login screen that autofocuses its field) would otherwise open the
- * autofill menu before the next command could arm it.
+ * autofill menu before the next command could arm it. New documents only get
+ * what's left of this lease — never a fresh one — so the guard stands down on
+ * schedule even when a session outlives the agent (the monitor keeps its).
  */
 async function armAutofillGuard(tabId: number): Promise<void> {
-  const source = `(${autofillGuard})(${AUTOFILL_LEASE_MS})`;
+  const until = Date.now() + AUTOFILL_LEASE_MS;
   try {
-    if (!GUARDED_SESSIONS.has(tabId)) {
+    if (!GUARD_SCRIPTS.has(tabId)) {
       // New-document scripts only fire once the Page domain is enabled.
       await send(tabId, "Page.enable", {});
-      await send(tabId, "Page.addScriptToEvaluateOnNewDocument", { source });
-      GUARDED_SESSIONS.add(tabId);
+      GUARD_SCRIPTS.set(tabId, undefined);
     }
-    await send(tabId, "Runtime.evaluate", { expression: source, returnByValue: true });
+    const previous = GUARD_SCRIPTS.get(tabId);
+    if (previous !== undefined) {
+      await send(tabId, "Page.removeScriptToEvaluateOnNewDocument", { identifier: previous });
+    }
+    const added = await send<{ identifier?: string } | undefined>(
+      tabId,
+      "Page.addScriptToEvaluateOnNewDocument",
+      { source: `(${autofillGuard})(${until} - Date.now())` },
+    );
+    GUARD_SCRIPTS.set(tabId, added?.identifier);
+    await send(tabId, "Runtime.evaluate", {
+      expression: `(${autofillGuard})(${AUTOFILL_LEASE_MS})`,
+      returnByValue: true,
+    });
   } catch {
     // Mid-navigation or an unscriptable page — the command itself still runs.
   }
 }
 
-export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+/**
+ * Run `fn` with a debugger session on the tab. `guard` arms the autofill guard
+ * first — for commands that drive the page. Everything else leaves the page
+ * untouched: reads must not mutate it, and a command that has to work under a
+ * JS dialog (which blocks every evaluate) can't wait on one.
+ */
+export async function withDebugger<T>(
+  tabId: number,
+  fn: () => Promise<T>,
+  opts: { guard?: boolean } = {},
+): Promise<T> {
   // If the monitor (read_console / read_network) holds this tab, reuse its
   // persistent session untouched.
   if (isMonitored(tabId)) {
-    await armAutofillGuard(tabId);
+    if (opts.guard) await armAutofillGuard(tabId);
     return fn();
   }
 
   let session = SESSIONS.get(tabId);
   if (!session) {
     // Share one attach promise so concurrent commands never double-attach.
-    GUARDED_SESSIONS.delete(tabId); // a fresh session starts with no scripts
+    GUARD_SCRIPTS.delete(tabId); // a fresh session starts with no scripts
     session = { attach: attachWithRetry(tabId), inflight: 0 };
     SESSIONS.set(tabId, session);
   } else if (session.idleTimer) {
@@ -176,7 +201,7 @@ export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Prom
   }
 
   try {
-    await armAutofillGuard(tabId);
+    if (opts.guard) await armAutofillGuard(tabId);
     return await fn();
   } finally {
     session.inflight--;
@@ -186,13 +211,18 @@ export async function withDebugger<T>(tabId: number, fn: () => Promise<T>): Prom
   }
 }
 
+/** `withDebugger` for commands that drive the page: arms the autofill guard. */
+export function drivePage<T>(tabId: number, fn: () => Promise<T>): Promise<T> {
+  return withDebugger(tabId, fn, { guard: true });
+}
+
 /** Test-only: drop all cached debugger sessions + timers between cases. */
 export function __resetDebugSessions(): void {
   for (const session of SESSIONS.values()) {
     if (session.idleTimer) clearTimeout(session.idleTimer);
   }
   SESSIONS.clear();
-  GUARDED_SESSIONS.clear();
+  GUARD_SCRIPTS.clear();
 }
 
 // chrome.debugger.sendCommand returns Promise<object|undefined> (loosely typed).
@@ -216,12 +246,11 @@ export async function cdpOpenTab({ url, activate }: OpenTabParams): Promise<Open
   const tabId = created.id;
   if (tabId === undefined) return { tabId: -1 };
   try {
-    const res = await withDebugger(tabId, () =>
-      send<{ errorText?: string }>(tabId, "Page.navigate", { url }),
-    );
-    if (res?.errorText) throw new Error(res.errorText);
+    // A failed load (network error, a download) already shows in the tab;
+    // navigating again would repeat it.
+    await drivePage(tabId, () => send(tabId, "Page.navigate", { url }));
   } catch {
-    // Undebuggable destination (chrome://, the Web Store, …): open it plainly.
+    // The debugger can't drive this tab: open the URL plainly.
     await chrome.tabs.update(tabId, { url });
   }
   return { tabId };
@@ -229,7 +258,7 @@ export async function cdpOpenTab({ url, activate }: OpenTabParams): Promise<Open
 
 export async function cdpNavigate(params: NavigateParams): Promise<{ url: string }> {
   const tabId = await resolveTabId(params.tabId);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     if (params.to === "reload") {
       await send(tabId, "Page.reload", {});
     } else if (params.to === "back" || params.to === "forward") {
@@ -336,7 +365,7 @@ export async function actionablePoint(
 export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     const { x, y } = await actionablePoint(tabId, css, "click", true);
     // The CLI omits button/count unless flagged, and nothing applies the schema
@@ -369,14 +398,12 @@ export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
       (r) => r.result.value,
       () => null,
     );
+    // Only a press seen landing elsewhere is a failure. Seeing nothing proves
+    // nothing — a page listener may have stopped the event first — and
+    // failing a click that landed makes the agent click twice.
     if (probe?.state === "missed") {
       throw new Error(
         `click on ${css} landed on ${probe.by} instead — the page changed under the pointer. Re-snapshot and retry.`,
-      );
-    }
-    if (probe?.state === "none") {
-      throw new Error(
-        `click on ${css} never reached the page — no pointer event arrived. Re-snapshot and retry.`,
       );
     }
     return { ok: true };
@@ -386,7 +413,8 @@ export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
 export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
+    await ensureVisible(tabId);
     const { result } = await send<{ result: { value: boolean } }>(tabId, "Runtime.evaluate", {
       expression: `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return false; el.focus(); return true; })()`,
       returnByValue: true,
@@ -394,14 +422,15 @@ export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
     if (!result.value) throw new Error(`element not found: ${css}`);
     await send(tabId, "Input.insertText", { text: params.text });
     if (params.submit) {
-      for (const type of ["keyDown", "keyUp"]) {
-        await send(tabId, "Input.dispatchKeyEvent", {
-          type,
-          key: "Enter",
-          code: "Enter",
-          windowsVirtualKeyCode: 13,
-        });
-      }
+      // Enter needs its text, or no keypress is generated and nothing submits.
+      const enter = { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 };
+      await send(tabId, "Input.dispatchKeyEvent", {
+        type: "keyDown",
+        ...enter,
+        text: "\r",
+        unmodifiedText: "\r",
+      });
+      await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...enter });
     }
     return { ok: true };
   });

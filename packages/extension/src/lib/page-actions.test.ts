@@ -22,22 +22,27 @@ type Call = { method: string; params?: Record<string, unknown> };
 /** Fake chrome with a scripted CDP: respond(method, params) → result. */
 function stubChrome(respond: (method: string, params?: Record<string, unknown>) => unknown) {
   const calls: Call[] = [];
-  // Every command first sets up the autofill guard (covered in cdp.test.ts):
-  // after an attach, everything up to the guard's evaluate is that setup —
-  // keep it out of the per-action call log.
-  let arming = false;
+  // Commands that drive the page first set up the autofill guard (covered in
+  // cdp.test.ts): Page.enable + (re)register a new-document script + an
+  // evaluate. Keep those out of the per-action call log. A Page.enable is
+  // only the guard's if the new-document registration follows it.
+  let heldEnable: Call | undefined;
   vi.stubGlobal("chrome", {
     debugger: {
-      attach: async () => {
-        arming = true;
-      },
+      attach: async () => {},
       detach: async () => {},
       sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
-        if (String(params?.expression).includes("autofillGuard")) {
-          arming = false;
+        if (method === "Page.enable") {
+          heldEnable = { method, params };
           return {};
         }
-        if (arming) return {};
+        const guardSetup =
+          method === "Page.addScriptToEvaluateOnNewDocument" ||
+          method === "Page.removeScriptToEvaluateOnNewDocument" ||
+          String(params?.expression).includes("autofillGuard");
+        if (heldEnable && !guardSetup) calls.push(heldEnable);
+        heldEnable = undefined;
+        if (guardSetup) return {};
         calls.push({ method, params });
         return respond(method, params);
       },
@@ -241,11 +246,11 @@ describe("readText", () => {
 });
 
 describe("handleDialog", () => {
-  it("enables Page and answers the dialog", async () => {
+  it("answers the dialog without first enabling Page (that hangs under a dialog)", async () => {
     const calls = stubChrome(() => ({}));
     await handleDialog({ accept: true, promptText: "yes", tabId: 1 });
-    expect(calls.map((c) => c.method)).toEqual(["Page.enable", "Page.handleJavaScriptDialog"]);
-    expect(calls[1]?.params).toEqual({ accept: true, promptText: "yes" });
+    expect(calls.map((c) => c.method)).toEqual(["Page.handleJavaScriptDialog"]);
+    expect(calls[0]?.params).toEqual({ accept: true, promptText: "yes" });
   });
 
   it("maps the no-dialog CDP error to a friendly message", async () => {

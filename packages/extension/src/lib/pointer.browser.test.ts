@@ -19,8 +19,8 @@ import { WebSocket } from "ws";
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
-import { __resetDebugSessions, cdpClick } from "./cdp.js";
-import { hover, pressKey } from "./page-actions.js";
+import { __resetDebugSessions, cdpClick, cdpType } from "./cdp.js";
+import { handleDialog, hover, pressKey } from "./page-actions.js";
 
 const CHROME = [
   process.env.REINS_TEST_CHROME,
@@ -39,12 +39,17 @@ const FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
   #scroller { height: 200px; overflow: auto; scroll-behavior: smooth }
   .slide { animation: slide .6s ease-out }
   @keyframes slide { from { transform: translateY(300px) } to { transform: none } }
+  #pulse { animation: pulse 1s infinite }
+  @keyframes pulse { 50% { transform: scale(1.1) } }
 </style></head><body>
 <header>sticky</header>
 <button id="top">top</button>
 <button id="other">other</button>
 <button id="zero" style="width:0;height:0;padding:0;border:0"></button>
 <button id="off" disabled>disabled</button>
+<button id="pulse">pulsing</button>
+<iframe id="frame" style="width:200px;height:60px;border:0"
+  srcdoc="<body style='margin:0'><button id=framed style='width:200px;height:60px' onclick='parent.__log.push(&quot;framed&quot;)'>in frame</button></body>"></iframe>
 <div class="spacer"></div>
 <button id="below">below the fold</button>
 <div id="scroller"><div style="height:800px"></div><button id="inner">in scroller</button></div>
@@ -326,6 +331,57 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       0,
     );
     expect(await evaluate<boolean>(`!!document.getElementById("user")`)).toBe(true);
+  });
+
+  it("answers a JS dialog even while it blocks the page", async () => {
+    // With an alert up, the renderer can't evaluate anything; a command that
+    // evaluates first would hang and leave the agent no way out.
+    await load();
+    // An agent drives the page before a dialog appears; that's what makes the
+    // dialog answerable (Chrome only tracks dialogs opened after Page.enable).
+    await hover({ tabId: 1, selector: "#top" });
+    await evaluate(`setTimeout(() => { __log.push(confirm("go?") ? "yes" : "no"); }, 0)`);
+    await new Promise((r) => setTimeout(r, 200));
+    await handleDialog({ tabId: 1, accept: true });
+    expect(await log()).toEqual(["yes"]);
+  }, 10_000);
+
+  it("clicks into an iframe without calling a delivered click a failure", async () => {
+    await load();
+    await click("#frame");
+    expect(await log()).toEqual(["framed"]);
+  });
+
+  it("accepts a click on a node the framework re-mounted under the pointer", async () => {
+    await load();
+    await evaluate(`document.addEventListener("mousemove", () => {
+      const a = document.getElementById("top");
+      a.replaceWith(a.cloneNode(true));
+    }, { once: true })`);
+    await click("#top");
+    expect(await log()).toEqual(["click:top"]);
+  });
+
+  it("doesn't fail a click just because a page listener stopped propagation first", async () => {
+    await load();
+    await evaluate(
+      `window.addEventListener("pointerdown", (e) => e.stopImmediatePropagation(), true)`,
+    );
+    await click("#top");
+    expect(await log()).toEqual(["click:top"]);
+  });
+
+  it("clicks an element with an infinite animation instead of waiting forever", async () => {
+    await load();
+    await click("#pulse");
+    expect(await log()).toEqual(["click:pulse"]);
+  }, 10_000);
+
+  it("submits with type --enter", async () => {
+    await load();
+    await cdpType({ tabId: 1, selector: "#field", text: "hi", submit: true });
+    // Implicit submission clicks the form's default button, then submits.
+    expect(await log()).toEqual(["click:submit", "submit"]);
   });
 
   it("presses a letter into a focused input", async () => {

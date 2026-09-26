@@ -187,12 +187,12 @@ otherwise, never guess. `reins browsers` shows who's connected.
   value in one step and fires input/change — prefer it for forms.
 - Errors like `element not found` usually mean a stale ref — `snapshot` again.
 - `click`/`hover` wait for the target to stop moving and check nothing sits
-  on top of it; `click` then confirms the press reached it, so an `ok` click
-  landed. `cannot click …: covered by <el>` means a modal, cookie banner, or
-  overlay is in the way — dismiss it, then retry. `element is disabled` means
-  the control isn't usable yet (often a form that's still invalid) — fix the
-  inputs first. `landed on … instead` / `never reached the page` mean the page
-  re-rendered — `snapshot` again.
+  on top of it. `cannot click …: covered by <el>` means a modal, cookie
+  banner, or overlay is in the way — dismiss it, then retry. `element is
+  disabled` means the control isn't usable yet (often a form that's still
+  invalid) — fix the inputs first. `landed on … instead` means the page
+  changed under the pointer and something else got the click — `snapshot`
+  again before retrying.
 - While reins drives a tab it hides password-manager autofill menus
   (1Password, Bitwarden, …): Chrome blocks debugging while another
   extension's frame is in the tab. `another extension has a frame in it`

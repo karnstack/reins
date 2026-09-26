@@ -11,6 +11,7 @@ import type {
 } from "@reins/protocol";
 import {
   actionablePoint,
+  drivePage,
   ensureVisible,
   resolveTabId,
   selectorFor,
@@ -49,7 +50,7 @@ export async function pressKey(params: PressKeyParams): Promise<{ ok: true }> {
     nativeVirtualKeyCode: spec.keyCode,
     modifiers: spec.modifiers,
   };
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     // With text, keyDown also generates the keypress (Enter submits, letters
     // type); without it, rawKeyDown is the plain key-down — as Puppeteer does.
@@ -68,7 +69,7 @@ export async function pressKey(params: PressKeyParams): Promise<{ ok: true }> {
 export async function hover(params: HoverParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     const { x, y } = await actionablePoint(tabId, css, "hover", false);
     await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
@@ -89,7 +90,7 @@ export async function scroll(params: ScrollParams): Promise<{ ok: true }> {
   } else {
     expression = "(window.scrollTo(0, document.documentElement.scrollHeight), true)";
   }
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const found = await evaluate<boolean>(tabId, expression);
     if (!found) throw new Error(`element not found: ${selectorFor(params.ref, params.selector)}`);
     return { ok: true };
@@ -116,7 +117,7 @@ export async function fill(params: FillParams): Promise<{ ok: true }> {
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return true;
   })()`;
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const found = await evaluate<boolean>(tabId, expression);
     if (!found) throw new Error(`element not found: ${css}`);
     return { ok: true };
@@ -142,7 +143,7 @@ export async function selectOption(params: SelectOptionParams): Promise<{ ok: tr
     el.dispatchEvent(new Event("change", { bubbles: true }));
     return "ok";
   })()`;
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const outcome = await evaluate<string>(tabId, expression);
     if (outcome === "missing") throw new Error(`element not found: ${css}`);
     if (outcome === "notselect") throw new Error(`not a <select> element: ${css}`);
@@ -154,7 +155,7 @@ export async function selectOption(params: SelectOptionParams): Promise<{ ok: tr
 export async function upload(params: UploadParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
-  return withDebugger(tabId, async () => {
+  return drivePage(tabId, async () => {
     const doc = await send<{ root: { nodeId: number } }>(tabId, "DOM.getDocument", { depth: 0 });
     const { nodeId } = await send<{ nodeId: number }>(tabId, "DOM.querySelector", {
       nodeId: doc.root.nodeId,
@@ -184,8 +185,10 @@ export async function readText(params: ReadTextParams): Promise<{ text: string }
 
 export async function handleDialog(params: DialogParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
+  // No Page.enable here: it hangs while a dialog is open, and a dialog is only
+  // answerable if Page was already enabled when it opened — which the
+  // commands that drive the page do (via the autofill guard).
   return withDebugger(tabId, async () => {
-    await send(tabId, "Page.enable", {});
     try {
       await send(tabId, "Page.handleJavaScriptDialog", {
         accept: params.accept,

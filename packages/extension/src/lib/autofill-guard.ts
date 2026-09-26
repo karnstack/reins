@@ -16,6 +16,8 @@
  * Function.prototype.toString, so it must stay self-contained.
  */
 export function autofillGuard(leaseMs: number): void {
+  // A new document registered after its lease lapsed: nothing to guard.
+  if (leaseMs <= 0) return;
   type Guard = { until: number; stop?: () => void };
   const key = Symbol.for("reins.autofillGuard");
   const w = window as unknown as Record<symbol, Guard | undefined>;
@@ -33,10 +35,12 @@ export function autofillGuard(leaseMs: number): void {
   const offends = (el: Element) =>
     HOST.test(el.localName) ||
     (el.localName === "iframe" && (el.getAttribute("src") ?? "").startsWith("chrome-extension://"));
-  // Walk the document and every open shadow root. A closed shadow root hides
-  // its iframe, but the host element itself matches HOST. Rooted at `document`
-  // because on a new document this runs before <html> exists.
-  const sweep = () => {
+  const EXTENSION_FRAMES = 'iframe[src^="chrome-extension:"]';
+  // Walk the document and every open shadow root, once, when the guard comes
+  // up. A closed shadow root hides its iframe, but the host element itself
+  // matches HOST. Rooted at `document` because on a new document this runs
+  // before <html> exists.
+  const fullSweep = () => {
     const stack: Array<Document | Element | ShadowRoot> = [document];
     while (stack.length) {
       const node = stack.pop();
@@ -51,18 +55,33 @@ export function autofillGuard(leaseMs: number): void {
       }
     }
   };
+  // After that, keep it cheap — a full walk every tick is a long task on a
+  // big page. Password managers mount their hosts at the top of the page,
+  // and a native query finds extension frames anywhere in the light DOM.
+  const quickSweep = () => {
+    for (const root of [document.documentElement, document.body]) {
+      if (!root) continue;
+      for (const el of Array.from(root.children)) if (offends(el)) el.remove();
+    }
+    for (const f of Array.from(document.querySelectorAll(EXTENSION_FRAMES))) f.remove();
+  };
   const observer = new MutationObserver((records) => {
     if (Date.now() > guard.until) return guard.stop?.();
     for (const r of records) {
       for (const n of Array.from(r.addedNodes)) {
-        if (n instanceof Element && offends(n)) n.remove();
+        if (!(n instanceof Element)) continue;
+        if (offends(n)) n.remove();
+        else if (n.firstElementChild) {
+          for (const f of Array.from(n.querySelectorAll(EXTENSION_FRAMES))) f.remove();
+        }
       }
     }
   });
-  // The periodic sweep catches hosts built where the observer can't see.
+  // The periodic sweep catches frames built where the observer can't see
+  // (inside a host that was already on the page).
   const timer = setInterval(() => {
     if (Date.now() > guard.until) guard.stop?.();
-    else sweep();
+    else quickSweep();
   }, 250);
   guard.stop = () => {
     clearInterval(timer);
@@ -70,5 +89,5 @@ export function autofillGuard(leaseMs: number): void {
     if (w[key] === guard) delete w[key];
   };
   observer.observe(document, { childList: true, subtree: true });
-  sweep();
+  fullSweep();
 }
