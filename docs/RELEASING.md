@@ -52,6 +52,13 @@ ignores it and it is never published on its own.
      the zip and uploads + submits it. CLI-only releases skip this step, so
      the store isn't re-reviewed for identical builds.
 
+   If the store step fails at **publish** (the upload succeeded), the error
+   annotation carries the store's reason — commonly a new manifest permission
+   with no justification on the dashboard's Privacy practices tab, or an older
+   version still in review. The upload sits as a draft: fix the cause in the
+   dashboard and hit **Submit for review** there. Re-running the job won't
+   help — it sees the draft version and skips.
+
 That's it — no tagging by hand.
 
 ## Required secrets (repo → Settings → Secrets → Actions)
