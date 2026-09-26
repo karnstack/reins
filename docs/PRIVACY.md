@@ -8,7 +8,7 @@ browser. It is a developer tool; you install both halves yourself.
 
 ## What data reins handles
 
-- **Page content and tab metadata** (titles, URLs, tab group names, screenshots, console and
+- **Page content and tab metadata** (titles, URLs, tab group names and colors, screenshots, console and
   network activity of tabs you interact with through your agent) are read via
   the Chrome DevTools Protocol **only when the local reins daemon asks**, and
   are sent **only** to that daemon over a WebSocket bound to `127.0.0.1` on

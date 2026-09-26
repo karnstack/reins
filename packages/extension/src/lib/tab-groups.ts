@@ -1,4 +1,4 @@
-import type { ListGroupsResult, TabGroup } from "@reins/protocol";
+import type { ListGroupsResult } from "@reins/protocol";
 
 /** The browser has no tab-group API (Arc, Dia, …). `code` survives to the
  *  ResponseFrame, so the agent can tell the user instead of guessing. */
@@ -38,7 +38,7 @@ export async function listGroups(): Promise<ListGroupsResult> {
     groups: groups.map((g) => ({
       groupId: g.id,
       title: g.title ?? "",
-      color: g.color as TabGroup["color"],
+      color: g.color,
       collapsed: g.collapsed,
       windowId: g.windowId,
       tabCount: counts.get(g.id) ?? 0,

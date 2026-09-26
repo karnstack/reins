@@ -44,7 +44,7 @@ Each answer below fits its field's 1,000-character limit. Paste verbatim.
 **Single purpose description**
 
 ```text
-reins has one narrow purpose: let the user's own coding agent (software running on their machine) drive their own browser. A local companion daemon — installed by the user via the reins CLI (npm: @karnstack/reins) and bound to 127.0.0.1 — sends commands that this extension executes: list/open/close/focus tabs, navigate, click, type, fill forms, scroll, take screenshots, read page text, and read console messages and network requests for debugging. All communication is confined to the user's machine; the extension never contacts a remote server and never sends data anywhere except the user's own local daemon.
+reins has one narrow purpose: let the user's own coding agent (software running on their machine) drive their own browser. A local companion daemon — installed by the user via the reins CLI (npm: @karnstack/reins) and bound to 127.0.0.1 — sends commands that this extension executes: list/open/close/focus/group tabs, navigate, click, type, fill forms, scroll, take screenshots, read page text, and read console messages and network requests for debugging. All communication is confined to the user's machine; the extension never contacts a remote server and never sends data anywhere except the user's own local daemon.
 ```
 
 **debugger justification**
@@ -56,7 +56,7 @@ Core function of the extension: executes the user's agent commands on tabs via t
 **tabs justification**
 
 ```text
-Lists open tabs (title and URL) so the user's agent can pick a target tab, and opens, closes, and focuses tabs — plus resizes the tab's window — on the agent's behalf. Tab metadata is sent only to the user's own local daemon on 127.0.0.1, never to a remote server.
+Lists open tabs (title, URL, and tab group) so the user's agent can pick a target tab, and opens, closes, and focuses tabs — plus resizes the tab's window — on the agent's behalf. Tab metadata is sent only to the user's own local daemon on 127.0.0.1, never to a remote server.
 ```
 
 **tabGroups justification**

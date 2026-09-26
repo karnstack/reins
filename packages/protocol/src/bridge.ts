@@ -37,7 +37,9 @@ export type TabGroupColor = z.infer<typeof TabGroupColor>;
 export const TabGroup = z.object({
   groupId: z.number(),
   title: z.string(),
-  color: TabGroupColor,
+  // Lenient on output so a future Chromium color doesn't reject the whole
+  // list; inputs stay on TabGroupColor.
+  color: z.string(),
   collapsed: z.boolean(),
   windowId: z.number(),
   tabCount: z.number(),

@@ -109,8 +109,9 @@ eval            'document.title' [--await]   JS in the page's own origin
 cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
 ```
 
-Every command takes `--tab <id>` (default: the active tab) and `--json`
-(raw result). `reins help <command>` shows exact usage.
+Page commands take `--tab <id>` (default: the active tab); `tabs` and
+`groups` take no tab. Every command takes `--json` (raw result).
+`reins help <command>` shows exact usage.
 
 ## Recipes for the powerful stuff
 

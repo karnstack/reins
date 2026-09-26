@@ -6,6 +6,7 @@ import {
   ResponseFrame,
   Tab,
   TabGroup,
+  TabGroupColor,
   WelcomeFrame,
 } from "./bridge.js";
 
@@ -83,7 +84,7 @@ describe("tab groups", () => {
     expect(Tab.parse({ tabId: 1, title: "t", url: "u", active: true }).groupId).toBeUndefined();
   });
 
-  it("TabGroup parses a group and rejects unknown colors", () => {
+  it("TabGroup parses a group and accepts unknown colors on output", () => {
     const g = {
       groupId: 7,
       title: "reins",
@@ -93,7 +94,10 @@ describe("tab groups", () => {
       tabCount: 2,
     };
     expect(TabGroup.parse(g)).toEqual(g);
-    expect(() => TabGroup.parse({ ...g, color: "magenta" })).toThrow();
+    // Output is lenient: a future Chromium color must not reject the whole list.
+    expect(TabGroup.parse({ ...g, color: "magenta" }).color).toBe("magenta");
+    // Inputs stay on the enum.
+    expect(() => TabGroupColor.parse("magenta")).toThrow();
     expect(ListGroupsResult.parse({ groups: [g] }).groups).toHaveLength(1);
   });
 });
