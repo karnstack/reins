@@ -1,4 +1,4 @@
-import type { JevAction, JevObservation } from "@reins/protocol";
+import type { JevAction, JevActParams, JevActResult, JevObservation } from "@reins/protocol";
 import { describe, expect, it, vi } from "vitest";
 import type { JevBody } from "./client.js";
 import { type LoopDeps, runLoop } from "./loop.js";
@@ -65,7 +65,9 @@ function deps(pages: JevObservation[], script: Script[], opts: { now?: () => num
   const observe = vi.fn(async () =>
     queue.length > 1 ? (queue.shift() as JevObservation) : (queue[0] as JevObservation),
   );
-  const act = vi.fn(async () => ({ ok: true as const }));
+  const act = vi.fn<(p: Omit<JevActParams, "browserId" | "tabId">) => Promise<JevActResult>>(
+    async () => ({ ok: true }),
+  );
   return { observe, act, ask: scriptedJev(script), now: opts.now ?? (() => 0) } satisfies LoopDeps;
 }
 
@@ -139,13 +141,65 @@ describe("runLoop", () => {
     const { result } = await runLoop(d, input());
     expect(result).toMatchObject({
       status: "needs_text",
+      reason: 'field "Passenger name" has no --fill',
       pending: { op: "type", label: "Passenger name" },
     });
   });
 
+  it("says when none of the fills matched the field", async () => {
+    const run = newRun("book it", "x.com", { from: "Zurich" }, [], 0);
+    const d = deps([page(field(3, "Passenger name"))], [{ op: "TYPE_TEXT", target: "1" }]);
+    const { result } = await runLoop(d, input({ run }));
+    expect(result).toMatchObject({
+      status: "needs_text",
+      reason: 'field "Passenger name" matched none of your --fill values',
+    });
+  });
+
+  it("asks a second time for the fill of a field beyond the first 8", async () => {
+    const run = newRun("book it", "x.com", { name: "Bob" }, [], 0);
+    const fields = Array.from({ length: 9 }, (_, i) => field(i + 1, `Field ${i + 1}`)).flat();
+    const d = deps(
+      [page(fields), page([], { text: "2" })],
+      [{ op: "TYPE_TEXT", target: "9" }, { op: "-", fill: { "9": "name" } }, { op: "DONE" }],
+    );
+    const { result } = await runLoop(d, input({ run }));
+    expect(d.ask).toHaveBeenCalledTimes(3);
+    expect(Object.keys(d.ask.mock.calls[1]?.[0].questions ?? {})).toEqual(["fill_for_9"]);
+    expect(d.act).toHaveBeenCalledWith({ op: "type", node: 9, text: "Bob", label: "Field 9" });
+    expect(result).toMatchObject({ status: "done", jevCalls: 3 });
+    expect(result.steps[0]).toMatchObject({ op: "type", fill: "name" });
+  });
+
+  it("stops at the Jev-call cap", async () => {
+    const d = deps(
+      [page([button(1, "Next")])],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+      ],
+    );
+    d.act.mockResolvedValue({ stale: true, reason: "covered" });
+    const { result } = await runLoop(d, input({ maxSteps: 1 }));
+    expect(result).toMatchObject({ status: "budget", reason: "reached 2 Jev calls", step: 0 });
+    expect(d.ask).toHaveBeenCalledTimes(2);
+  });
+
+  it("never mutates the run it was given", async () => {
+    const run = newRun("find flights", "x.com", {}, ["Pay now"], 0);
+    const d = deps(
+      [page([button(1, "Pay now")]), page([], { text: "2" })],
+      [{ op: "CLICK", target: "1" }, { op: "DONE" }],
+    );
+    const { run: after } = await runLoop(d, input({ run }));
+    expect(after.step).toBe(1);
+    expect(run).toEqual(newRun("find flights", "x.com", {}, ["Pay now"], 0));
+  });
+
   it("re-reads a stale target without using a step", async () => {
     const d = deps([page([button(1, "Search")])], [{ op: "CLICK", target: "1" }, { op: "DONE" }]);
-    d.act.mockResolvedValueOnce({ stale: true, reason: "the element is gone" } as never);
+    d.act.mockResolvedValueOnce({ stale: true, reason: "the element is gone" });
     const { result } = await runLoop(d, input());
     expect(result.status).toBe("done");
     expect(result.step).toBe(0);
@@ -234,6 +288,52 @@ describe("runLoop", () => {
     const second = await runLoop(again, input({ run: first.run, continued: true }));
     expect(second.result.status).toBe("stuck");
     expect(again.ask).not.toHaveBeenCalled();
+  });
+
+  it("a --continue that opens a dialog reports the dialog, not stuck", async () => {
+    const run = { ...newRun("find flights", "x.com", {}, [], 0), step: 5 };
+    const d = deps(
+      [
+        page([button(1, "Go")]),
+        page([button(1, "Go")], { dialog: { type: "confirm", message: "Sure?" }, title: "Y" }),
+      ],
+      [{ op: "CLICK", target: "1" }],
+    );
+    const { result, run: after } = await runLoop(d, input({ run, continued: true }));
+    expect(result).toMatchObject({ status: "dialog", title: "Y", step: 6 });
+    expect(result.steps[0]?.pageChanged).toBe(false);
+    expect(after.lockedFingerprint).toBeUndefined();
+  });
+
+  it("a --continue that is aborted after acting is interrupted, not stuck", async () => {
+    const ctrl = new AbortController();
+    const run = { ...newRun("find flights", "x.com", {}, [], 0), step: 5 };
+    const d = deps([page([button(1, "Go")])], [{ op: "CLICK", target: "1" }]);
+    d.act.mockImplementationOnce(async () => {
+      ctrl.abort(new Error("daemon restarting"));
+      return { ok: true };
+    });
+    const { result, run: after } = await runLoop(
+      d,
+      input({ run, continued: true, signal: ctrl.signal }),
+    );
+    expect(result).toMatchObject({ status: "interrupted", reason: "daemon restarting", step: 6 });
+    expect(after.lockedFingerprint).toBeUndefined();
+  });
+
+  it("a --continue that times out mid-action is budget, not stuck", async () => {
+    let t = 0;
+    const run = { ...newRun("find flights", "x.com", {}, [], 0), step: 5 };
+    const d = deps([page([button(1, "Go")])], [{ op: "CLICK", target: "1" }], {
+      now: () => (t += 400),
+    });
+    const { result, run: after } = await runLoop(
+      d,
+      input({ run, continued: true, timeoutMs: 1000 }),
+    );
+    expect(result.status).toBe("budget");
+    expect(result.reason).toContain("timed out");
+    expect(after.lockedFingerprint).toBeUndefined();
   });
 
   it("continues step numbering and grants a fresh budget", async () => {

@@ -38,6 +38,11 @@ const OP_OF: Record<Exclude<Operation, "DONE" | "BLOCKED">, StepOp> = {
   WAIT: "wait",
 };
 
+/** Statuses the --continue loop breaker may turn into `stuck`. The page-side
+ *  stops (dialog, left_site, interrupted) stay as they are: they say what
+ *  happened, and the page did move in a way the fingerprint can't see. */
+const BREAKABLE: DoStatus[] = ["risky_action", "needs_text", "blocked", "budget", "stuck"];
+
 function abortReason(signal: AbortSignal): string {
   const r = signal.reason as unknown;
   return r instanceof Error ? r.message : typeof r === "string" ? r : "stopped";
@@ -67,13 +72,17 @@ export async function runLoop(
     let final = status;
     let reason = extra.reason;
     // Loop breaker: a --continue that acted but moved nothing is stuck, and
-    // the next --continue refuses until the page itself changes.
+    // the next --continue refuses until the page itself changes. Only fires
+    // when the last action's outcome was actually observed: an abort or
+    // timeout before the next read says nothing about the page.
+    const last = run.history.at(-1);
     if (
       input.continued &&
       executed > 0 &&
       changed === 0 &&
-      status !== "done" &&
-      status !== "error"
+      last !== undefined &&
+      last.pageChanged !== null &&
+      BREAKABLE.includes(status)
     ) {
       final = "stuck";
       reason = `this --continue ran ${executed} action${executed === 1 ? "" : "s"} and none changed the page`;
@@ -107,13 +116,10 @@ export async function runLoop(
         return stop("budget", { reason: `timed out after ${Math.round(input.timeoutMs / 1000)}s` });
       }
       obs ??= await deps.observe();
-      if (obs.dialog) {
-        return stop("dialog", {
-          reason: `a JavaScript ${obs.dialog.type} is open: ${JSON.stringify(obs.dialog.message)}`,
-        });
-      }
       url = obs.url;
       title = obs.title;
+      // Resolve the last action's outcome before any stop below, so every
+      // result records it (the fingerprint already ignores the dialog).
       const fp = fingerprint(obs);
       const prev = run.history.at(-1);
       if (prev && prev.pageChanged === null) {
@@ -126,6 +132,11 @@ export async function runLoop(
         if (s && s.n === run.step) s.pageChanged = prev.pageChanged;
       }
       run.lastFingerprint = fp;
+      if (obs.dialog) {
+        return stop("dialog", {
+          reason: `a JavaScript ${obs.dialog.type} is open: ${JSON.stringify(obs.dialog.message)}`,
+        });
+      }
       if (first && input.continued && run.lockedFingerprint === fp) {
         return stop("stuck", {
           reason: "the last --continue changed nothing, and the page hasn't changed since",
@@ -186,7 +197,10 @@ export async function runLoop(
       }
       if (decision.operation === "TYPE_TEXT" && !decision.fill) {
         return stop("needs_text", {
-          reason: `field ${JSON.stringify(action.label)} has no --fill`,
+          reason:
+            plan.fillNames.length > 0
+              ? `field ${JSON.stringify(action.label)} matched none of your --fill values`
+              : `field ${JSON.stringify(action.label)} has no --fill`,
           pending: { op: "type", label: action.label },
         });
       }
