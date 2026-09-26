@@ -108,6 +108,34 @@ function SecurityPage() {
         </li>
       </Ul>
 
+      <H2 id="reins-do">reins do and TypeSafe</H2>
+      <P>
+        <Code>reins do</Code> hands page state to TypeSafe's Jev model, which answers typed
+        multiple-choice questions: which operation, and which observed element. Jev can only choose
+        among elements reins actually read from the page; its output never becomes a selector,
+        coordinate or code. Page text can still try to steer it (prompt injection), so:
+      </P>
+      <Ul>
+        <li>
+          A click whose label contains a money, messaging or deletion word (buy, pay, send, delete,
+          …) stops the run unless the agent passed <Code>--confirm</Code> for that label or the goal
+          names it word for word. Unlabeled buttons stop too. This is a heuristic, not a guarantee:
+          other languages and odd labels can slip past.
+        </li>
+        <li>
+          A run that moves to another site stops (<Code>left_site</Code>), and site permissions
+          still apply on every step (<Code>full</Code> required).
+        </li>
+        <li>
+          Ctrl-C, a dead agent, <Code>--timeout</Code> or a daemon restart stop the run before its
+          next action.
+        </li>
+        <li>
+          The key file is <Code>~/.reins/credentials.json</Code> (0600). The key is never returned
+          by any command, never logged, and never sent to a page.
+        </li>
+      </Ul>
+
       <H2 id="data">Data handling</H2>
       <Ul>
         <li>

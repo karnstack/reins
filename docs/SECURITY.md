@@ -184,6 +184,25 @@ Two limits to keep in mind:
   its own trail. The audit log is for review and debugging, not forensics
   against a capable attacker.
 
+## reins do and TypeSafe
+
+`reins do` hands page state to TypeSafe's Jev model, which answers typed
+multiple-choice questions: which operation, and which observed element. Jev
+can only choose among elements reins actually read from the page; its output
+never becomes a selector, coordinate or code. Page text can still try to
+steer it (prompt injection), so:
+
+- A click whose label contains a money, messaging or deletion word (buy, pay,
+  send, delete, …) stops the run unless the agent passed `--confirm` for that
+  label or the goal names it word for word. Unlabeled buttons stop too. This
+  is a heuristic, not a guarantee: other languages and odd labels can slip past.
+- A run that moves to another site stops (`left_site`), and site permissions
+  still apply on every step (`full` required).
+- Ctrl-C, a dead agent, `--timeout` or a daemon restart stop the run before its
+  next action.
+- The key file is `~/.reins/credentials.json` (0600). The key is never
+  returned by any command, never logged, and never sent to a page.
+
 ## Hardening checklist
 
 For running agents against a browser you care about, in rough order of
