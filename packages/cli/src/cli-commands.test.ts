@@ -9,6 +9,7 @@ import {
   healthSummary,
   helpText,
   logsInfo,
+  restartText,
   tabsText,
 } from "./cli-commands.js";
 import { TOOL_COMMANDS } from "./commands.js";
@@ -32,10 +33,19 @@ describe("helpText", () => {
     for (const name of Object.keys(TOOL_COMMANDS)) {
       expect(text, name).toContain(name);
     }
-    for (const cmd of ["browsers", "status", "allow", "kill", "doctor", "logs", "daemon"]) {
+    for (const cmd of [
+      "browsers",
+      "status",
+      "allow",
+      "restart",
+      "kill",
+      "doctor",
+      "logs",
+      "daemon",
+    ]) {
       expect(text).toContain(cmd);
     }
-    for (const gone of ["reins up", "install claude", "--stdio", "restart"]) {
+    for (const gone of ["reins up", "install claude", "--stdio"]) {
       expect(text, gone).not.toContain(gone);
     }
   });
@@ -46,6 +56,24 @@ describe("helpText", () => {
 
   it("help lists the audit command", () => {
     expect(helpText("1.2.3", TOOL_COMMANDS)).toContain("audit");
+  });
+});
+
+describe("restartText", () => {
+  it("shows the version change and the reconnected browsers", () => {
+    const s = restartText("0.0.9", 8765, HEALTH);
+    expect(s).toContain("daemon restarted on 127.0.0.1:8765 (v0.0.9 → v0.1.0)");
+    expect(s).toContain("browser: 1 connected (Chrome)");
+  });
+
+  it("drops the arrow when the version is unchanged", () => {
+    expect(restartText("0.1.0", 8765, HEALTH)).toContain("(v0.1.0)\n");
+  });
+
+  it("says when nothing was running, and when no browser is back yet", () => {
+    const s = restartText(undefined, 8765, { ...HEALTH, browsers: [] });
+    expect(s).toContain("no daemon was running — started v0.1.0");
+    expect(s).toContain("none connected yet");
   });
 });
 

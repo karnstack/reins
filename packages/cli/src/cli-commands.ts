@@ -58,6 +58,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     line("extension", "install the extension without the Chrome Web Store (load unpacked)"),
     line("", "  --reload: re-stage, then reload an unpacked (dev/sideload) build"),
     line("allow <id>", "allow an unpacked/dev extension to connect"),
+    line("restart", "restart the background daemon (e.g. after an upgrade)"),
     line("kill", "stop the background daemon"),
     line("doctor", "run diagnostic checks"),
     line("logs", "show the daemon log location and recent lines"),
@@ -67,6 +68,22 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     "only when several browsers are connected; ids come from `reins tabs`),",
     "--json (raw result). The daemon starts on demand; nothing to set up.",
   ].join("\n");
+}
+
+/** Result line(s) for `reins restart`. `previous` is the old daemon's version, if one ran. */
+export function restartText(previous: string | undefined, port: number, h: DaemonHealth): string {
+  const head =
+    previous === undefined
+      ? `no daemon was running — started v${h.version} on 127.0.0.1:${port}`
+      : previous === h.version
+        ? `daemon restarted on 127.0.0.1:${port} (v${h.version})`
+        : `daemon restarted on 127.0.0.1:${port} (v${previous} → v${h.version})`;
+  const names = [...new Set(h.browsers.map((b) => b.browser))].join(", ");
+  const browsers =
+    h.browsers.length === 0
+      ? "browser: none connected yet — the extension reconnects within ~10s (`reins status`)"
+      : `browser: ${h.browsers.length} connected (${names})`;
+  return `${head}\n${browsers}`;
 }
 
 /** Human status lines for `reins status`. */

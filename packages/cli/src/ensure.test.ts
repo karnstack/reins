@@ -1,11 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DaemonHealth } from "./cli-commands.js";
-import { ensureDaemon, type FoundDaemon, waitForBrowsers } from "./ensure.js";
+import {
+  ensureDaemon,
+  type FoundDaemon,
+  isOlderVersion,
+  restartDaemon,
+  stopDaemon,
+  waitForBrowsers,
+} from "./ensure.js";
 import { lowerPortRival } from "./serve.js";
+import { packageVersion } from "./version.js";
 
-const health = (browsers = 0): DaemonHealth => ({
+const health = (browsers = 0, version = packageVersion()): DaemonHealth => ({
   ok: true,
-  version: "0.0.0",
+  version,
   paired: browsers > 0,
   browsers: Array.from({ length: browsers }, (_, i) => ({
     id: `b${i + 1}`,
@@ -39,6 +47,109 @@ describe("ensureDaemon", () => {
     await expect(
       ensureDaemon(cfg, { spawn: () => {}, find: async () => undefined, pollMs: 1, timeoutMs: 10 }),
     ).rejects.toThrow("daemon failed to start — check `reins logs`");
+  });
+});
+
+describe("ensureDaemon version check", () => {
+  it("restarts a daemon older than the CLI", async () => {
+    const stop = vi.fn(async () => {});
+    const spawn = vi.fn();
+    const notice = vi.fn();
+    let calls = 0;
+    const find = async (): Promise<FoundDaemon> =>
+      ++calls === 1
+        ? { port: 8765, health: health(1, "0.4.0") }
+        : { port: 8765, health: health(0, "0.5.0") };
+    const result = await ensureDaemon(cfg, {
+      version: "0.5.0",
+      find,
+      stop,
+      spawn,
+      notice,
+      pollMs: 1,
+    });
+    expect(stop).toHaveBeenCalledWith(8765);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ spawned: true, health: { version: "0.5.0" } });
+    expect(notice).toHaveBeenCalledWith("reins: daemon runs v0.4.0, CLI is v0.5.0 — restarting it");
+  });
+
+  it("leaves a newer daemon alone (two installed CLIs must not bounce it)", async () => {
+    const stop = vi.fn(async () => {});
+    const found: FoundDaemon = { port: 8765, health: health(1, "0.6.0") };
+    const result = await ensureDaemon(cfg, { version: "0.5.0", find: async () => found, stop });
+    expect(result.spawned).toBe(false);
+    expect(stop).not.toHaveBeenCalled();
+  });
+});
+
+describe("isOlderVersion", () => {
+  it("compares major.minor.patch numerically", () => {
+    expect(isOlderVersion("0.4.0", "0.5.0")).toBe(true);
+    expect(isOlderVersion("0.9.0", "0.10.0")).toBe(true);
+    expect(isOlderVersion("1.0.0", "0.10.0")).toBe(false);
+    expect(isOlderVersion("0.5.0", "0.5.0")).toBe(false);
+    expect(isOlderVersion("0.5.0-next.1", "0.5.0")).toBe(false);
+  });
+});
+
+describe("stopDaemon", () => {
+  it("requests shutdown, then waits until the port stops answering", async () => {
+    const shutdown = vi.fn(async () => {});
+    let calls = 0;
+    const probe = async (port: number) => (++calls < 3 ? { port, health: health() } : undefined);
+    await stopDaemon(8765, { shutdown, probe, pollMs: 1 });
+    expect(shutdown).toHaveBeenCalledWith(8765);
+    expect(calls).toBe(3);
+  });
+
+  it("errors when the daemon never goes away", async () => {
+    const probe = async (port: number) => ({ port, health: health() });
+    await expect(
+      stopDaemon(8765, { shutdown: async () => {}, probe, pollMs: 1, timeoutMs: 10 }),
+    ).rejects.toThrow("did not stop");
+  });
+});
+
+describe("restartDaemon", () => {
+  it("stops the live daemon, spawns a fresh one, and reports the old one", async () => {
+    const order: string[] = [];
+    let stopped = false;
+    const find = async (): Promise<FoundDaemon | undefined> =>
+      stopped
+        ? order.includes("spawn")
+          ? { port: 8765, health: health(0) }
+          : undefined
+        : { port: 8766, health: health(1, "0.4.0") };
+    const result = await restartDaemon(cfg, {
+      find,
+      stop: async (port) => {
+        order.push(`stop:${port}`);
+        stopped = true;
+      },
+      spawn: () => order.push("spawn"),
+      pollMs: 1,
+    });
+    expect(order).toEqual(["stop:8766", "spawn"]);
+    expect(result.previous?.health.version).toBe("0.4.0");
+    expect(result.current).toMatchObject({ port: 8765, spawned: true });
+  });
+
+  it("just spawns when nothing was running", async () => {
+    const stop = vi.fn(async () => {});
+    let spawned = false;
+    const find = async () => (spawned ? { port: 8765, health: health() } : undefined);
+    const result = await restartDaemon(cfg, {
+      find,
+      stop,
+      spawn: () => {
+        spawned = true;
+      },
+      pollMs: 1,
+    });
+    expect(stop).not.toHaveBeenCalled();
+    expect(result.previous).toBeUndefined();
+    expect(result.current.spawned).toBe(true);
   });
 });
 

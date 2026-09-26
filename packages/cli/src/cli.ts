@@ -3,10 +3,17 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs, UsageError } from "./args.js";
-import { browsersText, doctorReport, healthSummary, helpText, logsInfo } from "./cli-commands.js";
+import {
+  browsersText,
+  doctorReport,
+  healthSummary,
+  helpText,
+  logsInfo,
+  restartText,
+} from "./cli-commands.js";
 import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
-import { ensureDaemon, findDaemon, waitForBrowsers } from "./ensure.js";
+import { ensureDaemon, findDaemon, restartDaemon, stopDaemon, waitForBrowsers } from "./ensure.js";
 import { logsDir } from "./log.js";
 import { packageVersion } from "./version.js";
 
@@ -92,11 +99,20 @@ async function main(): Promise<void> {
         console.log("no reins daemon running.");
         break;
       }
-      await fetch(`http://127.0.0.1:${found.port}/shutdown`, {
-        method: "POST",
-        signal: AbortSignal.timeout(3000),
-      });
+      await stopDaemon(found.port);
       console.log(`daemon on port ${found.port} stopped.`);
+      break;
+    }
+
+    case "restart": {
+      const { previous, current } = await restartDaemon(loadOrCreateConfig());
+      // Browsers that were connected come back on their own; wait for one so
+      // the next command doesn't race the extension's reconnect.
+      let health = current.health;
+      if (previous && previous.health.browsers.length > 0) {
+        health = await waitForBrowsers(current.port).catch(() => current.health);
+      }
+      console.log(restartText(previous?.health.version, current.port, health));
       break;
     }
 
@@ -161,7 +177,7 @@ async function main(): Promise<void> {
       if (!id) throw new UsageError("usage: reins allow <extension-id>");
       const { allowExtension } = await import("./allowlist.js");
       allowExtension(loadOrCreateConfig().dir, id);
-      console.log(`allowed ${id} — restart the daemon (\`reins kill\`; it respawns on demand).`);
+      console.log(`allowed ${id} — restart the daemon (\`reins restart\`) to pick it up.`);
       break;
     }
 
