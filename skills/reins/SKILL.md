@@ -88,6 +88,7 @@ reins status
 
 ```
 tabs / open <url> / close / focus / nav <url|back|forward|reload>
+groups          tab groups (id, title, color); `tabs` shows g<id> per grouped tab
 snapshot        interactive elements + refs
 click           --ref|--selector [--button right|middle] [--count 2]
 type            --text "…" [--enter]      keystrokes into an element
