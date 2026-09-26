@@ -53,6 +53,22 @@ describe("waitForBrowsers", () => {
     expect(h.browsers).toHaveLength(1);
   });
 
+  it("with connectedAfter, ignores a connection that predates it", async () => {
+    // After a reload the old connection can still be listed for a moment.
+    let calls = 0;
+    const probe = async (port: number): Promise<FoundDaemon> => {
+      const h = health(1);
+      h.browsers[0] = {
+        id: calls++ >= 2 ? "b2" : "b1",
+        browser: "Chrome",
+        connectedAt: calls >= 3 ? 200 : 50,
+      };
+      return { port, health: h };
+    };
+    const h = await waitForBrowsers(8765, { probe, pollMs: 1, connectedAfter: 100 });
+    expect(h.browsers[0]?.id).toBe("b2");
+  });
+
   it("times out with the extension hint", async () => {
     const probe = async (port: number): Promise<FoundDaemon> => ({ port, health: health(0) });
     await expect(waitForBrowsers(8765, { probe, pollMs: 1, timeoutMs: 5 })).rejects.toThrow(

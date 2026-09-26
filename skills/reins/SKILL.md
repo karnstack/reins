@@ -210,4 +210,8 @@ otherwise, never guess. `reins browsers` shows who's connected.
   Chrome allows one debugger per tab — close the other tool or run reins in a
   dedicated browser/profile.
 - Driving a tab shows the native "is being debugged" banner; that's expected.
+- `reins extension --reload` reloads an **unpacked** reins extension (a dev
+  checkout or a `reins extension` sideload) after its files change. It's for
+  working on reins itself — never needed to drive pages, and a Chrome Web
+  Store install refuses it.
 - Deeper diagnostics: `reins doctor`, `reins logs`.

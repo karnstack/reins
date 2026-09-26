@@ -39,6 +39,10 @@ describe("helpText", () => {
     }
   });
 
+  it("help mentions extension --reload", () => {
+    expect(helpText("1.2.3", TOOL_COMMANDS)).toMatch(/--reload: re-stage, then reload an unpacked/);
+  });
+
   it("help lists the audit command", () => {
     expect(helpText("1.2.3", TOOL_COMMANDS)).toContain("audit");
   });

@@ -30,6 +30,7 @@ import {
   upload,
 } from "./page-actions.js";
 import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
+import { reloadExtension } from "./reload.js";
 import { closeTab, listTabs, resizeWindow, selectTab } from "./tab-handler.js";
 
 const NAV_HISTORY = new Set(["back", "forward", "reload"]);
@@ -160,6 +161,7 @@ export interface DispatchOutcome {
  *  target (host/tier/tabId) for the daemon's audit trail. */
 export async function dispatchWithMeta(method: string, params: unknown): Promise<DispatchOutcome> {
   if (method === "policy_get") return { result: await policy() };
+  if (method === "extension_reload") return { result: await reloadExtension() };
   if (method === "policy_tighten") {
     const { pattern, tier } = PolicyTightenParams.parse(params ?? {});
     return { result: await tightenPolicy(pattern, tier) };

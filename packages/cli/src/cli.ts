@@ -101,12 +101,44 @@ async function main(): Promise<void> {
     }
 
     case "extension": {
+      const a = parseArgs(rest, { booleans: ["reload"] });
       const { bundledExtensionDir, extractExtension, sideloadInstructions } = await import(
         "./sideload.js"
       );
       const target = join(loadOrCreateConfig().dir, "extension");
       extractExtension(bundledExtensionDir(), target);
-      console.log(sideloadInstructions(target));
+      if (a.flags.reload !== true) {
+        console.log(sideloadInstructions(target));
+        break;
+      }
+      // --reload: the staged build is already on disk; have the connected
+      // unpacked extension re-read it (the chrome://extensions ⟳ click).
+      console.log(`staged ${target}`);
+      const ensured = await ensureDaemon(loadOrCreateConfig());
+      if (ensured.health.browsers.length === 0) {
+        if (!ensured.spawned) {
+          throw new Error(
+            "no browser connected — load the extension unpacked first (`reins extension`)",
+          );
+        }
+        await waitForBrowsers(ensured.port);
+      }
+      const browser = typeof a.flags.browser === "string" ? a.flags.browser : undefined;
+      const { reloadExtension } = await import("./extension-cli.js");
+      console.log(
+        await reloadExtension(
+          {
+            rpc: (method, params) => rpc(ensured.port, method, params),
+            waitReconnect: async (since) => {
+              const health = await waitForBrowsers(ensured.port, { connectedAfter: since });
+              const fresh = health.browsers.find((b) => b.connectedAt > since);
+              if (!fresh) throw new Error("the extension did not reconnect");
+              return fresh;
+            },
+          },
+          browser !== undefined ? { browserId: browser } : {},
+        ),
+      );
       break;
     }
 

@@ -88,14 +88,17 @@ export async function waitForBrowsers(
     timeoutMs?: number;
     pollMs?: number;
     probe?: (port: number) => Promise<FoundDaemon | undefined>;
+    /** Only count browsers that connected after this time (epoch ms). */
+    connectedAfter?: number;
   } = {},
 ): Promise<DaemonHealth> {
   const probe = opts.probe ?? probeHealth;
   const pollMs = opts.pollMs ?? 500;
+  const after = opts.connectedAfter ?? Number.NEGATIVE_INFINITY;
   const deadline = Date.now() + (opts.timeoutMs ?? 15_000);
   for (;;) {
     const found = await probe(port);
-    if (found && found.health.browsers.length > 0) return found.health;
+    if (found?.health.browsers.some((b) => b.connectedAt > after)) return found.health;
     if (Date.now() >= deadline) {
       throw new Error("no browser connected — is the reins extension installed? (`reins status`)");
     }
