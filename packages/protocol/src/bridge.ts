@@ -107,6 +107,21 @@ export type WelcomeFrame = z.infer<typeof WelcomeFrame>;
 export const ListTabsResult = z.object({ tabs: z.array(Tab) });
 export type ListTabsResult = z.infer<typeof ListTabsResult>;
 
-/** Result payload for the `list_groups` method. */
-export const ListGroupsResult = z.object({ groups: z.array(TabGroup) });
+/** A browser the daemon left out of a `list_groups` aggregate, and why:
+ *  no chrome.tabGroups API, an extension that predates tab groups, or a
+ *  plain failure. */
+export const SkippedBrowser = z.object({
+  browserId: z.string(),
+  browser: z.string(),
+  reason: z.enum(["unsupported", "outdated", "error"]),
+  message: z.string(),
+});
+export type SkippedBrowser = z.infer<typeof SkippedBrowser>;
+
+/** Result payload for the `list_groups` method. `skipped` is added only by
+ *  the daemon's aggregate; the extension never sends it. */
+export const ListGroupsResult = z.object({
+  groups: z.array(TabGroup),
+  skipped: z.array(SkippedBrowser).optional(),
+});
 export type ListGroupsResult = z.infer<typeof ListGroupsResult>;

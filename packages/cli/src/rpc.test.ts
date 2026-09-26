@@ -106,7 +106,7 @@ describe("listAllGroups", () => {
   };
   const two = [
     { id: "b1", browser: "Chrome", connectedAt: 0 },
-    { id: "b2", browser: "Dia", connectedAt: 1 },
+    { id: "b2", browser: "Chromium", connectedAt: 1 },
   ];
 
   it("aggregates across browsers with tags, via handleRpc", async () => {
@@ -117,34 +117,99 @@ describe("listAllGroups", () => {
     const out = (await handleRpc(bridge, { method: "list_groups" })) as { groups: unknown[] };
     expect(out.groups).toEqual([
       { ...G, browserId: "b1", browser: "Chrome" },
-      { ...G, browserId: "b2", browser: "Dia" },
+      { ...G, browserId: "b2", browser: "Chromium" },
     ]);
   });
 
-  it("skips browsers that fail when another answers", async () => {
+  const UNSUPPORTED_B2 =
+    "Chromium (b2) doesn't support tab groups — reins groups/group/ungroup need the chrome.tabGroups API, which this browser doesn't provide. Other reins commands work normally.";
+  const OUTDATED_B2 =
+    "Chromium (b2)'s reins extension predates tab groups — update it (Chrome Web Store), or run `reins extension --reload` for an unpacked build.";
+
+  function coded(message: string, code?: string): Error {
+    const e = new Error(message) as Error & { code?: string };
+    if (code) e.code = code;
+    return e;
+  }
+
+  it("reports a browser that can't do tab groups in skipped, naming it", async () => {
     const bridge = fakeBridge({
       browsers: two,
       request: vi.fn(async (_m: string, _p: unknown, opts?: { browserId?: string }) => {
-        if (opts?.browserId === "b2") throw new Error("unsupported: no tab groups");
+        if (opts?.browserId === "b2") {
+          throw coded(
+            "unsupported: this browser doesn't support tab groups (chrome.tabGroups unavailable)",
+            "unsupported",
+          );
+        }
         return { groups: [G] };
       }),
     });
-    const groups = await listAllGroups(bridge);
-    expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ browserId: "b1" });
+    const { groups, skipped } = await listAllGroups(bridge);
+    expect(groups).toEqual([{ ...G, browserId: "b1", browser: "Chrome" }]);
+    expect(skipped).toEqual([
+      { browserId: "b2", browser: "Chromium", reason: "unsupported", message: UNSUPPORTED_B2 },
+    ]);
   });
 
-  it("rethrows the first error when every browser fails", async () => {
+  it("reports an outdated extension in skipped", async () => {
     const bridge = fakeBridge({
-      request: vi.fn(async () => {
-        throw new Error("unsupported: this browser doesn't support tab groups");
+      browsers: two,
+      request: vi.fn(async (_m: string, _p: unknown, opts?: { browserId?: string }) => {
+        if (opts?.browserId === "b2") {
+          throw coded("HANDLER_ERROR: unknown method: list_groups", "HANDLER_ERROR");
+        }
+        return { groups: [G] };
       }),
     });
-    await expect(listAllGroups(bridge)).rejects.toThrow("unsupported");
+    const { skipped } = await listAllGroups(bridge);
+    expect(skipped).toEqual([
+      { browserId: "b2", browser: "Chromium", reason: "outdated", message: OUTDATED_B2 },
+    ]);
+  });
+
+  it("reports a generic failure in skipped with the raw message", async () => {
+    const bridge = fakeBridge({
+      browsers: two,
+      request: vi.fn(async (_m: string, _p: unknown, opts?: { browserId?: string }) => {
+        if (opts?.browserId === "b2") throw new Error('request "list_groups" timed out after 5ms');
+        return { groups: [G] };
+      }),
+    });
+    const { skipped } = await listAllGroups(bridge);
+    expect(skipped).toEqual([
+      {
+        browserId: "b2",
+        browser: "Chromium",
+        reason: "error",
+        message: 'request "list_groups" timed out after 5ms',
+      },
+    ]);
+  });
+
+  it("rethrows the first failure, named, when every browser fails", async () => {
+    const bridge = fakeBridge({
+      browsers: [{ id: "b2", browser: "Chromium", connectedAt: 1 }],
+      request: vi.fn(async () => {
+        throw coded(
+          "unsupported: this browser doesn't support tab groups (chrome.tabGroups unavailable)",
+          "unsupported",
+        );
+      }),
+    });
+    const p = listAllGroups(bridge);
+    await expect(p).rejects.toThrow(UNSUPPORTED_B2);
+    await expect(p).rejects.toMatchObject({ code: "unsupported" });
+  });
+
+  it("handleRpc list_groups always returns skipped", async () => {
+    const bridge = fakeBridge({ request: vi.fn(async () => ({ groups: [G] })) });
+    const out = await handleRpc(bridge, { method: "list_groups" });
+    expect(out).toEqual({ groups: [{ ...G, browserId: "b1", browser: "Chrome" }], skipped: [] });
   });
 
   it("returns [] with no browsers connected", async () => {
-    expect(await listAllGroups(fakeBridge({ browsers: [] }))).toEqual([]);
+    expect(await listAllGroups(fakeBridge({ browsers: [] }))).toEqual({ groups: [], skipped: [] });
   });
 
   it("errors on an unknown browserId", async () => {
@@ -235,6 +300,55 @@ describe("audit hook", () => {
     expect(records[0]?.host).toBeUndefined();
     expect(records[0]?.tier).toBeUndefined();
     expect(records[0]?.denied).toBeUndefined();
+  });
+
+  it("names the browser when a routed group method is unsupported, in the error and audit", async () => {
+    const records: AuditRecord[] = [];
+    const err = new Error(
+      "unsupported: this browser doesn't support tab groups (chrome.tabGroups unavailable)",
+    ) as Error & { code?: string; meta?: unknown; browserId?: string };
+    err.code = "unsupported";
+    err.meta = { host: "app.example.com", tier: "full", tabId: 7 };
+    err.browserId = "b1";
+    const bridge = fakeBridge({
+      requestFull: async () => {
+        throw err;
+      },
+    });
+    const expected =
+      "Chrome (b1) doesn't support tab groups — reins groups/group/ungroup need the chrome.tabGroups API, which this browser doesn't provide. Other reins commands work normally.";
+    const p = handleRpc(bridge, { method: "group_tabs", params: { tabIds: [7] } }, (r) =>
+      records.push(r),
+    );
+    await expect(p).rejects.toThrow(expected);
+    await expect(p).rejects.toMatchObject({
+      code: "unsupported",
+      browserId: "b1",
+      meta: { host: "app.example.com", tier: "full", tabId: 7 },
+    });
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      method: "group_tabs",
+      ok: false,
+      browserId: "b1",
+      browser: "Chrome",
+      host: "app.example.com",
+      error: expected,
+    });
+  });
+
+  it("leaves an unsupported error on a non-group method untouched", async () => {
+    const err = new Error("unsupported: nope") as Error & { code?: string; browserId?: string };
+    err.code = "unsupported";
+    err.browserId = "b1";
+    const bridge = fakeBridge({
+      requestFull: async () => {
+        throw err;
+      },
+    });
+    const p = handleRpc(bridge, { method: "click", params: {} });
+    await expect(p).rejects.toThrow("unsupported: nope");
+    await expect(p).rejects.toBe(err);
   });
 
   it("audits list_tabs as one aggregate line without host", async () => {

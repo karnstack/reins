@@ -121,8 +121,8 @@ list (no default). Every command takes `--json` (raw result).
 (`reins group --tab 12 --tab 13 --title reins --color blue`) so the user sees
 which tabs are yours. Grouping moves tabs into the group's window (a new group
 stays in the first tab's window). Don't regroup the user's own tabs unless they
-ask.
-Arc and Dia have no tab groups; those commands answer `unsupported` there.
+ask. A browser without the tab-group API answers with an error naming it, and
+`reins groups` lists it as skipped. Dia supports groups (cyan shows as blue).
 
 ## Recipes for the powerful stuff
 
