@@ -9,11 +9,19 @@ import {
   healthSummary,
   helpText,
   logsInfo,
-  restartText,
+  RESTART_WAIT_MS,
+  runRestart,
 } from "./cli-commands.js";
 import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
-import { ensureDaemon, findDaemon, restartDaemon, stopDaemon, waitForBrowsers } from "./ensure.js";
+import {
+  ensureDaemon,
+  findDaemon,
+  probeHealth,
+  restartDaemon,
+  stopDaemon,
+  waitForBrowsers,
+} from "./ensure.js";
 import { logsDir } from "./log.js";
 import { packageVersion } from "./version.js";
 
@@ -105,14 +113,13 @@ async function main(): Promise<void> {
     }
 
     case "restart": {
-      const { previous, current } = await restartDaemon(loadOrCreateConfig());
-      // Browsers that were connected come back on their own; wait for one so
-      // the next command doesn't race the extension's reconnect.
-      let health = current.health;
-      if (previous && previous.health.browsers.length > 0) {
-        health = await waitForBrowsers(current.port).catch(() => current.health);
-      }
-      console.log(restartText(previous?.health.version, current.port, health));
+      const { text, ok } = await runRestart({
+        restart: () => restartDaemon(loadOrCreateConfig()),
+        waitForBrowsers: (port) => waitForBrowsers(port, { timeoutMs: RESTART_WAIT_MS }),
+        probe: probeHealth,
+      });
+      console.log(text);
+      if (!ok) process.exitCode = 1;
       break;
     }
 
@@ -214,7 +221,7 @@ async function main(): Promise<void> {
     case "status": {
       const cfg = loadOrCreateConfig();
       const found = await findDaemon(cfg);
-      console.log(healthSummary(found?.health, found?.port ?? cfg.port));
+      console.log(healthSummary(found?.health, found?.port ?? cfg.port, packageVersion()));
       console.log(`logs   : ${logsDir()}`);
       break;
     }
@@ -222,7 +229,7 @@ async function main(): Promise<void> {
     case "doctor": {
       const cfg = loadOrCreateConfig();
       const found = await findDaemon(cfg);
-      const report = doctorReport(cfg, found?.health);
+      const report = doctorReport(cfg, found?.health, packageVersion());
       for (const c of report.checks) {
         console.log(`${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`);
       }

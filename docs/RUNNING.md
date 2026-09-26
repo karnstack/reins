@@ -82,5 +82,6 @@ a CLI on PATH, any agent with a shell can use it — no per-agent registration.
   extension too.
 - **`no browser connected`:** the extension isn't installed/allowed in any
   open browser, or it's still reconnecting (up to ~10 s after a daemon
-  restart). `reins doctor` shows what's reachable.
+  restart — `reins restart` waits 15 s for it). `reins doctor` shows what's
+  reachable, including a daemon that's older than the CLI.
 - **Anything else:** `reins logs` tails the newest daemon log.

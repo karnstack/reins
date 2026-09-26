@@ -37,7 +37,7 @@ const FAQS = [
     id: "update",
     question: "How do I update reins?",
     answer:
-      "Run npm i -g @karnstack/reins@latest. The next reins command notices the running daemon is older than the CLI and restarts it on the new version. The Chrome Web Store extension updates itself.",
+      "Run npm i -g @karnstack/reins@latest. The next tool command (reins tabs, say) notices the running daemon is older than the CLI and restarts it on the new version; reins restart does it right away. reins status and reins doctor only report the mismatch. The Chrome Web Store extension updates itself.",
   },
   {
     id: "mcp",
