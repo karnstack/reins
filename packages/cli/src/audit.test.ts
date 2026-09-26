@@ -79,6 +79,25 @@ describe("redactParams", () => {
     });
   });
 
+  it("keeps fill names but never their values", () => {
+    expect(redactParams("do", { goal: "g", fills: { from: "Zurich" } })).toEqual({
+      goal: "g",
+      fills: { from: "[redacted 6 chars]" },
+    });
+  });
+
+  it("keeps the act label, redacting only the typed text and value", () => {
+    expect(
+      redactParams("jev_act", { op: "type", node: 2, label: "City", text: "Zurich", value: "x" }),
+    ).toEqual({
+      op: "type",
+      node: 2,
+      label: "City",
+      text: "[redacted 6 chars]",
+      value: "[redacted 1 chars]",
+    });
+  });
+
   it("does not mutate its input", () => {
     const input = { text: "abc" };
     redactParams("type", input);
