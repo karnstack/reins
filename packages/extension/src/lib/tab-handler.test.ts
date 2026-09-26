@@ -25,6 +25,20 @@ describe("listTabs", () => {
     const { tabs } = await listTabs();
     expect(tabs).toEqual([{ tabId: -1, title: "", url: "", active: false }]);
   });
+
+  it("carries groupId for grouped tabs, omits it for ungrouped (-1)", async () => {
+    vi.stubGlobal("chrome", {
+      tabs: {
+        query: async () => [
+          { id: 1, title: "a", url: "https://a", active: false, groupId: 7 },
+          { id: 2, title: "b", url: "https://b", active: false, groupId: -1 },
+        ],
+      },
+    });
+    const { tabs } = await listTabs();
+    expect(tabs[0]).toEqual({ tabId: 1, title: "a", url: "https://a", active: false, groupId: 7 });
+    expect(tabs[1]).not.toHaveProperty("groupId");
+  });
 });
 
 describe("closeTab", () => {

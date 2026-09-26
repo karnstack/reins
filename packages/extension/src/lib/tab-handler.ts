@@ -9,6 +9,7 @@ export async function listTabs(): Promise<{ tabs: Tab[] }> {
       title: t.title ?? "",
       url: t.url ?? "",
       active: t.active ?? false,
+      ...(typeof t.groupId === "number" && t.groupId !== -1 ? { groupId: t.groupId } : {}),
     })),
   };
 }

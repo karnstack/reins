@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { BrowserInfo, Tab } from "@reins/protocol";
+import type { BrowserInfo, SkippedBrowser, Tab, TabGroup } from "@reins/protocol";
 import type { ToolCommand } from "./commands.js";
 import type { ReinsConfig } from "./config.js";
 
@@ -25,7 +25,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     "Usage: reins <command> [flags]",
     "",
     "Tabs & pages:",
-    ...["tabs", "open", "close", "focus", "nav"].map(tool),
+    ...["tabs", "groups", "open", "close", "focus", "nav"].map(tool),
     "",
     "Interaction:",
     ...[
@@ -103,9 +103,31 @@ export function tabsText(tabs: Tab[]): string {
   return tabs
     .map(
       (t) =>
-        `  ${t.browserId ?? "?"}  tab ${t.tabId}${t.active ? " *" : "  "}  ${t.title || "(untitled)"} — ${t.url}`,
+        `  ${t.browserId ?? "?"}  tab ${t.tabId}${t.active ? " *" : "  "}${t.groupId !== undefined ? `  g${t.groupId}` : ""}  ${t.title || "(untitled)"} — ${t.url}`,
     )
     .join("\n");
+}
+
+/** Group listing for `reins groups`, then one line per browser the daemon
+ *  couldn't ask. */
+export function groupsText(groups: TabGroup[], skipped: SkippedBrowser[] = []): string {
+  const lines =
+    groups.length === 0
+      ? ["(no groups)"]
+      : groups.map(
+          (g) =>
+            `  ${g.browserId ?? "?"}  group ${g.groupId}  "${g.title}"  ${g.color}  ${g.tabCount} tab${g.tabCount === 1 ? "" : "s"}${g.collapsed ? "  (collapsed)" : ""}  window ${g.windowId}`,
+        );
+  for (const s of skipped) {
+    const why =
+      s.reason === "unsupported"
+        ? "tab groups not supported"
+        : s.reason === "outdated"
+          ? "reins extension too old for tab groups (update it)"
+          : `failed: ${s.message}`;
+    lines.push(`  ${s.browserId}  ${s.browser} — ${why}`);
+  }
+  return lines.join("\n");
 }
 
 export interface DoctorReport {

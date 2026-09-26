@@ -31,6 +31,7 @@ import {
 } from "./page-actions.js";
 import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
 import { reloadExtension } from "./reload.js";
+import { listGroups } from "./tab-groups.js";
 import { closeTab, listTabs, resizeWindow, selectTab } from "./tab-handler.js";
 
 const NAV_HISTORY = new Set(["back", "forward", "reload"]);
@@ -45,11 +46,12 @@ interface Gated {
  * checks the host's tier against the method's required tier, and returns
  * params with tabId pinned plus the resolved host/tier/tabId for the audit
  * trail. list_tabs is gated per-tab (redaction) in runHandler; open_tab has
- * no current tab and checks its destination.
+ * no current tab and checks its destination. list_groups has no host (group
+ * titles are the user's own labels).
  */
 async function gate(method: GatedMethod, params: unknown): Promise<Gated> {
   const p = { ...((params ?? {}) as Record<string, unknown>) };
-  if (method === "list_tabs") return { params: p, meta: {} };
+  if (method === "list_tabs" || method === "list_groups") return { params: p, meta: {} };
   if (method === "open_tab") {
     const host = hostOf(String(p.url ?? ""));
     const tier = await ensureAllowed("open_tab", host);
@@ -103,6 +105,8 @@ async function runHandler(method: GatedMethod, gated: Record<string, unknown>): 
         ),
       };
     }
+    case "list_groups":
+      return listGroups();
     case "open_tab":
       return cdpOpenTab(gated as Parameters<typeof cdpOpenTab>[0]);
     case "close_tab":

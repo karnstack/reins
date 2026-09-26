@@ -23,6 +23,10 @@ const GROUPS: Array<{ id: string; title: string; intro?: string; rows: [string, 
     title: "Tabs and pages",
     rows: [
       ["reins tabs [--browser <id>]", "List tabs across all connected browsers."],
+      [
+        "reins groups [--browser <id>]",
+        "List tab groups. reins tabs marks each grouped tab with g<id>.",
+      ],
       ["reins open <url> [--background]", "Open a new tab."],
       ["reins close --tab <id>", "Close a tab."],
       ["reins focus --tab <id>", "Focus (activate) a tab."],

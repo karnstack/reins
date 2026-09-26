@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   browsersText,
   doctorReport,
+  groupsText,
   healthSummary,
   helpText,
   logsInfo,
@@ -80,6 +81,66 @@ describe("browsersText / tabsText", () => {
     expect(text).toContain("tab 3 *");
     expect(text).toContain("(untitled)");
     expect(tabsText([])).toContain("no tabs");
+  });
+});
+
+describe("groupsText", () => {
+  it("renders one line per group", () => {
+    const g = {
+      groupId: 7,
+      title: "reins",
+      color: "blue" as const,
+      collapsed: true,
+      windowId: 1,
+      tabCount: 2,
+      browserId: "b1",
+    };
+    expect(groupsText([g])).toBe('  b1  group 7  "reins"  blue  2 tabs  (collapsed)  window 1');
+    expect(groupsText([{ ...g, collapsed: false, tabCount: 1 }])).toBe(
+      '  b1  group 7  "reins"  blue  1 tab  window 1',
+    );
+    expect(groupsText([])).toBe("(no groups)");
+  });
+
+  it("lists skipped browsers after the groups, one line per reason", () => {
+    const g = {
+      groupId: 7,
+      title: "reins",
+      color: "blue" as const,
+      collapsed: false,
+      windowId: 1,
+      tabCount: 1,
+      browserId: "b1",
+    };
+    const skipped = [
+      {
+        browserId: "b2",
+        browser: "Chromium",
+        reason: "unsupported" as const,
+        message: "Chromium (b2) ...",
+      },
+      { browserId: "b3", browser: "Arc", reason: "outdated" as const, message: "old" },
+      { browserId: "b4", browser: "Brave", reason: "error" as const, message: "timed out" },
+    ];
+    expect(groupsText([g], skipped)).toBe(
+      [
+        '  b1  group 7  "reins"  blue  1 tab  window 1',
+        "  b2  Chromium — tab groups not supported",
+        "  b3  Arc — reins extension too old for tab groups (update it)",
+        "  b4  Brave — failed: timed out",
+      ].join("\n"),
+    );
+    expect(groupsText([], skipped.slice(0, 1))).toBe(
+      "(no groups)\n  b2  Chromium — tab groups not supported",
+    );
+    expect(groupsText([], [])).toBe("(no groups)");
+  });
+
+  it("tabsText marks grouped tabs", () => {
+    const text = tabsText([
+      { tabId: 12, title: "T", url: "https://x", active: true, groupId: 7, browserId: "b1" },
+    ]);
+    expect(text).toBe("  b1  tab 12 *  g7  T — https://x");
   });
 });
 

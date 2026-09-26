@@ -44,6 +44,12 @@ describe("TOOL_COMMANDS: params", () => {
     expect(build("tabs", ["--browser", "b1"])).toEqual({ browserId: "b1" });
   });
 
+  it("groups: optional browser filter", () => {
+    expect(build("groups", [])).toEqual({});
+    expect(build("groups", ["--browser", "b2"])).toEqual({ browserId: "b2" });
+    expect(cmd("groups").method).toBe("list_groups");
+  });
+
   it("open: url positional, --background flips activate", () => {
     expect(build("open", ["https://x"])).toEqual({ url: "https://x", activate: true });
     expect(build("open", ["https://x", "--background"])).toEqual({

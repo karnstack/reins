@@ -44,7 +44,7 @@ Each answer below fits its field's 1,000-character limit. Paste verbatim.
 **Single purpose description**
 
 ```text
-reins has one narrow purpose: let the user's own coding agent (software running on their machine) drive their own browser. A local companion daemon — installed by the user via the reins CLI (npm: @karnstack/reins) and bound to 127.0.0.1 — sends commands that this extension executes: list/open/close/focus tabs, navigate, click, type, fill forms, scroll, take screenshots, read page text, and read console messages and network requests for debugging. All communication is confined to the user's machine; the extension never contacts a remote server and never sends data anywhere except the user's own local daemon.
+reins has one narrow purpose: let the user's own coding agent (software running on their machine) drive their own browser. A local companion daemon — installed by the user via the reins CLI (npm: @karnstack/reins) and bound to 127.0.0.1 — sends commands that this extension executes: list/open/close/focus/group tabs, navigate, click, type, fill forms, scroll, take screenshots, read page text, and read console messages and network requests for debugging. All communication is confined to the user's machine; the extension never contacts a remote server and never sends data anywhere except the user's own local daemon.
 ```
 
 **debugger justification**
@@ -56,7 +56,13 @@ Core function of the extension: executes the user's agent commands on tabs via t
 **tabs justification**
 
 ```text
-Lists open tabs (title and URL) so the user's agent can pick a target tab, and opens, closes, and focuses tabs — plus resizes the tab's window — on the agent's behalf. Tab metadata is sent only to the user's own local daemon on 127.0.0.1, never to a remote server.
+Lists open tabs (title, URL, and tab group) so the user's agent can pick a target tab, and opens, closes, and focuses tabs — plus resizes the tab's window — on the agent's behalf. Tab metadata is sent only to the user's own local daemon on 127.0.0.1, never to a remote server.
+```
+
+**tabGroups justification**
+
+```text
+Lists the user's tab groups (title, color, collapsed state) and, on the agent's behalf, creates groups, adds or removes tabs, and edits a group's title and color — so the user can see which tabs their agent is working in. Group metadata is sent only to the user's own local daemon on 127.0.0.1, never to a remote server.
 ```
 
 **storage justification**
@@ -134,7 +140,7 @@ Once both are in place, the extension discovers the daemon on its own and the to
 
 WHAT YOUR AGENT CAN DO
 
-• Tabs — list, open, close, and focus tabs across every connected browser
+• Tabs — list, open, close, focus, and group tabs across every connected browser
 • Navigate — go to a URL, or back / forward / reload
 • Inspect — snapshot the page's interactive elements, read visible text, capture screenshots
 • Interact — click, type, fill inputs, choose dropdown options, hover, scroll, press keys, upload files
@@ -153,6 +159,7 @@ PERMISSIONS, AND WHY
 
 • debugger — runs your agent's commands (click, type, screenshot, read console/network) on tabs via the Chrome DevTools Protocol. Chrome shows its native debugging banner while attached.
 • tabs — list, open, close, and focus tabs, and resize the tab's window.
+• tabGroups — list, create, and edit tab groups, so you can see which tabs your agent is working in.
 • storage — stores the auto-connect setting, cached daemon port, and connection status on your device.
 • offscreen — hosts the persistent WebSocket to your local daemon; MV3 service workers can't hold long-lived connections.
 

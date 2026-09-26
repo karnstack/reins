@@ -1,7 +1,14 @@
 import { resolve } from "node:path";
-import type { ConsoleEntry, NetworkEntry, SnapshotRef, Tab } from "@reins/protocol";
+import type {
+  ConsoleEntry,
+  NetworkEntry,
+  SkippedBrowser,
+  SnapshotRef,
+  Tab,
+  TabGroup,
+} from "@reins/protocol";
 import { type ParsedArgs, UsageError } from "./args.js";
-import { tabsText } from "./cli-commands.js";
+import { groupsText, tabsText } from "./cli-commands.js";
 
 /** One `reins <name>` tool subcommand: flags → /rpc params → printed text. */
 export interface ToolCommand {
@@ -84,6 +91,19 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
       return browser !== undefined ? { browserId: browser } : {};
     },
     format: (r) => tabsText((r as { tabs: Tab[] }).tabs),
+  },
+  groups: {
+    method: "list_groups",
+    usage: "reins groups [--browser <id>]",
+    summary: "list tab groups across all connected browsers",
+    build: (a) => {
+      const browser = flagStr(a, "browser");
+      return browser !== undefined ? { browserId: browser } : {};
+    },
+    format: (r) => {
+      const { groups, skipped } = r as { groups: TabGroup[]; skipped?: SkippedBrowser[] };
+      return groupsText(groups, skipped);
+    },
   },
   open: {
     method: "open_tab",

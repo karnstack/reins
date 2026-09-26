@@ -88,6 +88,7 @@ reins status
 
 ```
 tabs / open <url> / close / focus / nav <url|back|forward|reload>
+groups          tab groups (id, title, color); `tabs` shows g<id> per grouped tab
 snapshot        interactive elements + refs
 click           --ref|--selector [--button right|middle] [--count 2]
 type            --text "…" [--enter]      keystrokes into an element
@@ -108,8 +109,9 @@ eval            'document.title' [--await]   JS in the page's own origin
 cdp             <Domain.method> ['{json}']   raw Chrome DevTools Protocol
 ```
 
-Every command takes `--tab <id>` (default: the active tab) and `--json`
-(raw result). `reins help <command>` shows exact usage.
+Page commands take `--tab <id>` (default: the active tab); `tabs` and
+`groups` take no tab. Every command takes `--json` (raw result).
+`reins help <command>` shows exact usage.
 
 ## Recipes for the powerful stuff
 
