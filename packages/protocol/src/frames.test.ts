@@ -13,6 +13,11 @@ describe("HelloFrame", () => {
     expect((parsed.data as Record<string, unknown>).token).toBeUndefined();
   });
 
+  it("carries the extension's version when it sends one", () => {
+    const parsed = HelloFrame.safeParse({ type: "hello", browser: "chrome", version: "0.4.0" });
+    expect(parsed.success && parsed.data.version).toBe("0.4.0");
+  });
+
   it("rejects a missing browser", () => {
     expect(HelloFrame.safeParse({ type: "hello" }).success).toBe(false);
   });

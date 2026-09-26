@@ -60,7 +60,9 @@ To debug the daemon itself, run it in the foreground: `pnpm daemon`
 After changing code, `pnpm build`, then `pnpm reins kill` for CLI/daemon
 changes and `pnpm reins extension --reload` for extension changes — it
 reloads the unpacked extension in place, instead of clicking ⟳ Reload in
-`chrome://extensions`.
+`chrome://extensions`. (It also re-stages the sideload copy in
+`~/.reins/extension` from this checkout, so a profile that loads that copy
+picks up your dev build on its next reload.)
 
 ## 4. Hook up an agent
 

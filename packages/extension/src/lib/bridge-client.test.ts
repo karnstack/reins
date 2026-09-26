@@ -8,6 +8,8 @@ interface Harness {
   port: number;
   /** the most recently accepted server-side socket */
   current(): WebSocket | undefined;
+  /** the most recent hello frame received */
+  hello(): Record<string, unknown> | undefined;
 }
 
 let harness: Harness | undefined;
@@ -33,6 +35,7 @@ afterEach(async () => {
 function startServer(): Promise<Harness> {
   return new Promise((resolve) => {
     let live: WebSocket | undefined;
+    let lastHello: Record<string, unknown> | undefined;
     const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
     server.on("connection", (ws, req) => {
       if (!req.headers.origin?.startsWith("chrome-extension://")) return ws.close(4003);
@@ -40,13 +43,14 @@ function startServer(): Promise<Harness> {
         const msg = JSON.parse(data.toString());
         if (msg.type === "hello") {
           live = ws;
+          lastHello = msg;
           ws.send(JSON.stringify({ type: "welcome", server: "reins" }));
         }
       });
     });
     server.on("listening", () => {
       const port = (server.address() as AddressInfo).port;
-      resolve({ server, port, current: () => live });
+      resolve({ server, port, current: () => live, hello: () => lastHello });
     });
   });
 }
@@ -121,6 +125,20 @@ describe("BridgeClient", () => {
     client.start();
     await waitFor(() => status === "connected");
     expect(status).toBe("connected");
+  });
+
+  it("sends the extension version in its hello", async () => {
+    harness = await startServer();
+    let status = "";
+    client = makeClient([`ws://127.0.0.1:${harness.port}`], {
+      version: "0.4.0",
+      onStatus: (s) => {
+        status = s;
+      },
+    });
+    client.start();
+    await waitFor(() => status === "connected");
+    expect(harness.hello()).toMatchObject({ type: "hello", browser: "test", version: "0.4.0" });
   });
 
   it("discovers the daemon across candidates: dead port, silent server, then reins", async () => {

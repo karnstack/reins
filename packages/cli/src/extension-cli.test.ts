@@ -6,11 +6,33 @@ describe("reloadExtension", () => {
     const rpc = vi.fn(async () => ({ reloading: true, version: "0.4.0" }));
     const waitReconnect = vi.fn(async (since: number) => {
       expect(since).toBeGreaterThan(0);
-      return { id: "b2", browser: "Google Chrome", connectedAt: since + 1 };
+      return { id: "b2", browser: "Google Chrome", connectedAt: since + 1, version: "0.4.0" };
     });
     const out = await reloadExtension({ rpc, waitReconnect }, { browserId: "b1" });
     expect(rpc).toHaveBeenCalledWith("extension_reload", { browserId: "b1" });
     expect(out).toBe("reloaded the reins extension (0.4.0) — reconnected as b2 (Google Chrome)");
+  });
+
+  it("reports the version that came up, not the one it replaced", async () => {
+    // The sideload upgrade flow: 0.3.9 running, 0.4.0 staged.
+    const rpc = vi.fn(async () => ({ reloading: true, version: "0.3.9" }));
+    const waitReconnect = vi.fn(async () => ({
+      id: "b2",
+      browser: "Google Chrome",
+      connectedAt: 2,
+      version: "0.4.0",
+    }));
+    expect(await reloadExtension({ rpc, waitReconnect }, {})).toBe(
+      "reloaded the reins extension 0.3.9 → 0.4.0 — reconnected as b2 (Google Chrome)",
+    );
+  });
+
+  it("labels the old version when the reconnected extension doesn't report one", async () => {
+    const rpc = vi.fn(async () => ({ reloading: true, version: "0.3.9" }));
+    const waitReconnect = vi.fn(async () => ({ id: "b2", browser: "Chrome", connectedAt: 2 }));
+    expect(await reloadExtension({ rpc, waitReconnect }, {})).toBe(
+      "reloaded the reins extension (was 0.3.9) — reconnected as b2 (Chrome)",
+    );
   });
 
   it("passes the extension's refusal through (store builds update themselves)", async () => {

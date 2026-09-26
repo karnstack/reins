@@ -124,14 +124,28 @@ async function main(): Promise<void> {
         await waitForBrowsers(ensured.port);
       }
       const browser = typeof a.flags.browser === "string" ? a.flags.browser : undefined;
+      // Wait for *this* browser to come back, not whichever reconnects first.
+      const roster = ensured.health.browsers;
+      const reloading =
+        browser !== undefined
+          ? roster.find((b) => b.id === browser)
+          : roster.length === 1
+            ? roster[0]
+            : undefined;
       const { reloadExtension } = await import("./extension-cli.js");
       console.log(
         await reloadExtension(
           {
             rpc: (method, params) => rpc(ensured.port, method, params),
             waitReconnect: async (since) => {
-              const health = await waitForBrowsers(ensured.port, { connectedAfter: since });
-              const fresh = health.browsers.find((b) => b.connectedAt > since);
+              const name = reloading?.browser;
+              const health = await waitForBrowsers(ensured.port, {
+                connectedAfter: since,
+                ...(name !== undefined ? { browser: name } : {}),
+              });
+              const fresh = health.browsers.find(
+                (b) => b.connectedAt > since && (name === undefined || b.browser === name),
+              );
               if (!fresh) throw new Error("the extension did not reconnect");
               return fresh;
             },

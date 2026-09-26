@@ -22,5 +22,11 @@ export async function reloadExtension(
       "the extension reloaded, but hasn't reconnected — click ⟳ Reload on the reins card in chrome://extensions",
     );
   });
-  return `reloaded the reins extension (${version}) — reconnected as ${b.id} (${b.browser})`;
+  const versions =
+    b.version === undefined
+      ? `(was ${version})`
+      : b.version === version
+        ? `(${version})`
+        : `${version} → ${b.version}`;
+  return `reloaded the reins extension ${versions} — reconnected as ${b.id} (${b.browser})`;
 }

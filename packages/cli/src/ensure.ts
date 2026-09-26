@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BrowserInfo } from "@reins/protocol";
 import type { DaemonHealth } from "./cli-commands.js";
 import { candidatePorts, type ReinsConfig } from "./config.js";
 
@@ -90,6 +91,8 @@ export async function waitForBrowsers(
     probe?: (port: number) => Promise<FoundDaemon | undefined>;
     /** Only count browsers that connected after this time (epoch ms). */
     connectedAfter?: number;
+    /** Only count browsers with this name (e.g. "Google Chrome"). */
+    browser?: string;
   } = {},
 ): Promise<DaemonHealth> {
   const probe = opts.probe ?? probeHealth;
@@ -98,7 +101,9 @@ export async function waitForBrowsers(
   const deadline = Date.now() + (opts.timeoutMs ?? 15_000);
   for (;;) {
     const found = await probe(port);
-    if (found?.health.browsers.some((b) => b.connectedAt > after)) return found.health;
+    const counts = (b: BrowserInfo) =>
+      b.connectedAt > after && (opts.browser === undefined || b.browser === opts.browser);
+    if (found?.health.browsers.some(counts)) return found.health;
     if (Date.now() >= deadline) {
       throw new Error("no browser connected — is the reins extension installed? (`reins status`)");
     }

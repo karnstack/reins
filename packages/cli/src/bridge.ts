@@ -44,6 +44,7 @@ interface ConnectedBrowser {
   ws: WebSocket;
   browser: string;
   connectedAt: number;
+  version?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -122,7 +123,12 @@ export class BridgeHost implements BridgePort {
   get browsers(): BrowserInfo[] {
     return [...this.#browsers.entries()]
       .filter(([, b]) => b.ws.readyState === WebSocket.OPEN)
-      .map(([id, b]) => ({ id, browser: b.browser, connectedAt: b.connectedAt }));
+      .map(([id, b]) => ({
+        id,
+        browser: b.browser,
+        connectedAt: b.connectedAt,
+        ...(b.version !== undefined ? { version: b.version } : {}),
+      }));
   }
 
   #onConnection(ws: WebSocket, origin: string | undefined): void {
@@ -149,6 +155,7 @@ export class BridgeHost implements BridgePort {
           ws,
           browser: hello.data.browser,
           connectedAt: Date.now(),
+          ...(hello.data.version !== undefined ? { version: hello.data.version } : {}),
         });
         this.#log(`reins: browser connected (${browserId}: ${hello.data.browser})`);
         ws.send(

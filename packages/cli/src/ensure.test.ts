@@ -69,6 +69,25 @@ describe("waitForBrowsers", () => {
     expect(h.browsers[0]?.id).toBe("b2");
   });
 
+  it("with browser, ignores a fresh connection from a different browser", async () => {
+    // Reloading Chrome while Brave happens to reconnect: Brave isn't the answer.
+    let calls = 0;
+    const probe = async (port: number): Promise<FoundDaemon> => {
+      calls++;
+      const browsers = [{ id: "b3", browser: "Brave", connectedAt: 200 }];
+      if (calls >= 3) browsers.push({ id: "b4", browser: "Chrome", connectedAt: 300 });
+      return { port, health: { ...health(0), browsers } };
+    };
+    const h = await waitForBrowsers(8765, {
+      probe,
+      pollMs: 1,
+      connectedAfter: 100,
+      browser: "Chrome",
+    });
+    expect(h.browsers.map((b) => b.id)).toContain("b4");
+    expect(calls).toBe(3);
+  });
+
   it("times out with the extension hint", async () => {
     const probe = async (port: number): Promise<FoundDaemon> => ({ port, health: health(0) });
     await expect(waitForBrowsers(8765, { probe, pollMs: 1, timeoutMs: 5 })).rejects.toThrow(
