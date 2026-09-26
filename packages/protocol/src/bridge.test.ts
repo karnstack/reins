@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CALL_METHODS,
+  CallFrame,
+  KeySetParams,
+  KeyStatus,
   ListGroupsResult,
   ListTabsResult,
   RequestFrame,
@@ -113,5 +117,34 @@ describe("tab groups", () => {
     expect(() =>
       ListGroupsResult.parse({ groups: [], skipped: [{ ...skipped[0], reason: "nope" }] }),
     ).toThrow();
+  });
+});
+
+describe("call frames (extension → daemon)", () => {
+  it("parses a call frame", () => {
+    const f = { type: "call", id: "c1", method: "key_status", params: {} };
+    expect(CallFrame.parse(f)).toEqual(f);
+    expect(() => CallFrame.parse({ ...f, id: "" })).toThrow();
+  });
+
+  it("allows exactly the three key methods", () => {
+    expect([...CALL_METHODS]).toEqual(["key_set", "key_status", "key_clear"]);
+  });
+
+  it("defaults the provider and trims the key", () => {
+    expect(KeySetParams.parse({ key: "  ts_abcdefgh  " })).toEqual({
+      provider: "typesafe",
+      key: "ts_abcdefgh",
+    });
+    expect(() => KeySetParams.parse({ key: "short" })).toThrow();
+    expect(() => KeySetParams.parse({ provider: "openai", key: "ts_abcdefgh" })).toThrow();
+  });
+
+  it("KeyStatus carries only set + last4", () => {
+    expect(KeyStatus.parse({ provider: "typesafe", set: true, last4: "a1b2" })).toEqual({
+      provider: "typesafe",
+      set: true,
+      last4: "a1b2",
+    });
   });
 });
