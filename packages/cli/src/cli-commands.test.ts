@@ -113,20 +113,25 @@ describe("groupsText", () => {
       browserId: "b1",
     };
     const skipped = [
-      { browserId: "b2", browser: "Dia", reason: "unsupported" as const, message: "Dia (b2) ..." },
+      {
+        browserId: "b2",
+        browser: "Chromium",
+        reason: "unsupported" as const,
+        message: "Chromium (b2) ...",
+      },
       { browserId: "b3", browser: "Arc", reason: "outdated" as const, message: "old" },
       { browserId: "b4", browser: "Brave", reason: "error" as const, message: "timed out" },
     ];
     expect(groupsText([g], skipped)).toBe(
       [
         '  b1  group 7  "reins"  blue  1 tab  window 1',
-        "  b2  Dia — tab groups not supported",
+        "  b2  Chromium — tab groups not supported",
         "  b3  Arc — reins extension too old for tab groups (update it)",
         "  b4  Brave — failed: timed out",
       ].join("\n"),
     );
     expect(groupsText([], skipped.slice(0, 1))).toBe(
-      "(no groups)\n  b2  Dia — tab groups not supported",
+      "(no groups)\n  b2  Chromium — tab groups not supported",
     );
     expect(groupsText([], [])).toBe("(no groups)");
   });

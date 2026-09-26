@@ -103,7 +103,7 @@ describe("tab groups", () => {
 
   it("ListGroupsResult accepts the daemon's skipped list and still parses without it", () => {
     const skipped = [
-      { browserId: "b2", browser: "Dia", reason: "unsupported", message: "Dia (b2) ..." },
+      { browserId: "b2", browser: "Chromium", reason: "unsupported", message: "Chromium (b2) ..." },
       { browserId: "b3", browser: "Arc", reason: "outdated", message: "old" },
       { browserId: "b4", browser: "Chrome", reason: "error", message: "timeout" },
     ];

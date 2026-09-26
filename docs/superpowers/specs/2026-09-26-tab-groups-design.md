@@ -127,9 +127,11 @@ ignore it with a load-time warning; the extension still loads.
 `list_groups` aggregates across browsers the same way `list_tabs` does: it
 fans out to every targeted browser and tags each group with `browserId` and
 `browser`. A browser that fails (`unsupported`, or an older extension that
-answers `unknown method`) contributes no groups. If every targeted browser
-fails, the first error is rethrown so the agent sees why. The call is still
-audited like any other.
+answers `unknown method`) contributes no groups and is listed in `skipped`
+(`{browserId, browser, reason, message}`); the text output prints one line
+per skipped browser. If every targeted browser fails, the first error is
+rethrown, rewritten to name the browser. Routed group calls rewrite the same
+way. The call is still audited like any other.
 
 All other group methods route to one browser through the existing
 `bridge.requestFull` path.

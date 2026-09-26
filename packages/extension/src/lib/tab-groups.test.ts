@@ -30,7 +30,7 @@ describe("groupsSupported", () => {
     expect(groupsSupported()).toBe(true);
   });
 
-  it("is false without chrome.tabGroups (Arc, Dia, …)", () => {
+  it("is false without chrome.tabGroups", () => {
     stubGroups({ tabGroups: undefined });
     expect(groupsSupported()).toBe(false);
   });

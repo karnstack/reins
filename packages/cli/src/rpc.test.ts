@@ -106,7 +106,7 @@ describe("listAllGroups", () => {
   };
   const two = [
     { id: "b1", browser: "Chrome", connectedAt: 0 },
-    { id: "b2", browser: "Dia", connectedAt: 1 },
+    { id: "b2", browser: "Chromium", connectedAt: 1 },
   ];
 
   it("aggregates across browsers with tags, via handleRpc", async () => {
@@ -117,14 +117,14 @@ describe("listAllGroups", () => {
     const out = (await handleRpc(bridge, { method: "list_groups" })) as { groups: unknown[] };
     expect(out.groups).toEqual([
       { ...G, browserId: "b1", browser: "Chrome" },
-      { ...G, browserId: "b2", browser: "Dia" },
+      { ...G, browserId: "b2", browser: "Chromium" },
     ]);
   });
 
-  const UNSUPPORTED_DIA =
-    "Dia (b2) doesn't support tab groups — reins groups/group/ungroup need the chrome.tabGroups API, which this browser doesn't provide. Other reins commands work normally.";
-  const OUTDATED_DIA =
-    "Dia (b2)'s reins extension predates tab groups — update it (Chrome Web Store), or run `reins extension --reload` for an unpacked build.";
+  const UNSUPPORTED_B2 =
+    "Chromium (b2) doesn't support tab groups — reins groups/group/ungroup need the chrome.tabGroups API, which this browser doesn't provide. Other reins commands work normally.";
+  const OUTDATED_B2 =
+    "Chromium (b2)'s reins extension predates tab groups — update it (Chrome Web Store), or run `reins extension --reload` for an unpacked build.";
 
   function coded(message: string, code?: string): Error {
     const e = new Error(message) as Error & { code?: string };
@@ -148,7 +148,7 @@ describe("listAllGroups", () => {
     const { groups, skipped } = await listAllGroups(bridge);
     expect(groups).toEqual([{ ...G, browserId: "b1", browser: "Chrome" }]);
     expect(skipped).toEqual([
-      { browserId: "b2", browser: "Dia", reason: "unsupported", message: UNSUPPORTED_DIA },
+      { browserId: "b2", browser: "Chromium", reason: "unsupported", message: UNSUPPORTED_B2 },
     ]);
   });
 
@@ -164,7 +164,7 @@ describe("listAllGroups", () => {
     });
     const { skipped } = await listAllGroups(bridge);
     expect(skipped).toEqual([
-      { browserId: "b2", browser: "Dia", reason: "outdated", message: OUTDATED_DIA },
+      { browserId: "b2", browser: "Chromium", reason: "outdated", message: OUTDATED_B2 },
     ]);
   });
 
@@ -180,7 +180,7 @@ describe("listAllGroups", () => {
     expect(skipped).toEqual([
       {
         browserId: "b2",
-        browser: "Dia",
+        browser: "Chromium",
         reason: "error",
         message: 'request "list_groups" timed out after 5ms',
       },
@@ -189,7 +189,7 @@ describe("listAllGroups", () => {
 
   it("rethrows the first failure, named, when every browser fails", async () => {
     const bridge = fakeBridge({
-      browsers: [{ id: "b2", browser: "Dia", connectedAt: 1 }],
+      browsers: [{ id: "b2", browser: "Chromium", connectedAt: 1 }],
       request: vi.fn(async () => {
         throw coded(
           "unsupported: this browser doesn't support tab groups (chrome.tabGroups unavailable)",
@@ -198,7 +198,7 @@ describe("listAllGroups", () => {
       }),
     });
     const p = listAllGroups(bridge);
-    await expect(p).rejects.toThrow(UNSUPPORTED_DIA);
+    await expect(p).rejects.toThrow(UNSUPPORTED_B2);
     await expect(p).rejects.toMatchObject({ code: "unsupported" });
   });
 

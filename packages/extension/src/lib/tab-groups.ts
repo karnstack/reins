@@ -1,6 +1,6 @@
 import type { ListGroupsResult } from "@reins/protocol";
 
-/** The browser has no tab-group API (Arc, Dia, …). `code` survives to the
+/** The browser has no tab-group API (some Chromium forks). `code` survives to the
  *  ResponseFrame, so the agent can tell the user instead of guessing. */
 export class GroupsUnsupported extends Error {
   readonly code = "unsupported";

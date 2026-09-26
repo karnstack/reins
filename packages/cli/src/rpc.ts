@@ -78,7 +78,7 @@ export function describeGroupError(
 }
 
 /** List tab groups across connected browsers, tagged like listAllTabs. A
- *  browser that can't answer — no tab groups (Arc, Dia), an older extension,
+ *  browser that can't answer — no tab-group API, an older extension,
  *  or a plain failure — is reported in `skipped` with a message naming it.
  *  Only when every targeted browser fails does the (rewritten) error throw. */
 export async function listAllGroups(
