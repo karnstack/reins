@@ -22,6 +22,17 @@ vi.mock("./cdp.js", () => ({
   cdpWaitFor: vi.fn(async () => ({ ok: true })),
 }));
 
+vi.mock("./jev.js", () => ({
+  jevObserve: vi.fn(async () => ({
+    url: "https://x.com/",
+    title: "",
+    text: "",
+    visible: true,
+    actions: [],
+  })),
+  jevAct: vi.fn(async () => ({ ok: true })),
+}));
+
 vi.mock("./reload.js", () => ({
   reloadExtension: vi.fn(async () => ({ reloading: true, version: "9.9.9" })),
 }));
@@ -54,6 +65,7 @@ vi.mock("./policy.js", async (importOriginal) => {
 
 import { cdpClick } from "./cdp.js";
 import { dispatchMethod, dispatchWithMeta } from "./dispatch.js";
+import { jevAct } from "./jev.js";
 import { ensureAllowed, PolicyDenied, policy, tightenPolicy } from "./policy.js";
 
 /** chrome stub with enough tabs API for the gate (tabs.get → host). */
@@ -162,6 +174,17 @@ describe("dispatchMethod routing (CDP)", () => {
   it("routes wait_for to cdpWaitFor", async () => {
     stubTabs();
     expect(await dispatchMethod("wait_for", { selector: "#btn" })).toEqual({ ok: true });
+  });
+  it("routes jev_observe to the handler", async () => {
+    stubTabs();
+    expect(await dispatchMethod("jev_observe", {})).toMatchObject({ url: "https://x.com/" });
+  });
+  it("routes jev_act to the handler with the tab pinned", async () => {
+    stubTabs();
+    const out = await dispatchWithMeta("jev_act", { op: "click", node: 3 });
+    expect(out.result).toEqual({ ok: true });
+    expect(jevAct).toHaveBeenCalledWith({ op: "click", node: 3, tabId: 1 });
+    expect(out.meta).toMatchObject({ tabId: 1, host: "x.com" });
   });
 });
 

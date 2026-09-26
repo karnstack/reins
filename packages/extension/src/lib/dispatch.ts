@@ -20,6 +20,7 @@ import {
   cdpWaitFor,
   resolveTabId,
 } from "./cdp.js";
+import { jevAct, jevObserve } from "./jev.js";
 import { readConsole, readNetwork } from "./monitor.js";
 import {
   cdpRaw,
@@ -196,6 +197,10 @@ async function runHandler(method: GatedMethod, gated: Record<string, unknown>): 
       return handleDialog(gated as Parameters<typeof handleDialog>[0]);
     case "cdp":
       return cdpRaw(gated as Parameters<typeof cdpRaw>[0]);
+    case "jev_observe":
+      return jevObserve(gated as Parameters<typeof jevObserve>[0]);
+    case "jev_act":
+      return jevAct(gated as Parameters<typeof jevAct>[0]);
     default:
       throw new Error(`unknown method: ${method}`);
   }

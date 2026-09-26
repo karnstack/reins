@@ -20,6 +20,7 @@ vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
 import { __resetDebugSessions, cdpClick, cdpType } from "./cdp.js";
+import { jevAct, jevObserve } from "./jev.js";
 import { jevSnapshot } from "./jev-snapshot.js";
 import { handleDialog, hover, pressKey } from "./page-actions.js";
 
@@ -81,7 +82,7 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <form id="f">
   <label for="from">Where from?</label><input id="from" value="San Francisco">
   <input id="to" aria-label="Where to?">
-  <input id="pw" type="password" aria-label="Password">
+  <input id="pw" type="password" aria-label="Password" value="hunter2">
   <input id="h" type="hidden" value="secret">
   <select id="cabin" aria-label="Cabin"><option value="eco" selected>Economy</option><option value="biz">Business</option></select>
   <button id="search" type="submit">Search</button>
@@ -192,12 +193,18 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
         attach: async () => {},
         detach: async () => {},
         onDetach: { addListener: () => {} },
+        onEvent: { addListener: () => {} },
         sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
           const result = await cdp(method, params);
           // One real page serves every test: remember injected scripts so
           // afterEach can drop them, as a fresh debugger session would.
           if (method === "Page.addScriptToEvaluateOnNewDocument") {
             injected.push((result as { identifier: string }).identifier);
+          } else if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+            // A second drivePage in one case re-arms the guard and drops its
+            // own previous script; don't try to drop it again in afterEach.
+            const i = injected.indexOf(String(params?.identifier));
+            if (i >= 0) injected.splice(i, 1);
           }
           return result;
         },
@@ -440,5 +447,51 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     const b = nodeOf(await snap(), "Search");
     expect(a).toBeDefined();
     expect(a).toBe(b);
+  });
+
+  it("jev: an observation never carries a password or hidden-field value", async () => {
+    await load("/jev");
+    const wire = JSON.stringify(await jevObserve({ tabId: 1 }));
+    expect(wire).not.toMatch(/hunter2/);
+    expect(wire).not.toMatch(/secret/);
+  });
+
+  it("jev: types over an existing value", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Where from?")?.node as number;
+    expect(await jevAct({ tabId: 1, op: "type", node, text: "Zurich" })).toEqual({ ok: true });
+    expect(await evaluate<string>('document.getElementById("from").value')).toBe("Zurich");
+  });
+
+  it("jev: picks a native select option and fires change", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const opt = s.actions.find((a) => a.label === "Cabin → Business");
+    expect(
+      await jevAct({ tabId: 1, op: "select", node: opt?.node as number, value: "biz" }),
+    ).toEqual({ ok: true });
+    expect(await log()).toContain("change:biz");
+  });
+
+  it("jev: a node replaced after the read comes back stale, not clicked", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Swap me")?.node as number;
+    await evaluate(
+      'document.getElementById("swap").replaceWith(Object.assign(document.createElement("button"), { textContent: "Swap me" }))',
+    );
+    const r = await jevAct({ tabId: 1, op: "click", node });
+    expect(r).toMatchObject({ stale: true, reason: "the element is gone" });
+  });
+
+  it("jev: a covered target comes back stale within about half a second", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    // The snapshot lists it (it is visible); only the act-time hit test sees the overlay.
+    const node = s.actions.find((a) => a.label === "Covered")?.node as number;
+    const t0 = Date.now();
+    expect(await jevAct({ tabId: 1, op: "click", node })).toMatchObject({ stale: true });
+    expect(Date.now() - t0).toBeLessThan(1500);
   });
 });
