@@ -25,7 +25,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     "Usage: reins <command> [flags]",
     "",
     "Tabs & pages:",
-    ...["tabs", "groups", "open", "close", "focus", "nav"].map(tool),
+    ...["tabs", "groups", "group", "ungroup", "open", "close", "focus", "nav"].map(tool),
     "",
     "Interaction:",
     ...[

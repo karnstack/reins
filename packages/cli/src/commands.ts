@@ -6,6 +6,9 @@ import { groupsText, tabsText } from "./cli-commands.js";
 /** One `reins <name>` tool subcommand: flags → /rpc params → printed text. */
 export interface ToolCommand {
   method: string;
+  /** Pick the bridge method from the built params, when one command covers
+   *  several (default: `method`). */
+  methodFor?(params: Record<string, unknown>): string;
   usage: string;
   summary: string;
   booleans?: string[];
@@ -50,6 +53,42 @@ function oneOf(a: ParsedArgs, name: string, allowed: string[]): string | undefin
   return v;
 }
 
+const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
+
+/** Repeatable --tab → tab ids (undefined when absent). */
+function tabList(a: ParsedArgs): number[] | undefined {
+  const v = a.flags.tab;
+  if (v === undefined) return undefined;
+  const list = Array.isArray(v) ? v : [v];
+  return list.map((s) => {
+    const n = Number(s);
+    if (typeof s !== "string" || !Number.isInteger(n)) {
+      throw new UsageError(`--tab must be an integer, got "${String(s)}"`);
+    }
+    return n;
+  });
+}
+
+/** --title / --color / --collapse|--expand → group props. */
+function groupProps(a: ParsedArgs): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const title = flagStr(a, "title");
+  if (title !== undefined) out.title = title;
+  const color = oneOf(a, "color", GROUP_COLORS);
+  if (color !== undefined) out.color = color;
+  if (a.flags.collapse === true && a.flags.expand === true) {
+    throw new UsageError("--collapse and --expand are mutually exclusive");
+  }
+  if (a.flags.collapse === true) out.collapsed = true;
+  if (a.flags.expand === true) out.collapsed = false;
+  return out;
+}
+
+function browserOnly(a: ParsedArgs): Record<string, unknown> {
+  const browser = flagStr(a, "browser");
+  return browser !== undefined ? { browserId: browser } : {};
+}
+
 /** Shared routing/targeting flags (--browser, --tab). */
 function base(a: ParsedArgs): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -79,21 +118,63 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
     method: "list_tabs",
     usage: "reins tabs [--browser <id>]",
     summary: "list tabs across all connected browsers",
-    build: (a) => {
-      const browser = flagStr(a, "browser");
-      return browser !== undefined ? { browserId: browser } : {};
-    },
+    build: browserOnly,
     format: (r) => tabsText((r as { tabs: Tab[] }).tabs),
   },
   groups: {
     method: "list_groups",
     usage: "reins groups [--browser <id>]",
     summary: "list tab groups across all connected browsers",
-    build: (a) => {
-      const browser = flagStr(a, "browser");
-      return browser !== undefined ? { browserId: browser } : {};
-    },
+    build: browserOnly,
     format: (r) => groupsText((r as { groups: TabGroup[] }).groups),
+  },
+  group: {
+    method: "group_tabs",
+    methodFor: (p) => (p.tabIds === undefined ? "update_group" : "group_tabs"),
+    usage:
+      "reins group --tab <id> [--tab <id> …] [--group <gid>] [--title <t>] [--color <c>] [--collapse|--expand]\n       reins group --group <gid> [--title <t>] [--color <c>] [--collapse|--expand]",
+    summary: "group tabs (new group, or --group to add/edit one)",
+    booleans: ["collapse", "expand"],
+    multi: ["tab"],
+    build: (a) => {
+      const tabIds = tabList(a);
+      const groupId = flagInt(a, "group");
+      const props = groupProps(a);
+      if (tabIds === undefined && groupId === undefined) {
+        throw new UsageError("--tab (to group tabs) or --group (to edit a group) is required");
+      }
+      if (tabIds === undefined && Object.keys(props).length === 0) {
+        throw new UsageError("editing a group needs --title, --color, --collapse or --expand");
+      }
+      return {
+        ...browserOnly(a),
+        ...(tabIds !== undefined ? { tabIds } : {}),
+        ...(groupId !== undefined ? { groupId } : {}),
+        ...props,
+      };
+    },
+    format: (r) => {
+      const g = r as { groupId?: number };
+      return g.groupId !== undefined ? `group ${g.groupId}` : "ok";
+    },
+  },
+  ungroup: {
+    method: "ungroup_tabs",
+    usage: "reins ungroup --tab <id> [--tab <id> …] | --group <gid>",
+    summary: "take tabs out of their group, or dissolve a group (tabs stay open)",
+    multi: ["tab"],
+    build: (a) => {
+      const tabIds = tabList(a);
+      const groupId = flagInt(a, "group");
+      if ((tabIds === undefined) === (groupId === undefined)) {
+        throw new UsageError("exactly one of --tab or --group is required");
+      }
+      return {
+        ...browserOnly(a),
+        ...(tabIds !== undefined ? { tabIds } : { groupId }),
+      };
+    },
+    format: ok,
   },
   open: {
     method: "open_tab",
