@@ -504,6 +504,7 @@ async function renderJev(connected: boolean, stickyError?: string): Promise<void
   jevKey.disabled = flags.disabled;
   jevSave.disabled = flags.disabled;
   jevCancel.disabled = flags.disabled;
+  jevRemove.disabled = flags.disabled;
   showJevError(flags.error ?? stickyError);
 }
 
@@ -521,8 +522,13 @@ jevForm.addEventListener("submit", (ev) => {
   const key = jevKey.value.trim();
   if (!key || jevSaving) return;
   jevSaving = true;
+  // Nothing may change the key while the daemon is checking this one: Cancel
+  // would clear the form under the request, Remove would race its write.
+  // The renderer re-enables them once the save settles.
   jevKey.disabled = true;
   jevSave.disabled = true;
+  jevCancel.disabled = true;
+  jevRemove.disabled = true;
   jevSave.textContent = "Checking…";
   void jevCall("key_set", { provider: "typesafe", key }, JEV_SET_TIMEOUT_MS)
     .then(() => {

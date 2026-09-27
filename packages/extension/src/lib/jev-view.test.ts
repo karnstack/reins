@@ -52,6 +52,14 @@ describe("popup Jev view flags", () => {
       cancelHidden: true,
     });
   });
+  it("saving disables the form, Cancel included, until the save settles", () => {
+    expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true, true)).toMatchObject({
+      cancelHidden: false,
+      disabled: true,
+    });
+    expect(jevViewFlags({ kind: "unset" }, false, true).disabled).toBe(true);
+    expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true, false).disabled).toBe(false);
+  });
   it("set + replacing: form and Cancel shown, Replace/Remove hidden", () => {
     expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true)).toMatchObject({
       pitchHidden: false,
