@@ -185,6 +185,36 @@ export function jevSnapshot(): {
     );
   };
 
+  // A consent banner's "Accept" is not a risky action (the daemon's gate
+  // waives it): the button sits in an ancestor that says what it is — an
+  // id/class/aria hint, or a dialog/region/banner whose opening text names
+  // cookies, consent, privacy, GDPR or tracking. Only labels the gate would
+  // stop on are checked; innerText is read for dialog-like ancestors only.
+  const CONSENT = /cookie|consent|privacy|gdpr|tracking/i;
+  const CONSENT_LABEL = /\b(accept|agree)\b/i;
+  const CONTAINER_ROLES = ["dialog", "alertdialog", "region", "banner", "complementary"];
+  const inConsent = (e: Element): boolean => {
+    for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+      const hint = [
+        p.id,
+        p.getAttribute("class"),
+        p.getAttribute("aria-label"),
+        p.getAttribute("data-testid"),
+      ]
+        .filter(Boolean)
+        .join(" ");
+      if (CONSENT.test(hint)) return true;
+      const container =
+        p.tagName === "DIALOG" ||
+        p.tagName === "ASIDE" ||
+        CONTAINER_ROLES.includes(p.getAttribute("role") ?? "") ||
+        p.getAttribute("aria-modal") === "true";
+      if (container && CONSENT.test(((p as HTMLElement).innerText ?? "").slice(0, 600)))
+        return true;
+    }
+    return false;
+  };
+
   const actions: Action[] = [];
   for (const e of document.querySelectorAll(selector)) {
     if (!safe(e) || !visible(e) || e.matches(":disabled") || e.closest('[aria-disabled="true"]'))
@@ -205,6 +235,7 @@ export function jevSnapshot(): {
       continue;
     if (rname === "gridcell" && e.querySelector('button,[role="button"]')) continue;
     const base: Action = { kind: "click", node: identity(e), role: rname, label: name(e) || rname };
+    if (CONSENT_LABEL.test(base.label) && inConsent(e)) base.consent = true;
     for (const key of ["checked", "selected", "expanded"] as const) {
       const v = e.getAttribute(`aria-${key}`);
       if (v !== null) base[key] = v;

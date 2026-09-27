@@ -56,6 +56,10 @@ export function riskyReason(
   const m = RISKY_RE.exec(label);
   if (!m) return undefined;
   if (goalSaysLabel(normalizeLabel(goal), label)) return undefined;
+  // "Accept" / "Accept all" in a cookie/consent banner (judged page-side, see
+  // jev-snapshot's `consent`) is routine, not risky; every other risky word
+  // stays risky there, and "accept" stays risky anywhere else.
+  if (action.consent === true && m[1]?.toLowerCase() === "accept") return undefined;
   return `its label says "${(m[1] as string).toLowerCase()}"`;
 }
 

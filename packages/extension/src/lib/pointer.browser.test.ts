@@ -95,6 +95,9 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <a id="docs" href="/jev" target="_blank">Docs</a>
 <a id="slowdocs" href="SLOW_URL" target="_blank">Slow docs</a>
 <div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
+<div class="gdpr-notice"><p>We use tracking</p><span><button id="agree">Accept all</button></span></div>
+<div role="dialog" id="invite"><p>Join the team</p><button id="accept-invite">Accept invitation</button></div>
+<button id="accept-loose">Accept</button>
 <form id="sf" role="search"><input id="q" name="q" aria-label="Search GitHub" value="cats"></form>
 <form id="spa" role="search"><input id="rq" name="q" aria-label="Search repos" value="browser automation"></form>
 <form id="go" role="search" action="/jev" method="get"><input id="gq" name="q" aria-label="Search issues" value="x"></form>
@@ -654,6 +657,18 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(labels.join()).not.toMatch(/Password|Disabled|Hidden|secret/);
     expect(s.actions.find((a) => a.label === "Where from?")?.value).toBe("San Francisco");
     expect(s.text).toContain("Flights");
+  });
+
+  it("jev: marks accept/agree buttons inside consent banners, nothing else", async () => {
+    await load("/jev");
+    const s = await snap();
+    const consent = (label: string) =>
+      s.actions.find((a) => a.kind === "click" && a.label === label)?.consent;
+    expect(consent("Accept cookies")).toBe(true); // role=dialog whose text says cookies
+    expect(consent("Accept all")).toBe(true); // an ancestor class says gdpr
+    expect(consent("Accept invitation")).toBeUndefined(); // a dialog about something else
+    expect(consent("Accept")).toBeUndefined(); // no banner around it
+    expect(consent("Search")).toBeUndefined(); // not an accept label
   });
 
   it("jev: a node keeps its id across snapshots", async () => {

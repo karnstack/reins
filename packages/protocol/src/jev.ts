@@ -22,6 +22,9 @@ export const JevAction = z.object({
   delta: z.number().optional(),
   /** A fill whose field may be submitted with Enter (search-like fields only). */
   submit: z.boolean().optional(),
+  /** A click inside a cookie/consent/privacy banner or dialog (page-side
+   *  judgement): "Accept" there is not a risky action. */
+  consent: z.boolean().optional(),
 });
 export type JevAction = z.infer<typeof JevAction>;
 

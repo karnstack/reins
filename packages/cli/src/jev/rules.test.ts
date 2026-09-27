@@ -72,6 +72,18 @@ describe("riskyReason", () => {
     expect(riskyReason(click("Pay-now/today"), "pay-now/today please", [])).toBeUndefined();
   });
 
+  it("accept inside a consent banner is not risky; other words there and accept elsewhere are", () => {
+    const consent = (label: string): JevAction => ({ ...click(label), consent: true });
+    expect(riskyReason(consent("Accept all"), "x", [])).toBeUndefined();
+    expect(riskyReason(consent("I accept"), "x", [])).toBeUndefined();
+    expect(riskyReason(consent("Accept cookies"), "x", [])).toBeUndefined();
+    expect(riskyReason(consent("Delete all cookies"), "x", [])).toBeDefined();
+    expect(riskyReason(consent("Share data"), "x", [])).toBeDefined();
+    expect(riskyReason(consent("button"), "x", [])).toBe("it has no label");
+    expect(riskyReason(click("Accept invitation"), "x", [])).toBeDefined();
+    expect(riskyReason({ ...click("Accept all"), consent: false }, "x", [])).toBeDefined();
+  });
+
   it("only clicks are risky", () => {
     const fill: JevAction = { id: "e2", kind: "fill", node: 2, role: "textbox", label: "Send to" };
     expect(riskyReason(fill, "x", [])).toBeUndefined();

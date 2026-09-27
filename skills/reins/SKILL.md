@@ -115,7 +115,8 @@ of snapshot → click → snapshot. It's much faster: Jev picks each action in
 - Exit 1 = an error; no `next:` line is printed.
 - `stuck` or `blocked` → switch to manual commands for that part.
 - The risky-label stop is a heuristic (English words; unlabeled buttons stop).
-  Don't rely on it for anything you wouldn't do yourself.
+  "Accept" inside a cookie/consent banner is not stopped on; "Accept" anywhere
+  else is. Don't rely on it for anything you wouldn't do yourself.
 - Takes `--tab <id>`, `--browser <id>` and `--json` like every page command.
 - No key (`reins do` says so)? Ask the user to run `reins key set typesafe`
   themselves, or to save it in the reins extension popup. Never ask them to

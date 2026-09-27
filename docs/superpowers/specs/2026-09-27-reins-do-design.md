@@ -241,7 +241,14 @@ password, file, or hidden inputs (the snapshot skips them) and the key.
   9:40 flight", label "Book" → allowed; goal "delete the spam", label "Delete
   account" → stops). Generic `submit / confirm / continue / next / search` are
   not on the list; stopping every search form would cause the back-and-forth
-  this command exists to remove. The skill states that this is a heuristic
+  this command exists to remove. **Consent banners:** the snapshot marks a
+  click target `consent: true` when its label says accept/agree and an
+  ancestor (below `body`) is a consent banner — its id/class/aria-label/
+  data-testid mentions cookie/consent/privacy/GDPR/tracking, or it is a
+  dialog/alertdialog/region/banner/complementary/`<dialog>`/`<aside>`/
+  aria-modal container whose first 600 chars of text do. The gate waives the
+  word `accept` for such a target and nothing else: "Delete all cookies" in a
+  banner still stops, and "Accept invitation" outside one still stops. The skill states that this is a heuristic
   with holes (other languages, odd labels), not a guarantee.
 - **left_site.** Before each act, the current host must equal the run's start
   host or be a subdomain of it, or vice versa (`a === b || a.endsWith("." + b)
