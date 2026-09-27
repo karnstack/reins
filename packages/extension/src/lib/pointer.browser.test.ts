@@ -201,6 +201,22 @@ async function load(path = "/"): Promise<void> {
 
 const log = () => evaluate<string[]>("window.__log");
 
+/**
+ * One setup step under its own deadline, so a hang names the step it was on
+ * instead of vitest's bare "Hook timed out".
+ */
+async function step<T>(name: string, ms: number, run: () => Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`setup: "${name}" did not finish in ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([run(), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
   beforeAll(async () => {
     server = http.createServer((q, s) => {
@@ -222,10 +238,12 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       s.write("<!doctype html><title>slow docs</title>"); // commits at once, still loading
       setTimeout(() => s.end("<p>Docs, at last</p>"), 800);
     });
-    await new Promise<void>((r) => slowServer?.listen(0, "localhost", r));
-    slowUrl = `http://localhost:${(slowServer.address() as AddressInfo).port}/slow`;
-    await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
-    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    await step("fixture servers listen", 5_000, async () => {
+      await new Promise<void>((r) => slowServer?.listen(0, "localhost", r));
+      slowUrl = `http://localhost:${(slowServer?.address() as AddressInfo).port}/slow`;
+      await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
+      url = `http://127.0.0.1:${(server?.address() as AddressInfo).port}/`;
+    });
 
     profile = mkdtempSync(join(tmpdir(), "reins-pointer-"));
     const proc = spawn(
@@ -234,6 +252,10 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
         "--headless=new",
         "--no-sandbox",
         "--no-first-run",
+        // Linux CI has no GPU and a small /dev/shm; without these the browser
+        // can stall in GPU-process startup or crash renderers under load.
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
         "--remote-debugging-port=0",
         `--user-data-dir=${profile}`,
         "--window-size=1000,700",
@@ -242,23 +264,38 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       { stdio: ["ignore", "ignore", "pipe"] },
     );
     chromeProc = proc;
-    const port = await new Promise<string>((resolve, reject) => {
-      let buf = "";
-      proc.stderr?.on("data", (d: Buffer) => {
-        buf += d.toString();
-        const m = buf.match(/DevTools listening on ws:\/\/[^:]+:(\d+)\//);
-        if (m?.[1]) resolve(m[1]);
+    // Chrome's stderr, kept so a failure to start can say what it printed.
+    let stderr = "";
+    proc.stderr?.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
+    const port = await step("chrome prints its DevTools port", 15_000, () => {
+      return new Promise<string>((resolve, reject) => {
+        const check = () => {
+          const m = stderr.match(/DevTools listening on ws:\/\/[^:]+:(\d+)\//);
+          if (m?.[1]) resolve(m[1]);
+        };
+        check();
+        proc.stderr?.on("data", check);
+        proc.on("error", (err) => reject(new Error(`chrome failed to spawn: ${err.message}`)));
+        proc.on("exit", (code, signal) =>
+          reject(new Error(`chrome exited (${code ?? signal}) before listening`)),
+        );
       });
-      proc.on("exit", () => reject(new Error(`chrome exited: ${buf}`)));
+    }).catch((err: Error) => {
+      throw new Error(`${err.message}\nchrome stderr so far:\n${stderr || "(nothing)"}`);
     });
     devtoolsPort = port;
-    const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as Array<{
-      type: string;
-      id: string;
-      webSocketDebuggerUrl: string;
-    }>;
+    const targets = await step("GET /json/list", 5_000, async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/json/list`);
+      return (await res.json()) as Array<{
+        type: string;
+        id: string;
+        webSocketDebuggerUrl: string;
+      }>;
+    });
     const target = targets.find((t) => t.type === "page");
-    if (!target) throw new Error("no page target");
+    if (!target) throw new Error(`no page target in ${JSON.stringify(targets)}`);
     pageTargetId = target.id;
     const sock = new WebSocket(target.webSocketDebuggerUrl);
     ws = sock;
@@ -286,8 +323,15 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       pending.get(msg.id)?.(msg);
       pending.delete(msg.id);
     });
-    await new Promise((r) => sock.once("open", r));
-    await cdp("Target.setDiscoverTargets", { discover: true });
+    await step("page WebSocket opens", 5_000, () => {
+      return new Promise<void>((resolve, reject) => {
+        sock.once("open", () => resolve());
+        sock.once("error", reject);
+      });
+    });
+    await step("Target.setDiscoverTargets", 5_000, () =>
+      cdp("Target.setDiscoverTargets", { discover: true }),
+    );
 
     // The extension's view of the world, forwarded to the headless browser.
     vi.stubGlobal("chrome", {
@@ -334,7 +378,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     });
     // jev.ts registered at import against no `chrome`; register on the stub.
     initDialogTracking();
-  }, 20_000);
+  }, 40_000); // above the steps' own deadlines, so a stall reports its step
 
   afterEach(async () => {
     __resetDebugSessions();
