@@ -65,7 +65,16 @@ export async function handleDo(
   const parsed = DoParams.safeParse(raw ?? {});
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    const path = issue?.path.join(".") || "params";
+    // A record key (a fill name) is part of the path; it is user input, so
+    // anything that isn't a plain name is quoted to keep the error one line.
+    const path =
+      issue?.path
+        .map((seg) =>
+          typeof seg === "number" || (typeof seg === "string" && /^[\w-]+$/.test(seg))
+            ? seg
+            : JSON.stringify(String(seg)),
+        )
+        .join(".") || "params";
     throw new RpcBadRequest(`invalid reins do params: ${path}: ${issue?.message ?? "invalid"}`);
   }
   const p = parsed.data;

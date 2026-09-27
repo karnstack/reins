@@ -101,6 +101,8 @@ const params = {
 describe("handleDo", () => {
   it.each([
     ["an uppercase fill name", { ...params, fills: { From: "Zurich" } }, /fills/],
+    ["a fill name with a newline", { ...params, fills: { "from\nto": "Zurich" } }, /fills/],
+    ["a fill name with an escape", { ...params, fills: { "a\u001b[2Jb": "x" } }, /fills/],
     ["maxSteps 0", { ...params, maxSteps: 0 }, /maxSteps/],
     ["timeoutSec 1", { ...params, timeoutSec: 1 }, /timeoutSec/],
   ])("rejects %s as a bad request naming the field", async (_name, bad, field) => {
@@ -114,7 +116,8 @@ describe("handleDo", () => {
     await expect(promise).rejects.toThrow(/^invalid reins do params: /);
     await expect(promise).rejects.toThrow(field);
     const message = await promise.catch((e: Error) => e.message);
-    expect(message).not.toContain("\n");
+    // One line, printable: a fill name is user input and lands in the message.
+    expect(message).toMatch(/^\P{Cc}*$/u);
     expect(b.requestFull).not.toHaveBeenCalled();
   });
 
