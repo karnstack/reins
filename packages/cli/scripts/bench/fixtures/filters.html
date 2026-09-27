@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codehub — repository search</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #fff; color: #1a1a1a; }
+  header { background: #24292f; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  header form { flex: 1; display: flex; gap: 8px; max-width: 640px; }
+  header input { flex: 1; padding: 8px 10px; font-size: 14px; border-radius: 6px; border: 1px solid #57606a; background: #fff; }
+  header button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid #57606a; background: #2da44e; color: #fff; cursor: pointer; }
+  .layout { display: flex; gap: 32px; max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+  aside { width: 200px; flex: none; }
+  aside h3 { font-size: 13px; color: #57606a; text-transform: uppercase; letter-spacing: .04em; }
+  aside ul { list-style: none; padding: 0; margin: 0; }
+  aside li a { display: block; padding: 6px 8px; border-radius: 6px; color: #24292f; text-decoration: none; }
+  aside li a:hover { background: #f6f8fa; }
+  .content { flex: 1; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; position: relative; }
+  .sortbtn { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #d0d7de; background: #f6f8fa; cursor: pointer; }
+  [role=menu] { position: absolute; right: 0; top: 36px; z-index: 5; background: #fff; border: 1px solid #d0d7de; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); min-width: 200px; padding: 6px 0; margin: 0; list-style: none; }
+  [role=menuitemradio] { padding: 8px 14px; cursor: pointer; }
+  [role=menuitemradio]:hover { background: #f6f8fa; }
+  [role=menuitemradio][aria-checked=true]::before { content: "✓ "; }
+  .repo { padding: 14px 0; border-bottom: 1px solid #d8dee4; }
+  .repo a { color: #0969da; font-weight: 600; text-decoration: none; }
+  .meta { color: #57606a; font-size: 13px; }
+  .chip { display: inline-block; background: #ddf4ff; color: #0969da; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Codehub</strong>
+  <form id="form" method="get" action="filters.html" role="search">
+    <input id="q" name="q" type="text" placeholder="Search repositories" aria-label="Search repositories" autocomplete="off">
+    <input type="hidden" name="sort" id="sort-field">
+    <button type="submit">Search</button>
+  </form>
+</header>
+<div class="layout">
+  <aside id="sidebar">
+    <h3>Filter by</h3>
+    <section id="languages">
+      <h3>Languages</h3>
+      <ul id="lang-list"></ul>
+    </section>
+    <section>
+      <h3>Type</h3>
+      <ul><li><a href="#" data-noop>Public</a></li><li><a href="#" data-noop>Archived</a></li></ul>
+    </section>
+  </aside>
+  <div class="content">
+    <div class="toolbar">
+      <h2 id="count" style="margin:0;font-size:16px"></h2>
+      <div>
+        <button type="button" class="sortbtn" id="sortbtn" aria-haspopup="menu" aria-expanded="false" aria-controls="sortmenu">Sort: <span id="sort-name">Best match</span> ▾</button>
+        <ul id="sortmenu" role="menu" aria-label="Sort options" hidden>
+          <li role="menuitemradio" data-sort="" aria-checked="false">Best match</li>
+          <li role="menuitemradio" data-sort="stars" aria-checked="false">Most stars</li>
+          <li role="menuitemradio" data-sort="forks" aria-checked="false">Most forks</li>
+          <li role="menuitemradio" data-sort="updated" aria-checked="false">Recently updated</li>
+        </ul>
+      </div>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<script>
+(() => {
+  const REPOS = [
+    ["puppeteer/puppeteer", "TypeScript", 88000, "JavaScript API for Chrome and Firefox browser automation"],
+    ["microsoft/playwright", "TypeScript", 66000, "Framework for web testing and browser automation"],
+    ["SeleniumHQ/selenium", "Java", 31000, "A browser automation framework and ecosystem"],
+    ["browser-use/browser-use", "Python", 60000, "Make websites accessible for AI agents — browser automation"],
+    ["karnstack/reins", "TypeScript", 1200, "Drive your real browser from any coding agent (browser automation)"],
+    ["cypress-io/cypress", "JavaScript", 47000, "Fast, easy and reliable browser testing and automation"],
+    ["gotenberg/gotenberg", "Go", 8000, "A developer-friendly API for converting HTML via headless browser automation"],
+    ["rod-web/rod", "Go", 5000, "A Chrome DevTools Protocol driver for browser automation"],
+    ["webdriverio/webdriverio", "TypeScript", 9000, "Next-gen browser and mobile automation test framework"],
+    ["nightwatchjs/nightwatch", "JavaScript", 11000, "End-to-end browser automation framework"],
+    ["chromedp/chromedp", "Go", 11000, "Drive browsers with the Chrome DevTools Protocol — automation in Go"],
+    ["tauri-apps/tauri", "Rust", 85000, "Build smaller, faster desktop apps with a web frontend"],
+    ["vercel/next.js", "JavaScript", 125000, "The React framework"],
+    ["astral-sh/ruff", "Rust", 35000, "An extremely fast Python linter"],
+  ];
+  const LANGS = ["TypeScript", "JavaScript", "Python", "Go", "Java", "Rust"];
+  const SORT_NAMES = { "": "Best match", stars: "Most stars", forks: "Most forks", updated: "Recently updated" };
+  const params = new URLSearchParams(location.search);
+  const q = params.get("q") || "";
+  const sort = params.get("sort") || "";
+  const langMatch = /\blanguage:(\S+)/i.exec(q);
+  const lang = langMatch ? langMatch[1] : null;
+  const words = q.replace(/\blanguage:\S+/gi, "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+  document.getElementById("q").value = q;
+  document.getElementById("sort-field").value = sort;
+  document.getElementById("sort-name").textContent = SORT_NAMES[sort] ?? "Best match";
+  document.title = q ? `${q} · Search — Codehub` : "Codehub — repository search";
+
+  function go(next) {
+    const p = new URLSearchParams();
+    if (next.q) p.set("q", next.q);
+    if (next.sort) p.set("sort", next.sort);
+    location.href = `filters.html?${p}`;
+  }
+
+  // Once a language is applied it lives only in the query text (like GitHub).
+  const langs = document.getElementById("languages");
+  if (lang) langs.hidden = true;
+  else {
+    document.getElementById("lang-list").innerHTML = LANGS.map((l) => `<li><a href="#" data-lang="${l}">${l}</a></li>`).join("");
+    langs.addEventListener("click", (e) => {
+      const a = e.target.closest("a[data-lang]");
+      if (!a) return;
+      e.preventDefault();
+      go({ q: `${q} language:${a.dataset.lang}`.trim(), sort });
+    });
+  }
+
+  let hits = REPOS.filter(([name, l, , desc]) => (!lang || l.toLowerCase() === lang.toLowerCase()) && words.every((w) => (name + " " + desc).toLowerCase().includes(w)));
+  if (sort === "stars") hits = [...hits].sort((a, b) => b[2] - a[2]);
+  else if (sort === "forks") hits = [...hits].sort((a, b) => a[2] - b[2]);
+  else if (sort === "updated") hits = [...hits].reverse();
+  document.getElementById("count").textContent = q ? `${hits.length} repository results` : "Type a query to search";
+  document.getElementById("list").innerHTML = hits.map(([name, l, stars, desc]) => `<div class="repo"><a href="#${name}">${name}</a><span class="chip">${l}</span><div>${desc}</div><div class="meta">★ ${stars.toLocaleString()}</div></div>`).join("");
+
+  const btn = document.getElementById("sortbtn");
+  const menu = document.getElementById("sortmenu");
+  for (const item of menu.querySelectorAll("[role=menuitemradio]")) {
+    item.setAttribute("aria-checked", String(item.dataset.sort === sort));
+    item.addEventListener("click", () => go({ q, sort: item.dataset.sort }));
+  }
+  btn.addEventListener("click", () => {
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !e.target.closest("#sortbtn, #sortmenu")) { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  });
+  document.querySelectorAll("a[data-noop]").forEach((a) => a.addEventListener("click", (e) => e.preventDefault()));
+})();
+</script>
+</body>
+</html>

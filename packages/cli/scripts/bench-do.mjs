@@ -4,65 +4,52 @@
 // spend for the `manual` arm.
 //
 //   node packages/cli/scripts/bench-do.mjs [--runs 5] [--arm do|manual|both]
-//        [--tasks wikipedia,github] [--out bench-do.json] [--claude-budget-usd 2]
+//        [--set dev|holdout|all] [--tier fixture|live|all] [--tasks a,b]
+//        [--out-dir bench-out] [--out <summary.json>] [--claude-budget-usd 2]
+//        [--trace <jev-trace.jsonl>]
 //   node packages/cli/scripts/bench-do.mjs --check-only wikipedia --tab <id>
 //   node packages/cli/scripts/bench-do.mjs --dry --runs 1   # self-test: fake tabs, `sleep 5` children
+//
+// Tasks live in ./bench/tasks.mjs (fixture tier served from ./bench/fixtures by
+// this script on 127.0.0.1:<random port>; live tier on the public web).
+//
+// Every run leaves a trace dir  bench-out/<timestamp>/<task>-<arm>-<n>/  with
+//   result.json      the `reins do --json` output (steps included) or the manual
+//                    arm's claude JSON, plus the row this script derived
+//   screenshot.png   the tab the run ended on
+//   jev-trace.jsonl  the daemon's Jev trace lines for this run's time window,
+//                    when a trace file is known (see below)
+//
+// Jev trace (opt-in diagnostics): the daemon writes one JSON line per Jev call
+// when started with REINS_JEV_TRACE=<file>. This script cannot set the
+// daemon's environment; the coordinator starts the daemon with it —
+//     REINS_JEV_TRACE=/tmp/jev-trace.jsonl reins restart
+// — and passes the same path here as --trace (or REINS_JEV_TRACE in this
+// script's env). The runner copies the lines whose `t` falls inside each run
+// into that run's trace dir.
 //
 // Cheap first pass:  --arm do --runs 1
 // The full ship-bar run:  --runs 5  (both arms, all tasks)
 import { execFileSync, spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { TASK_IDS, TASKS } from "./bench/tasks.mjs";
 
-const TASKS = [
-  {
-    id: "flights",
-    url: "https://www.google.com/travel/flights?hl=en",
-    goal: "Find one-way flights from Zurich to London on November 20, 2026, for one adult in economy. Stop when matching flight options are visible.",
-    fills: { from: "Zurich", to: "London" },
-    // A results page carries the encoded search in `tfs=` and shows prices;
-    // the filled-but-unsearched form and "no flights found" have neither.
-    // Prices follow the viewer's locale (₹ from India), so any currency sign.
-    check:
-      "location.href.includes('/travel/flights') && /[?&]tfs=/.test(location.search) && /(CHF|\\p{Sc})\\s?\\d/u.test(document.body.innerText) && /Zurich|ZRH/.test(document.body.innerText) && /London/.test(document.body.innerText) && /Nov 20|20 Nov|November 20/.test(document.body.innerText)",
-  },
-  {
-    id: "wikipedia",
-    url: "https://en.wikipedia.org/wiki/Main_Page",
-    goal: "Find and open the Wikipedia article about Gödel's incompleteness theorems.",
-    fills: { query: "Gödel's incompleteness theorems" },
-    // Chrome leaves the apostrophe unencoded in pathname, so compare decoded.
-    check: 'decodeURIComponent(location.pathname) === "/wiki/Gödel\'s_incompleteness_theorems"',
-  },
-  {
-    id: "github",
-    url: "https://github.com/search?type=repositories",
-    goal: "Search GitHub repositories for 'browser automation' written in TypeScript, sorted by most stars.",
-    fills: { query: "browser automation" },
-    check:
-      "/[?&]q=[^&]*browser/i.test(location.search) && /language(%3A|:)TypeScript|[?&]l=TypeScript/i.test(decodeURIComponent(location.href)) && /[?&]s=stars/.test(location.search) && document.querySelectorAll('[data-testid=\"results-list\"] h3').length > 0",
-  },
-  {
-    id: "cookies",
-    url: "https://www.bbc.com/weather",
-    goal: "Dismiss any cookie or consent banner, then show the weather forecast for Zurich.",
-    fills: { place: "Zurich" },
-    // A forecast URL (/weather/<geonameId>), the place in the title, and no
-    // visible cookie/consent dialog left. From this machine's region BBC shows
-    // no consent banner at all (only a survey alertdialog), so the dialog part
-    // is a guard, not the proof.
-    check:
-      "/^\\/weather\\/\\d+/.test(location.pathname) && /Zurich|Zürich/.test(document.title) && ![...document.querySelectorAll('#bbccookies, [id^=sp_message], #onetrust-banner-sdk, [role=dialog], [role=alertdialog]')].some(e => /cookie|consent/i.test(e.innerText || '') && (e.offsetWidth || e.offsetHeight))",
-  },
-];
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const { values: opts } = parseArgs({
   options: {
     runs: { type: "string", default: "5" },
     arm: { type: "string", default: "both" },
+    set: { type: "string", default: "all" },
+    tier: { type: "string", default: "all" },
     tasks: { type: "string" },
-    out: { type: "string", default: "bench-do.json" },
+    out: { type: "string" },
+    "out-dir": { type: "string", default: "bench-out" },
+    trace: { type: "string" },
     "check-only": { type: "string" },
     tab: { type: "string" },
     "claude-budget-usd": { type: "string", default: "2" },
@@ -75,27 +62,14 @@ if (opts.help) {
   console.log(
     [
       "usage: node packages/cli/scripts/bench-do.mjs [--runs 5] [--arm do|manual|both]",
-      "         [--tasks id1,id2] [--out bench-do.json] [--claude-budget-usd 2]",
+      "         [--set dev|holdout|all] [--tier fixture|live|all] [--tasks id1,id2]",
+      "         [--out-dir bench-out] [--out <summary.json>] [--claude-budget-usd 2] [--trace <file>]",
       "       node packages/cli/scripts/bench-do.mjs --check-only <taskId> --tab <id>",
       "       node packages/cli/scripts/bench-do.mjs --dry [--runs 1]   (self-test, no browser, no spend)",
-      `tasks: ${TASKS.map((t) => t.id).join(", ")}`,
+      `tasks: ${TASK_IDS.join(", ")}`,
     ].join("\n"),
   );
   process.exit(0);
-}
-
-const RUNS = Number(opts.runs);
-if (!Number.isInteger(RUNS) || RUNS < 1) die(`--runs must be a positive integer, got ${opts.runs}`);
-if (!["do", "manual", "both"].includes(opts.arm)) die("--arm must be do, manual or both");
-const ARMS = opts.arm === "both" ? ["do", "manual"] : [opts.arm];
-const taskFilter = opts.tasks
-  ?.split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-const tasks = taskFilter ? TASKS.filter((t) => taskFilter.includes(t.id)) : TASKS;
-for (const id of taskFilter ?? []) {
-  if (!TASKS.some((t) => t.id === id))
-    die(`unknown task ${id}; known: ${TASKS.map((t) => t.id).join(", ")}`);
 }
 
 function die(msg) {
@@ -103,31 +77,86 @@ function die(msg) {
   process.exit(1);
 }
 
+const RUNS = Number(opts.runs);
+if (!Number.isInteger(RUNS) || RUNS < 1) die(`--runs must be a positive integer, got ${opts.runs}`);
+if (!["do", "manual", "both"].includes(opts.arm)) die("--arm must be do, manual or both");
+if (!["dev", "holdout", "all"].includes(opts.set)) die("--set must be dev, holdout or all");
+if (!["fixture", "live", "all"].includes(opts.tier)) die("--tier must be fixture, live or all");
+const ARMS = opts.arm === "both" ? ["do", "manual"] : [opts.arm];
+const taskFilter = opts.tasks
+  ?.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+for (const id of taskFilter ?? []) {
+  if (!TASK_IDS.includes(id)) die(`unknown task ${id}; known: ${TASK_IDS.join(", ")}`);
+}
+const tasks = TASKS.filter(
+  (t) =>
+    (opts.set === "all" || t.set === opts.set) &&
+    (opts.tier === "all" || t.tier === opts.tier) &&
+    (!taskFilter || taskFilter.includes(t.id)),
+);
+if (tasks.length === 0) die("no tasks match the filters");
+
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: "utf8" }).trim();
 
 const DRY = opts.dry === true;
 let dryTab = 0;
 
-/** `reins open` prints `opened tab <id>`; with --json it prints `{ "tabId": <id> }`. */
+/** `reins open --json` prints `{ "tabId": <id> }`. When the CLI gives up
+ *  waiting (a busy daemon), the browser may still have opened the tab: find it
+ *  by URL among the tabs that were not there before, so it never leaks. */
 function openTab(url) {
   if (DRY) return ++dryTab;
-  const out = JSON.parse(sh("reins", ["open", url, "--json"]));
-  if (typeof out.tabId !== "number")
-    throw new Error(`reins open: no tabId in ${JSON.stringify(out)}`);
-  return out.tabId;
+  const before = listTabIds();
+  try {
+    const out = JSON.parse(sh("reins", ["open", url, "--json"]));
+    if (typeof out.tabId !== "number")
+      throw new Error(`reins open: no tabId in ${JSON.stringify(out)}`);
+    return out.tabId;
+  } catch (err) {
+    if (interruptedChild(err)) throw err;
+    // The page may not have loaded yet, so its url can still be blank.
+    const stray = listTabs().find(
+      (t) => !before.has(t.tabId) && (t.url === url || !t.url || t.url === "about:blank"),
+    );
+    if (stray) {
+      console.error(`  reins open failed but the tab exists (${stray.tabId}); using it`);
+      return stray.tabId;
+    }
+    throw err;
+  }
+}
+
+function listTabs() {
+  if (DRY) return [];
+  try {
+    return JSON.parse(sh("reins", ["tabs", "--json"])).tabs ?? [];
+  } catch {
+    return [];
+  }
 }
 
 const closeTab = (tab) => (DRY ? "ok (dry)" : sh("reins", ["close", "--tab", String(tab)]));
 
-/** Independent checker: `reins eval --json` prints `{ "value": <result> }`. */
+/** Independent checker: `reins eval --json --await` prints `{ "value": <result> }`. */
 function verify(tab, check) {
   if (DRY) return false;
   try {
-    const out = JSON.parse(sh("reins", ["eval", check, "--tab", String(tab), "--json"]));
+    const out = JSON.parse(sh("reins", ["eval", check, "--tab", String(tab), "--await", "--json"]));
     return out.value === true;
   } catch (err) {
     console.error(`  verify failed: ${err instanceof Error ? err.message : err}`);
     return false;
+  }
+}
+
+function screenshot(tab, file) {
+  if (DRY) return;
+  try {
+    sh("reins", ["screenshot", "--tab", String(tab), "--out", file, "--json"]);
+  } catch (err) {
+    console.error(`  screenshot failed: ${err instanceof Error ? err.message : err}`);
   }
 }
 
@@ -142,6 +171,80 @@ if (opts["check-only"]) {
   process.exit(ok ? 0 : 1);
 }
 
+// ── fixture server ──────────────────────────────────────────────────────────
+/** ./bench/fixture-server.mjs in a child process (see its header for why),
+ *  resolving with its port once it prints it. */
+function startFixtureServer() {
+  return new Promise((resolveServer, reject) => {
+    const child = spawn(process.execPath, [join(HERE, "bench", "fixture-server.mjs")], {
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    let buf = "";
+    let ready = false;
+    child.stdout.setEncoding("utf8").on("data", (d) => {
+      buf += d;
+      const line = buf.split("\n")[0];
+      if (!ready && buf.includes("\n")) {
+        ready = true;
+        try {
+          resolveServer({
+            port: JSON.parse(line).port,
+            close: () =>
+              new Promise((r) => {
+                child.once("exit", () => r());
+                child.kill("SIGTERM");
+              }),
+          });
+        } catch (err) {
+          reject(err);
+        }
+      }
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (!ready) reject(new Error(`fixture server exited early (code ${code})`));
+    });
+  });
+}
+
+const needsFixtures = tasks.some((t) => t.tier === "fixture");
+const fixtureServer = needsFixtures && !DRY ? await startFixtureServer() : undefined;
+const fixturePort = fixtureServer?.port ?? 0;
+
+/** `fixture:<file>` → the local server's URL; anything else is returned as is. */
+function taskUrl(task) {
+  return task.url.startsWith("fixture:")
+    ? `http://127.0.0.1:${fixturePort}/${task.url.slice("fixture:".length)}`
+    : task.url;
+}
+
+// ── output dirs ─────────────────────────────────────────────────────────────
+const STAMP = new Date().toISOString().replace(/[:.]/g, "-");
+const OUT_ROOT = resolve(opts["out-dir"]);
+const RUN_DIR = join(OUT_ROOT, STAMP);
+const SUMMARY_FILE = opts.out ? resolve(opts.out) : join(RUN_DIR, "bench-do.json");
+mkdirSync(RUN_DIR, { recursive: true });
+
+const TRACE_FILE = opts.trace ?? process.env.REINS_JEV_TRACE;
+
+/** Lines of the daemon's Jev trace whose `t` lies in [from, to]. */
+function traceSegment(from, to) {
+  if (!TRACE_FILE || !existsSync(TRACE_FILE)) return undefined;
+  const lines = readFileSync(TRACE_FILE, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .filter((l) => {
+      try {
+        const t = JSON.parse(l).t;
+        return typeof t === "string" && t >= from && t <= to;
+      } catch {
+        return false;
+      }
+    });
+  return lines;
+}
+
+// ── children ────────────────────────────────────────────────────────────────
 /**
  * Spawn a child and resolve when it exits, never reject. A timeout sends
  * SIGTERM (then SIGKILL) and marks the result `timedOut`; a user interrupt
@@ -150,7 +253,7 @@ if (opts["check-only"]) {
  */
 let current;
 function run(cmd, args, timeoutMs) {
-  return new Promise((resolve) => {
+  return new Promise((resolveRun) => {
     const t0 = performance.now();
     let stdout = "";
     let stderr = "";
@@ -174,7 +277,7 @@ function run(cmd, args, timeoutMs) {
     child.on("close", (status, signal) => {
       clearTimeout(timer);
       if (current === child) current = undefined;
-      resolve({
+      resolveRun({
         ms: Math.round(performance.now() - t0),
         status,
         signal,
@@ -194,17 +297,23 @@ function kill(child) {
   child.once("close", () => clearTimeout(hard));
 }
 
+const doTimeoutSec = (task) => task.timeoutSec ?? 60;
+
 function runDo(task, tab) {
   if (DRY) return run("sleep", ["5"], 120_000);
   const args = [
     "do",
     task.goal,
     ...Object.entries(task.fills).flatMap(([k, v]) => ["--fill", `${k}=${v}`]),
+    "--timeout",
+    String(doTimeoutSec(task)),
     "--tab",
     String(tab),
     "--json",
   ];
-  return run("reins", args, 120_000);
+  // The loop stops itself at --timeout; the act in flight can take one more
+  // bridge call (30 s), and the CLI waits 40 s past the timeout. Kill after.
+  return run("reins", args, (doTimeoutSec(task) + 60) * 1000);
 }
 
 function manualPrompt(task, tab) {
@@ -214,7 +323,7 @@ function manualPrompt(task, tab) {
   return [
     `You are driving the user's browser with the reins CLI, step by step, in tab ${tab}.`,
     `Task: ${task.goal}`,
-    `Values to use: ${fills}.`,
+    fills ? `Values to use: ${fills}.` : "No values are supplied; the task names everything.",
     "",
     "Rules:",
     `- Every reins command must pass --tab ${tab}. Do not touch other tabs and do not open, close or focus tabs.`,
@@ -222,6 +331,7 @@ function manualPrompt(task, tab) {
     "- Never navigate by URL: reach the result through the page's own UI (search box, buttons, filters).",
     `- The only commands available: ${MANUAL_STEP_COMMANDS.map((c) => `reins ${c}`).join(", ")}. Anything else is denied.`,
     "- Do NOT use `reins do`.",
+    "- If the next click would delete, send, pay or otherwise do something irreversible, stop and say so instead of clicking.",
     "- Stop as soon as the task's end state is visible on the page. Reply with one line saying what is on screen.",
   ].join("\n");
 }
@@ -283,11 +393,12 @@ function parseJson(text) {
   }
 }
 
+// ── the loop ────────────────────────────────────────────────────────────────
 const results = [];
 // Ctrl-C: the loop is async, so the handler runs right away. It marks the
 // benchmark as stopping and kills the running child; the run's `finally`
-// closes the tab (a second Ctrl-C during that close is ignored so the tab
-// never leaks), then partial results are written and we exit 130.
+// closes the tabs (a second Ctrl-C during that close is ignored so no tab
+// leaks), then partial results are written and we exit 130.
 let stopping = false;
 let closing = false;
 process.on("SIGINT", () => {
@@ -307,36 +418,79 @@ function interruptedChild(err) {
   return err?.signal === "SIGINT";
 }
 
-function safeClose(tab) {
+function safeCloseAll(tabs) {
   closing = true;
   try {
-    closeTab(tab);
-  } catch (err) {
-    if (interruptedChild(err)) stopping = true;
-    console.error(`  close tab ${tab} failed: ${err instanceof Error ? err.message : err}`);
+    for (const tab of tabs) {
+      try {
+        closeTab(tab);
+      } catch (err) {
+        if (interruptedChild(err)) stopping = true;
+        console.error(`  close tab ${tab} failed: ${err instanceof Error ? err.message : err}`);
+      }
+    }
   } finally {
     closing = false;
   }
 }
 
-async function runOne(task, arm, i, tab) {
+/** Manual arm: the tab the run ended on isn't reported; ask the browser which
+ *  tabs exist now versus before, so a target=_blank link is still checked and closed. */
+function listTabIds() {
+  return new Set(listTabs().map((t) => t.tabId));
+}
+
+async function runOne(task, arm, i, tab, opened) {
+  const dir = join(RUN_DIR, `${task.id}-${arm}-${i + 1}`);
+  mkdirSync(dir, { recursive: true });
   await sleep(2_000); // initial load is outside the clock in both arms
   if (stopping) return;
+  const before = arm === "manual" ? listTabIds() : undefined;
+  const startedAt = new Date().toISOString();
   const out = await (arm === "do" ? runDo(task, tab) : runManual(task, tab));
+  const endedAt = new Date().toISOString();
+  const body = parseJson(out.stdout);
+
+  // The tab the run ended on: `reins do` reports it; a manual run that
+  // opened a new tab is found by diffing the tab list.
+  let finalTab = tab;
+  if (arm === "do" && typeof body?.tabId === "number") finalTab = body.tabId;
+  const followed = new Set();
+  for (const s of body?.steps ?? [])
+    if (typeof s.openedTabId === "number") followed.add(s.openedTabId);
+  if (before) {
+    for (const id of listTabIds()) if (!before.has(id) && id !== tab) followed.add(id);
+    if (followed.size > 0) finalTab = [...followed].at(-1);
+  }
+  for (const id of followed) opened.add(id);
+  opened.add(finalTab);
+
   // A killed child may still have left the page in the wanted state; it does
   // not count. A verified row must have finished on its own, inside the clock.
-  const ok = stopping || out.timedOut ? false : verify(tab, task.check);
+  const finished = !stopping && !out.timedOut;
+  const checkOk = finished ? verify(finalTab, task.check) : false;
+  const statusOk = task.expect?.status ? body?.status === task.expect.status : true;
+  const ok = finished && checkOk && statusOk;
+  screenshot(finalTab, join(dir, "screenshot.png"));
+
   const row = {
     task: task.id,
+    tier: task.tier,
+    set: task.set,
     arm,
     run: i + 1,
     ms: out.ms,
     verified: ok,
+    checkOk,
+    ...(task.expect ? { expected: task.expect, statusOk } : {}),
     exit: out.status,
     timedOut: out.timedOut,
     interrupted: stopping,
+    tab,
+    finalTab,
+    openedTabs: [...followed],
+    dir,
   };
-  const body = parseJson(out.stdout);
   if (arm === "do") {
     row.status = body?.status ?? (out.error ? "spawn_error" : "unparsed");
     row.reason = body?.reason;
@@ -344,6 +498,7 @@ async function runOne(task, arm, i, tab) {
     row.inputTokens = body?.inputTokens;
     row.elapsedMs = body?.elapsedMs;
     row.step = body?.step;
+    row.url = body?.url;
   } else {
     row.turns = body?.num_turns;
     row.costUsd = body?.total_cost_usd;
@@ -354,9 +509,32 @@ async function runOne(task, arm, i, tab) {
   else if (stopping && !body) row.error = "interrupted";
   else if (out.status !== 0 && !body) row.error = out.stderr.trim().slice(0, 300);
   results.push(row);
+
+  const trace = arm === "do" ? traceSegment(startedAt, endedAt) : undefined;
+  if (trace) {
+    writeFileSync(join(dir, "jev-trace.jsonl"), trace.length ? `${trace.join("\n")}\n` : "");
+    row.traceLines = trace.length;
+  }
+  writeFileSync(
+    join(dir, "result.json"),
+    JSON.stringify(
+      {
+        task: { ...task, url: taskUrl(task) },
+        arm,
+        startedAt,
+        endedAt,
+        row,
+        output: body ?? null,
+        stderr: out.stderr.trim().slice(0, 2000) || undefined,
+      },
+      null,
+      2,
+    ),
+  );
+
   const extra =
     arm === "do"
-      ? `${row.status} step=${row.step ?? "?"} jev=${row.jevCalls ?? "?"}`
+      ? `${row.status} step=${row.step ?? "?"} jev=${row.jevCalls ?? "?"}${row.reason ? ` — ${row.reason}` : ""}`
       : `turns=${row.turns ?? "?"} $${row.costUsd?.toFixed?.(3) ?? "?"}`;
   const mark = out.timedOut ? "timeout" : stopping ? "interrupted" : ok ? "✓" : "✗";
   console.log(`${task.id} ${arm} #${i + 1}: ${out.ms} ms ${mark} (${extra})`);
@@ -364,17 +542,20 @@ async function runOne(task, arm, i, tab) {
 
 async function runAll() {
   console.log(
-    `bench-do${DRY ? " (dry)" : ""}: ${tasks.length} task(s) × ${ARMS.join("+")} × ${RUNS} run(s)`,
+    `bench-do${DRY ? " (dry)" : ""}: ${tasks.length} task(s) × ${ARMS.join("+")} × ${RUNS} run(s) → ${RUN_DIR}${
+      fixtureServer ? ` (fixtures on 127.0.0.1:${fixturePort})` : ""
+    }`,
   );
   for (const task of tasks) {
     for (let i = 0; i < RUNS; i++) {
       for (const arm of ARMS) {
         if (stopping) return;
-        const tab = openTab(task.url);
+        const tab = openTab(taskUrl(task));
+        const opened = new Set([tab]);
         try {
-          await runOne(task, arm, i, tab);
+          await runOne(task, arm, i, tab, opened);
         } finally {
-          safeClose(tab);
+          safeCloseAll(opened);
         }
       }
     }
@@ -393,8 +574,11 @@ try {
     crashed = err instanceof Error ? err.message : String(err);
     console.error(`bench-do: aborted — ${crashed}`);
   }
+} finally {
+  await fixtureServer?.close();
 }
 
+// ── summary ─────────────────────────────────────────────────────────────────
 /** Lower-middle median: for an even count the smaller of the two middle values. */
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -407,13 +591,25 @@ const rows = tasks.map((t) => {
   const manMed = median(ok("manual").map((r) => r.ms));
   return {
     task: t.id,
+    tier: t.tier,
+    set: t.set,
     doVerified: `${ok("do").length}/${arm("do").length}`,
     manualVerified: `${ok("manual").length}/${arm("manual").length}`,
     doMedianMs: doMed,
     manualMedianMs: manMed,
     speedup: doMed && manMed ? Number((manMed / doMed).toFixed(2)) : undefined,
+    doStatuses: arm("do").map((r) => r.status),
   };
 });
+const setRows = ["dev", "holdout"]
+  .flatMap((set) => ["fixture", "live", "all"].map((tier) => ({ set, tier })))
+  .map(({ set, tier }) => {
+    const pick = (a) =>
+      results.filter((r) => r.set === set && (tier === "all" || r.tier === tier) && r.arm === a);
+    const count = (a) => `${pick(a).filter((r) => r.verified).length}/${pick(a).length}`;
+    return { set, tier, doVerified: count("do"), manualVerified: count("manual") };
+  })
+  .filter((r) => r.doVerified !== "0/0" || r.manualVerified !== "0/0");
 
 function safeVersion(cmd, args) {
   try {
@@ -429,26 +625,37 @@ const env = {
   claude: !DRY && ARMS.includes("manual") ? safeVersion("claude", ["--version"]) : undefined,
   runs: RUNS,
   arms: ARMS,
+  set: opts.set,
+  tier: opts.tier,
   dry: DRY,
+  traceFile: TRACE_FILE,
+  runDir: RUN_DIR,
   partial: stopping || crashed !== undefined,
   interrupted: stopping,
   crashed,
 };
-writeFileSync(opts.out, JSON.stringify({ env, results, rows }, null, 2));
+mkdirSync(dirname(SUMMARY_FILE), { recursive: true });
+writeFileSync(SUMMARY_FILE, JSON.stringify({ env, results, rows, setRows }, null, 2));
 
 const fmt = (v) => (v === undefined ? "—" : String(v));
 console.log("");
 console.log(
-  "| task | do verified | manual verified | do median (ms) | manual median (ms) | speed-up |",
+  "| task | tier | set | do verified | manual verified | do median (ms) | manual median (ms) | speed-up | do statuses |",
 );
-console.log("|---|---|---|---|---|---|");
+console.log("|---|---|---|---|---|---|---|---|---|");
 for (const r of rows) {
   console.log(
-    `| ${r.task} | ${r.doVerified} | ${r.manualVerified} | ${fmt(r.doMedianMs)} | ${fmt(r.manualMedianMs)} | ${r.speedup ? `${r.speedup}×` : "—"} |`,
+    `| ${r.task} | ${r.tier} | ${r.set} | ${r.doVerified} | ${r.manualVerified} | ${fmt(r.doMedianMs)} | ${fmt(r.manualMedianMs)} | ${r.speedup ? `${r.speedup}×` : "—"} | ${r.doStatuses.join(", ") || "—"} |`,
   );
 }
+console.log("");
+console.log("| set | tier | do verified | manual verified |");
+console.log("|---|---|---|---|");
+for (const r of setRows) {
+  console.log(`| ${r.set} | ${r.tier} | ${r.doVerified} | ${r.manualVerified} |`);
+}
 console.log(
-  `\nwrote ${opts.out}${stopping ? " (partial: interrupted)" : crashed ? " (partial: aborted)" : ""}`,
+  `\nwrote ${SUMMARY_FILE}${stopping ? " (partial: interrupted)" : crashed ? " (partial: aborted)" : ""}`,
 );
 if (stopping) process.exit(130);
 if (crashed) process.exit(1);

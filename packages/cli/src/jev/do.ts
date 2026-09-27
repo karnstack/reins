@@ -14,6 +14,7 @@ import { readKey } from "./credentials.js";
 import { nextCommand } from "./format.js";
 import { runLoop } from "./loop.js";
 import { newRun, RunStore } from "./runs.js";
+import { type TraceSink, traceAsk } from "./trace.js";
 import type { DoResult, RunState } from "./types.js";
 
 export const DoParams = z.object({
@@ -37,6 +38,8 @@ export interface DoContext {
   audit?: AuditHook;
   /** Test seam: replaces the TypeSafe client; `onUsage` reports each call's input tokens. */
   createAsk?: (key: string, onUsage: (inputTokens: number) => void) => JevAsk;
+  /** Opt-in diagnostics (REINS_JEV_TRACE): receives one line per Jev call. */
+  trace?: TraceSink;
   now?: () => number;
 }
 
@@ -197,7 +200,11 @@ export async function handleDo(
     const onUsage = (n: number) => {
       inputTokens += n;
     };
-    const ask = (ctx.createAsk ?? ((k: string) => createJevAsk({ key: k, onUsage })))(key, onUsage);
+    const plainAsk = (ctx.createAsk ?? ((k: string) => createJevAsk({ key: k, onUsage })))(
+      key,
+      onUsage,
+    );
+    const ask = ctx.trace ? traceAsk(plainAsk, ctx.trace, () => inputTokens, now) : plainAsk;
     // One signal for the loop: the hang-up/shutdown signal, plus --timeout.
     // A Jev call or jev_act in flight when the budget runs out is cut short,
     // so the run always answers inside the CLI's HTTP wait.

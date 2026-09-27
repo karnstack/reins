@@ -6,3 +6,4 @@ packages/cli/extension/
 coverage/
 *.log
 .DS_Store
+bench-out/

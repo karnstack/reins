@@ -9,7 +9,8 @@
       "!**/*.svg",
       "!.claude",
       "!**/routeTree.gen.ts",
-      "!docs/benchmarks/*.json"
+      "!docs/benchmarks/*.json",
+      "!packages/cli/scripts/bench/fixtures"
     ]
   },
   "css": { "parser": { "tailwindDirectives": true } },

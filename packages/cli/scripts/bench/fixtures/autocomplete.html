@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flightfinder — search flights</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #1f3a5f; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 20px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .field { position: relative; margin-bottom: 16px; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 15px; border: 1px solid #b9c0c8; border-radius: 6px; }
+  [role=listbox] { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; margin: 0; padding: 4px 0; list-style: none; background: #fff; border: 1px solid #b9c0c8; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.12); max-height: 220px; overflow: auto; }
+  [role=option] { padding: 8px 12px; cursor: pointer; }
+  [role=option][aria-selected=true], [role=option]:hover { background: #e8f0fe; }
+  [role=option] small { color: #666; margin-left: 6px; }
+  button { font: inherit; padding: 10px 18px; border-radius: 6px; border: 1px solid #1f3a5f; background: #1f3a5f; color: #fff; cursor: pointer; }
+  .error { color: #b3261e; margin: 8px 0 0; }
+  .result { display: flex; justify-content: space-between; padding: 12px 0; border-top: 1px solid #eee; }
+  .price { font-weight: 700; }
+</style>
+</head>
+<body>
+<header>Flightfinder</header>
+<main>
+  <section class="card" id="search">
+    <h1 style="margin-top:0">Search flights</h1>
+    <form id="form" autocomplete="off">
+      <div class="field">
+        <label for="from">Where from?</label>
+        <input id="from" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="from-list" aria-haspopup="listbox" placeholder="City or airport">
+        <ul id="from-list" role="listbox" aria-label="Suggested cities" hidden></ul>
+      </div>
+      <div class="field">
+        <label for="to">Where to?</label>
+        <input id="to" type="text" value="London (LHR)" readonly aria-readonly="true">
+      </div>
+      <button type="submit" id="search-btn">Search</button>
+      <p class="error" id="error" hidden>Choose a departure city from the suggestions.</p>
+    </form>
+  </section>
+
+  <section class="card" id="results" hidden aria-live="polite">
+    <h2 id="results-title"></h2>
+    <div id="results-list"></div>
+    <p><a href="#" id="back">New search</a></p>
+  </section>
+</main>
+<script>
+(() => {
+  const CITIES = [
+    ["Zurich", "ZRH", "Switzerland"], ["Zagreb", "ZAG", "Croatia"], ["Zaragoza", "ZAZ", "Spain"],
+    ["Zanzibar", "ZNZ", "Tanzania"], ["Lisbon", "LIS", "Portugal"], ["Lyon", "LYS", "France"],
+    ["Paris", "CDG", "France"], ["Prague", "PRG", "Czechia"], ["Porto", "OPO", "Portugal"],
+    ["Berlin", "BER", "Germany"], ["Boston", "BOS", "United States"], ["Bangkok", "BKK", "Thailand"],
+    ["Tokyo", "HND", "Japan"], ["Toronto", "YYZ", "Canada"], ["Geneva", "GVA", "Switzerland"],
+    ["Milan", "MXP", "Italy"], ["Madrid", "MAD", "Spain"], ["Munich", "MUC", "Germany"],
+  ];
+  const input = document.getElementById("from");
+  const list = document.getElementById("from-list");
+  const error = document.getElementById("error");
+  let committed = null; // the city actually chosen from the listbox
+  let active = -1;
+  let matches = [];
+
+  function render() {
+    list.innerHTML = "";
+    matches.forEach((c, i) => {
+      const li = document.createElement("li");
+      li.role = "option";
+      li.id = `opt-${c[1]}`;
+      li.setAttribute("aria-selected", String(i === active));
+      li.innerHTML = `${c[0]} <small>${c[1]} · ${c[2]}</small>`;
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); commit(c); });
+      list.appendChild(li);
+    });
+    const open = matches.length > 0;
+    list.hidden = !open;
+    input.setAttribute("aria-expanded", String(open));
+    input.setAttribute("aria-activedescendant", active >= 0 && matches[active] ? `opt-${matches[active][1]}` : "");
+  }
+  function close() { matches = []; active = -1; render(); }
+  function commit(c) {
+    committed = c;
+    input.value = `${c[0]} (${c[1]})`;
+    error.hidden = true;
+    close();
+  }
+  input.addEventListener("input", () => {
+    committed = null; // typing alone never chooses a city
+    const q = input.value.trim().toLowerCase();
+    matches = q ? CITIES.filter((c) => c[0].toLowerCase().startsWith(q) || c[1].toLowerCase() === q).slice(0, 6) : [];
+    active = -1;
+    render();
+  });
+  input.addEventListener("keydown", (e) => {
+    const open = !list.hidden;
+    if (e.key === "ArrowDown" && open) { active = Math.min(active + 1, matches.length - 1); render(); e.preventDefault(); }
+    else if (e.key === "ArrowUp" && open) { active = Math.max(active - 1, 0); render(); e.preventDefault(); }
+    else if (e.key === "Escape" && open) { close(); e.preventDefault(); }
+    else if (e.key === "Enter" && open) { commit(matches[active >= 0 ? active : 0]); e.preventDefault(); }
+  });
+  input.addEventListener("blur", () => setTimeout(close, 120));
+
+  document.getElementById("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!committed) { error.hidden = false; return; }
+    const [name, code] = committed;
+    document.getElementById("results-title").textContent = `Flights from ${name} (${code}) to London (LHR)`;
+    const seed = name.length;
+    document.getElementById("results-list").innerHTML = [
+      ["Swiss", "07:15 – 08:05", 120 + seed * 3], ["easyJet", "10:40 – 11:30", 64 + seed * 2], ["British Airways", "18:20 – 19:10", 158 + seed],
+    ].map(([a, t, p]) => `<div class="result"><span>${a} · ${t}</span><span class="price">CHF ${p}</span></div>`).join("");
+    document.getElementById("search").hidden = true;
+    document.getElementById("results").hidden = false;
+    document.title = `Flights from ${name} — Flightfinder`;
+  });
+  document.getElementById("back").addEventListener("click", (e) => {
+    e.preventDefault();
+    document.getElementById("results").hidden = true;
+    document.getElementById("search").hidden = false;
+  });
+})();
+</script>
+</body>
+</html>

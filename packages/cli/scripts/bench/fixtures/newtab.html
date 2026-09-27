@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reins Console</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #3b2f63; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 24px; }
+  header nav a { color: #e6e1f5; text-decoration: none; margin-right: 16px; }
+  main { max-width: 800px; margin: 32px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+  .ok { color: #1a7f37; }
+</style>
+</head>
+<body>
+<header>
+  <strong>Reins Console</strong>
+  <nav>
+    <a href="#overview">Overview</a>
+    <a href="#browsers">Browsers</a>
+    <a href="docs.html" target="_blank" rel="noopener" id="docs-link">Docs ↗</a>
+  </nav>
+</header>
+<main>
+  <section class="card" id="overview">
+    <h1 style="margin-top:0">Overview</h1>
+    <p>Daemon <span class="ok">running</span> on 127.0.0.1:8765. One browser connected.</p>
+  </section>
+  <section class="card" id="browsers">
+    <h2 style="margin-top:0">Browsers</h2>
+    <table>
+      <thead><tr><th>Id</th><th>Name</th><th>Tabs</th></tr></thead>
+      <tbody><tr><td>b1</td><td>Google Chrome</td><td>14</td></tr></tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2 style="margin-top:0">Help</h2>
+    <p>Looking for the site policy rules or the command reference? They live in the <a href="docs.html" target="_blank" rel="noopener">documentation</a>, which opens in a new tab.</p>
+  </section>
+</main>
+</body>
+</html>
