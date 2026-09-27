@@ -2,7 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { parseArgs, UsageError } from "./args.js";
+import { parseArgs, UsageError, wantsHelp } from "./args.js";
 import {
   browsersText,
   doctorReport,
@@ -12,6 +12,7 @@ import {
   RESTART_WAIT_MS,
   rpcFailure,
   runRestart,
+  usageText,
 } from "./cli-commands.js";
 import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
@@ -56,10 +57,12 @@ function screenshotFile(out: string | undefined, format: string): string {
 }
 
 async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<void> {
-  const a = parseArgs(argv, {
-    booleans: [...(cmd.booleans ?? []), "json"],
-    multi: cmd.multi,
-  });
+  const spec = { booleans: [...(cmd.booleans ?? []), "json"], multi: cmd.multi };
+  if (wantsHelp(argv, spec)) {
+    console.log(usageText(cmd));
+    return;
+  }
+  const a = parseArgs(argv, spec);
   const params = cmd.build(a);
 
   const ensured = await ensureDaemon(loadOrCreateConfig());
@@ -220,7 +223,12 @@ async function main(): Promise<void> {
 
     case "key": {
       // Key methods are answered by the daemon itself — no browser needed.
-      const { runKey } = await import("./key-cli.js");
+      const { KEY_USAGE, runKey } = await import("./key-cli.js");
+      // Usage needs no daemon either: answer before starting one.
+      if (rest[0] === undefined || wantsHelp(rest) || rest[0] === "help") {
+        console.log(KEY_USAGE);
+        break;
+      }
       const { readSecret } = await import("./secret.js");
       const ensured = await ensureDaemon(loadOrCreateConfig());
       console.log(
@@ -294,7 +302,12 @@ async function main(): Promise<void> {
     case undefined: {
       const topic = rest[0] !== undefined ? TOOL_COMMANDS[rest[0]] : undefined;
       if (topic) {
-        console.log(`${topic.usage}\n  ${topic.summary}`);
+        console.log(usageText(topic));
+        break;
+      }
+      if (rest[0] === "key") {
+        const { KEY_USAGE } = await import("./key-cli.js");
+        console.log(KEY_USAGE);
         break;
       }
       console.log(helpText(packageVersion(), TOOL_COMMANDS));

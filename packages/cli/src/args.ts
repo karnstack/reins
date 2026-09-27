@@ -14,6 +14,18 @@ export interface ParsedArgs {
 
 export class UsageError extends Error {}
 
+/** True when `--help` or `-h` appears as a flag (not as some other flag's value). */
+export function wantsHelp(argv: string[], spec: ArgSpec = {}): boolean {
+  const booleans = new Set(spec.booleans ?? []);
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i] as string;
+    if (token === "--help" || token === "-h") return true;
+    // A value flag consumes the next token, whatever it looks like.
+    if (token.startsWith("--") && !token.includes("=") && !booleans.has(token.slice(2))) i++;
+  }
+  return false;
+}
+
 export function parseArgs(argv: string[], spec: ArgSpec = {}): ParsedArgs {
   const booleans = new Set(spec.booleans ?? []);
   const multi = new Set(spec.multi ?? []);

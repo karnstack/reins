@@ -13,8 +13,9 @@ import {
   rpcFailure,
   runRestart,
   tabsText,
+  usageText,
 } from "./cli-commands.js";
-import { TOOL_COMMANDS } from "./commands.js";
+import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
 
 function cfg() {
@@ -348,6 +349,14 @@ describe("logsInfo", () => {
     const info = logsInfo(dir, 2);
     expect(info.latest).toContain("daemon-2026-01-02.log");
     expect(info.tail).toEqual(["two", "three"]);
+  });
+});
+
+describe("usageText", () => {
+  it("is the usage line and the summary", () => {
+    expect(usageText(TOOL_COMMANDS.do as ToolCommand)).toBe(
+      `${TOOL_COMMANDS.do?.usage}\n  ${TOOL_COMMANDS.do?.summary}`,
+    );
   });
 });
 

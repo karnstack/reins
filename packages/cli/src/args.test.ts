@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { parseArgs, UsageError } from "./args.js";
+import { parseArgs, UsageError, wantsHelp } from "./args.js";
+
+describe("wantsHelp", () => {
+  it("spots --help and -h anywhere among the flags", () => {
+    expect(wantsHelp(["--help"])).toBe(true);
+    expect(wantsHelp(["-h"])).toBe(true);
+    expect(wantsHelp(["find it", "--help"])).toBe(true);
+    expect(wantsHelp(["--tab", "3", "-h"])).toBe(true);
+    expect(wantsHelp([])).toBe(false);
+    expect(wantsHelp(["find it", "--tab", "3"])).toBe(false);
+  });
+
+  it("does not mistake a flag's value for a help request", () => {
+    expect(wantsHelp(["--text", "-h"])).toBe(false);
+    expect(wantsHelp(["--fill", "-h", "--continue"], { multi: ["fill"] })).toBe(false);
+    expect(wantsHelp(["--continue", "-h"], { booleans: ["continue"] })).toBe(true);
+  });
+});
 
 describe("parseArgs", () => {
   it("splits positionals and --flag value pairs", () => {

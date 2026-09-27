@@ -24,6 +24,11 @@ export function rpcFailure(err: unknown, timeoutMs: number): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+/** `reins help <tool>` / `reins <tool> --help`: the usage line and the summary. */
+export function usageText(cmd: ToolCommand): string {
+  return `${cmd.usage}\n  ${cmd.summary}`;
+}
+
 export function helpText(version: string, tools: Record<string, ToolCommand>): string {
   // Floor: the longest management entry, so its summary never runs into the name.
   const width =
