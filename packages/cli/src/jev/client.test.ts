@@ -92,11 +92,24 @@ describe("validateChoice", () => {
     ["an extra probability", { ...good, probabilities: { a: 0.5, b: 0.3, c: 0.2 } }],
     ["probabilities that don't sum to 1", { ...good, probabilities: { a: 0.5, b: 0.1 } }],
     ["a choice that isn't the most likely", { ...good, probabilities: { a: 0.3, b: 0.7 } }],
+    ["a choice more than rounding under the top", { ...good, probabilities: { a: 0.48, b: 0.52 } }],
     ["confidence out of range", { ...good, confidence: 1.5 }],
     ["probabilities that aren't an object", { ...good, probabilities: "ab" }],
     ["nothing at all", undefined],
   ])("rejects %s", (_name, answer) => {
     expect(() => validateChoice(answer, ids)).toThrow(JevError);
+  });
+
+  it("accepts a choice within rounding of the top probability (a reported tie)", () => {
+    expect(() =>
+      validateChoice({ ...good, probabilities: { a: 0.49, b: 0.51 } }, ids),
+    ).not.toThrow();
+    expect(() =>
+      validateChoice({ ...good, probabilities: { a: 0.3, b: 0.31, c: 0.39 } }, ["a", "b", "c"]),
+    ).toThrow(JevError);
+    expect(() =>
+      validateChoice({ ...good, probabilities: { a: 0.38, b: 0.23, c: 0.39 } }, ["a", "b", "c"]),
+    ).not.toThrow();
   });
 
   it("only counts a probability the answer itself carries, not one from the prototype", () => {

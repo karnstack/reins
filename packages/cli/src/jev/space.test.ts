@@ -229,6 +229,25 @@ describe("interpret", () => {
     expect(d.action).toBeUndefined();
   });
 
+  it("never validates a speculative head: an unusable one for an operation not chosen is ignored", () => {
+    const bad = { choice: "99", confidence: 2, probabilities: { "99": 0.5 } };
+    // A verdict: every target head and every fill head was speculative.
+    const done = answersFor("DONE", "1", {});
+    for (const name of Object.keys(plan.body.questions)) if (name !== "operation") done[name] = bad;
+    expect(interpret(done, plan)).toMatchObject({ operation: "DONE" });
+    // A click: the other operations' target heads and the fill heads were speculative.
+    const click = answersFor("CLICK", "3", {});
+    click.type_text_target = bad;
+    click.fill_for_1 = bad;
+    click.fill_for_2 = bad;
+    expect(interpret(click, plan)).toMatchObject({ operation: "CLICK", targetIndex: "3" });
+    // Typing into field 2: field 1's fill head was speculative.
+    const type = answersFor("TYPE_TEXT", "2", { "2": "to" });
+    type.click_target = bad;
+    type.fill_for_1 = bad;
+    expect(interpret(type, plan)).toMatchObject({ operation: "TYPE_TEXT", fill: "to" });
+  });
+
   it("refuses an unusable target answer", () => {
     const a = answersFor("CLICK", "3", {});
     a.click_target = { choice: "99", confidence: 1, probabilities: { "99": 1 } };

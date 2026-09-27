@@ -89,10 +89,17 @@ export function createJevAsk(opts: {
   };
 }
 
+/** How far under the top probability a reported choice may sit. Probabilities
+ *  arrive rounded to two decimals, so a choice 0.01 under another is a tie as
+ *  reported, not a contradiction (the sum check tolerates the same 0.02). */
+export const PROBABILITY_TIE = 0.02 + 1e-6;
+
 /**
  * Check a choice answer beyond its type: the choice was offered, every option
  * has exactly one probability in [0, 1], they sum to ~1, and the choice is the
- * most likely. Anything else is an unusable answer — never act on it.
+ * most likely — or within rounding of it. Anything else is an unusable
+ * answer — never act on it. Call it only on a head the loop acts on: a
+ * speculative head's answer is never validated (see `interpret`).
  */
 export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
   const a = answer as Partial<ChoiceAnswer> | undefined;
@@ -110,7 +117,7 @@ export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
       (n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
     ) &&
     Math.abs(values.reduce((s, n) => s + n, 0) - 1) < 0.02 &&
-    (probs[a.choice] ?? 0) >= Math.max(...values) - 1e-6;
+    (probs[a.choice] ?? 0) >= Math.max(...values) - PROBABILITY_TIE;
   if (!valid) {
     throw new JevError(
       "TypeSafe returned an unusable answer — no action was taken",

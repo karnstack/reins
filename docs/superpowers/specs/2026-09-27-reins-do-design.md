@@ -174,7 +174,7 @@ One file per job:
 | file | job |
 |---|---|
 | `credentials.ts` | read/write/clear `credentials.json` (0600, atomic) |
-| `client.ts` | thin wrapper over the official SDK `@typesafe-ai/sdk` (MIT, zero deps, Node ≥ 20; pinned exact): `TypeSafeClient.systemOne` with the run's `AbortSignal`, the SDK's default retries (408/429/5xx, 2 retries, honours Retry-After), 8 s per attempt, logging off. On top of the SDK's typing, validate every choice answer (choice ∈ offered, probabilities keyed exactly by the options, each in [0,1], sum within 0.02 of 1). Invalid → throw, nothing executes. `AuthenticationError`/`PermissionDeniedError` → "TypeSafe rejected the API key". |
+| `client.ts` | thin wrapper over the official SDK `@typesafe-ai/sdk` (MIT, zero deps, Node ≥ 20; pinned exact): `TypeSafeClient.systemOne` with the run's `AbortSignal`, the SDK's default retries (408/429/5xx, 2 retries, honours Retry-After), 8 s per attempt, logging off. On top of the SDK's typing, validate every choice answer the loop acts on (choice ∈ offered, probabilities keyed exactly by the options, each in [0,1], sum within 0.02 of 1, the choice within 0.02 of the top probability — probabilities arrive rounded to two decimals, so 0.30 vs 0.31 is a tie as reported, not a contradiction). Invalid → throw, nothing executes. Speculative heads (a target head for an operation not chosen, a fill head for a field not typed into) are never validated: an unusable answer there cannot fail a step. `AuthenticationError`/`PermissionDeniedError` → "TypeSafe rejected the API key". |
 | `space.ts` | snapshot → indexed element list + questions (port of jev `model.py` `action_space`/`choose`) |
 | `prompts.ts` | port of jev `questions.py` + fill rules |
 | `loop.ts` | the run state machine |
@@ -213,7 +213,10 @@ the loop issues `jev_observe` / `jev_act` through the existing
      answered per field, still in one round trip. If Jev picks a TYPE_TEXT
      target outside the first 8, one extra request asks that field's head
      alone.
-4. **Gate** (stop rules below). Only the chosen operation's target is used.
+4. **Gate** (stop rules below). Only the chosen operation's target is used,
+   and only the heads the loop acts on are validated: the operation head,
+   the chosen operation's target head, and a fill head only when its field
+   is the one typed into. An unusable speculative head is ignored.
    - **Unsubmitted query.** A DONE or BLOCKED verdict whose immediately
      preceding action was TYPE_TEXT into a field the page marked `submit`
      (search-like), while that field still holds the typed value, is
