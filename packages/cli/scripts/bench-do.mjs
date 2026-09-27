@@ -300,11 +300,19 @@ process.on("SIGINT", () => {
   if (current) kill(current);
 });
 
+/** Ctrl-C reaches every process in the terminal's group, so a `reins open` /
+ *  `close` / `eval` in flight dies of SIGINT and its execFileSync throws —
+ *  before the SIGINT handler above gets its turn. That is the interrupt. */
+function interruptedChild(err) {
+  return err?.signal === "SIGINT";
+}
+
 function safeClose(tab) {
   closing = true;
   try {
     closeTab(tab);
   } catch (err) {
+    if (interruptedChild(err)) stopping = true;
     console.error(`  close tab ${tab} failed: ${err instanceof Error ? err.message : err}`);
   } finally {
     closing = false;
@@ -342,6 +350,7 @@ async function runOne(task, arm, i, tab) {
     row.reply = typeof body?.result === "string" ? body.result.slice(0, 200) : undefined;
   }
   if (out.error) row.error = out.error.message;
+  else if (stopping && !body) row.error = "interrupted";
   else if (out.status !== 0 && !body) row.error = out.stderr.trim().slice(0, 300);
   results.push(row);
   const extra =
@@ -375,8 +384,14 @@ let crashed;
 try {
   await runAll();
 } catch (err) {
-  crashed = err instanceof Error ? err.message : String(err);
-  console.error(`bench-do: aborted — ${crashed}`);
+  if (interruptedChild(err)) {
+    // Ctrl-C during `reins open`: nothing to clean up, just stop.
+    stopping = true;
+    console.error("\nbench-do: interrupted — writing partial results");
+  } else {
+    crashed = err instanceof Error ? err.message : String(err);
+    console.error(`bench-do: aborted — ${crashed}`);
+  }
 }
 
 /** Lower-middle median: for an even count the smaller of the two middle values. */
