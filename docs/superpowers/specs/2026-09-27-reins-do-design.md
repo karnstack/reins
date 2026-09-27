@@ -218,7 +218,9 @@ A `stale` act (target gone, covered, moving) uses no step but is remembered:
 the history Jev sees carries `could not <op> "<label>": <reason>`, and three
 stale acts in a row stop the run as `stuck`. A click that opens a new tab
 (`target=_blank`) comes back with `openedTabId`; the extension brings that
-tab forward and the run follows it — every later observe/act, the stored run
+tab forward (before any policy check on its host: activation is not a page
+action, and a denied host still fails at the next observe) and waits, bounded,
+for its document to load, and the run follows it — every later observe/act, the stored run
 (`browserId:<newTab>`), the result's `tabId` and every `next:` line use the
 new tab. The site rule applies to the new tab's host as to any observation.
 
