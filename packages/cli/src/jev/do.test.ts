@@ -242,6 +242,28 @@ describe("handleDo", () => {
     expect(runs.tryBegin("b1:9")).toBe(true);
   });
 
+  it("a retarget onto a busy tab is an error that keeps the original lock intact", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const b = bridge();
+    (b.requestFull as ReturnType<typeof vi.fn>).mockImplementation(async (method: string) => ({
+      result: method === "jev_observe" ? OBS : { ok: true, openedTabId: 9 },
+      meta: { tabId: 5, host: "x.com", tier: "full" },
+      browserId: "b1",
+    }));
+    const runs = new RunStore();
+    runs.tryBegin("b1:9"); // someone else's run
+    const r = await handleDo(b, params, {
+      runs,
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+      createAsk: () => clickThenDone() as never,
+    });
+    expect(r.status).toBe("error");
+    expect(r.reason).toContain("already active on tab 9");
+    expect(runs.tryBegin("b1:9")).toBe(false); // untouched
+    expect(runs.tryBegin("b1:5")).toBe(true); // ours, released
+  });
+
   it("refuses without a key, pointing at both ways to add one", async () => {
     const r = await handleDo(bridge(), params, {
       runs: new RunStore(),

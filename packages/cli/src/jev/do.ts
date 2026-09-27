@@ -226,11 +226,15 @@ export async function handleDo(
           // A link opened a new tab: the run follows it (the extension has
           // brought it forward), and its memory moves with it.
           retarget: (id: number) => {
-            tabId = id;
             const moved = RunStore.key(browserId as string, id);
+            // A brand-new tab can't be busy; if it somehow is, keep our own
+            // key so the finally below never releases someone else's lock.
+            if (!ctx.runs.tryBegin(moved)) {
+              throw new Error(`a reins do run is already active on tab ${id}`);
+            }
+            tabId = id;
             ctx.runs.delete(runKey);
             ctx.runs.end(runKey);
-            ctx.runs.tryBegin(moved);
             runKey = moved;
           },
         },
