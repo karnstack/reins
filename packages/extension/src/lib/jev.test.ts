@@ -9,12 +9,23 @@ afterEach(() => vi.unstubAllGlobals());
 function stubChrome(tab?: { url?: string; title?: string }) {
   let onEvent: ((s: { tabId?: number }, m: string, p?: unknown) => void) | undefined;
   const sendCommand = vi.fn();
+  const created: Array<(t: chrome.tabs.Tab) => void> = [];
+  const updated: Array<[number, unknown]> = [];
   vi.stubGlobal("chrome", {
     tabs: {
       get: vi.fn(async () => {
         if (!tab) throw new Error("No tab with id");
         return tab;
       }),
+      update: vi.fn(async (id: number, props: unknown) => {
+        updated.push([id, props]);
+        return {};
+      }),
+      onCreated: {
+        addListener: (fn: (t: chrome.tabs.Tab) => void) => created.push(fn),
+        removeListener: (fn: (t: chrome.tabs.Tab) => void) =>
+          created.splice(created.indexOf(fn), 1),
+      },
     },
     debugger: {
       attach: vi.fn(),
@@ -27,6 +38,11 @@ function stubChrome(tab?: { url?: string; title?: string }) {
   initDialogTracking();
   return {
     fire: (tabId: number, m: string, p?: unknown) => onEvent?.({ tabId }, m, p),
+    tabCreated: (t: { id: number; openerTabId: number }) => {
+      for (const fn of created) fn(t as chrome.tabs.Tab);
+    },
+    created,
+    updated,
     sendCommand,
   };
 }
@@ -145,6 +161,71 @@ describe("jevAct", () => {
     const sent = sendCommand.mock.calls.map((c) => c[1]);
     expect(sent).not.toContain("Input.dispatchMouseEvent");
   });
+
+  it("hands over a tab the click opened only once that tab has a loaded document", async () => {
+    const { tabCreated, created, updated, sendCommand } = stubChrome();
+    // What the new tab answers to each read: about:blank, then the committed
+    // page still loading, then loaded.
+    const pages = [
+      { href: "about:blank", ready: "complete" },
+      { href: "https://docs.x.com/", ready: "loading" },
+      { href: "https://docs.x.com/", ready: "interactive" },
+    ];
+    const reads: string[] = [];
+    const page = pageAnswers({
+      onPress: async () => {
+        tabCreated({ id: 9, openerTabId: 3 });
+        return {};
+      },
+    });
+    sendCommand.mockImplementation(
+      async (target: { tabId: number }, method: string, params?: { expression?: string }) => {
+        if (target.tabId === 9 && method === "Runtime.evaluate") {
+          const p = pages.length > 1 ? (pages.shift() as (typeof pages)[number]) : pages[0];
+          reads.push(`${p?.href} ${p?.ready}`);
+          return { result: { value: p } };
+        }
+        return page(target, method, params);
+      },
+    );
+    await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toEqual({
+      ok: true,
+      openedTabId: 9,
+    });
+    expect(updated).toEqual([[9, { active: true }]]);
+    expect(created).toEqual([]); // the watcher is gone
+    expect(reads).toEqual([
+      "about:blank complete",
+      "https://docs.x.com/ loading",
+      "https://docs.x.com/ interactive",
+    ]);
+  });
+
+  it("gives up waiting for a tab that never loads, and still hands it over", async () => {
+    const { tabCreated, sendCommand } = stubChrome();
+    const page = pageAnswers({
+      onPress: async () => {
+        tabCreated({ id: 9, openerTabId: 3 });
+        return {};
+      },
+    });
+    sendCommand.mockImplementation(
+      async (target: { tabId: number }, method: string, params?: { expression?: string }) => {
+        if (target.tabId === 9 && method === "Runtime.evaluate") {
+          throw new Error("Execution context was destroyed."); // mid-commit, every time
+        }
+        return page(target, method, params);
+      },
+    );
+    const t0 = Date.now();
+    await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toEqual({
+      ok: true,
+      openedTabId: 9,
+    });
+    const took = Date.now() - t0;
+    expect(took).toBeGreaterThanOrEqual(2900);
+    expect(took).toBeLessThan(4500);
+  }, 10_000);
 
   it("an abandoned type sends no more input once the press resumes", async () => {
     const { fire, sendCommand } = stubChrome();

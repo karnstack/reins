@@ -161,6 +161,30 @@ export async function jevAct(params: JevActParams): Promise<JevActResult> {
 
 const DIALOG_WON = Symbol("dialog");
 
+/** How long a tab a click opened may take to show its first real document. */
+const OPENED_TAB_LOAD_MS = 3000;
+
+/**
+ * A new tab starts on about:blank and stays there until its navigation
+ * commits; read then, the run would see an empty page (or lose the evaluate
+ * to the cross-process commit). Wait, bounded, for a committed document that
+ * is past "loading". A slow site past the bound is still handed over: observe
+ * has its own body wait, and the page-changed rule copes with a late load.
+ */
+async function awaitOpenedTab(tabId: number): Promise<void> {
+  const until = Date.now() + OPENED_TAB_LOAD_MS;
+  await drivePage(tabId, async () => {
+    while (Date.now() < until) {
+      const page = await evaluate<{ href: string; ready: string }>(
+        tabId,
+        "({ href: location.href, ready: document.readyState })",
+      ).catch(() => undefined); // the commit destroyed the context: read again
+      if (page && page.href !== "about:blank" && page.ready !== "loading") return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }).catch(() => {}); // a tab that can't be driven is reported all the same
+}
+
 /** Watch for a tab this tab opens (a target=_blank link) while a click runs. */
 function watchOpenedTab(tabId: number): { get: () => number | undefined; stop: () => void } {
   let opened: number | undefined;
@@ -299,5 +323,6 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
   const openedTabId = opened?.get();
   if (openedTabId === undefined) return { ok: true };
   await chrome.tabs.update(openedTabId, { active: true }).catch(() => {});
+  await awaitOpenedTab(openedTabId);
   return { ok: true, openedTabId };
 }

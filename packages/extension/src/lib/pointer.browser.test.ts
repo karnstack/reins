@@ -93,6 +93,7 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <button id="swap">Swap me</button>
 <button id="ask" onclick="confirm('Leave?')">Ask</button>
 <a id="docs" href="/jev" target="_blank">Docs</a>
+<a id="slowdocs" href="SLOW_URL" target="_blank">Slow docs</a>
 <div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
 <form id="sf" role="search"><input id="q" name="q" aria-label="Search GitHub" value="cats"></form>
 <form id="spa" role="search"><input id="rq" name="q" aria-label="Search repos" value="browser automation"></form>
@@ -118,29 +119,65 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 </script></body></html>`;
 
 let chromeProc: ChildProcess | undefined;
-const injected: string[] = [];
+/** Scripts drivePage injected, with the tab (socket) each belongs to. */
+const injected: Array<{ identifier: string; tabId: number | undefined }> = [];
 /** Page targets opened by the fixture (target=_blank), closed after each test. */
 const openedTargets: string[] = [];
 let pageTargetId = "";
 const tabCreatedListeners: Array<(tab: chrome.tabs.Tab) => void> = [];
 const activated: Array<[number, unknown]> = [];
 let server: http.Server | undefined;
+let slowServer: http.Server | undefined;
+let slowUrl = "";
 let profile: string | undefined;
 let ws: WebSocket | undefined;
+let devtoolsPort = "";
+/** Sockets to the tabs the fixture opened, by the tab id the harness gave them. */
+const openedSockets = new Map<number, Promise<WebSocket>>();
 let url = "";
 let nextId = 0;
 const pending = new Map<number, (msg: { result?: unknown; error?: { message: string } }) => void>();
 type EventListener = (source: { tabId?: number }, method: string, params?: unknown) => void;
 const eventListeners: EventListener[] = [];
 
-function cdp<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+function cdp<T = unknown>(
+  method: string,
+  params: Record<string, unknown> = {},
+  sock: WebSocket | undefined = ws,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const id = ++nextId;
     pending.set(id, (msg) =>
       msg.error ? reject(new Error(msg.error.message)) : resolve(msg.result as T),
     );
-    ws?.send(JSON.stringify({ id, method, params }));
+    sock?.send(JSON.stringify({ id, method, params }));
   });
+}
+
+/** Route a chrome.debugger command to the tab it names: the fixture page, or one it opened. */
+async function socketFor(tabId: number | undefined): Promise<WebSocket | undefined> {
+  if (tabId === undefined || tabId === 1) return ws;
+  const targetId = openedTargets[tabId - 101];
+  if (!targetId) throw new Error(`no tab ${tabId}`);
+  let sock = openedSockets.get(tabId);
+  if (!sock) {
+    sock = new Promise<WebSocket>((resolve, reject) => {
+      const s = new WebSocket(`ws://127.0.0.1:${devtoolsPort}/devtools/page/${targetId}`);
+      s.on("message", (data) => {
+        const msg = JSON.parse(String(data));
+        if (msg.id === undefined && msg.method) {
+          for (const listener of eventListeners) listener({ tabId }, msg.method, msg.params);
+          return;
+        }
+        pending.get(msg.id)?.(msg);
+        pending.delete(msg.id);
+      });
+      s.once("open", () => resolve(s));
+      s.once("error", reject);
+    });
+    openedSockets.set(tabId, sock);
+  }
+  return sock;
 }
 
 async function evaluate<T>(expression: string): Promise<T> {
@@ -170,8 +207,23 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       s.setHeader("content-type", "text/html");
       // A login-style page whose password-manager host exists from first parse.
       const path = (q.url ?? "").split("?")[0];
-      s.end(path === "/login" ? LOGIN_FIXTURE : path === "/jev" ? JEV_FIXTURE : FIXTURE);
+      s.end(
+        path === "/login"
+          ? LOGIN_FIXTURE
+          : path === "/jev"
+            ? JEV_FIXTURE.replace("SLOW_URL", slowUrl)
+            : FIXTURE,
+      );
     });
+    // A second origin (so its tab gets its own renderer, as another site's
+    // would) whose page takes its time: what a new tab shows before it loads.
+    slowServer = http.createServer((_q, s) => {
+      s.setHeader("content-type", "text/html");
+      s.write("<!doctype html><title>slow docs</title>"); // commits at once, still loading
+      setTimeout(() => s.end("<p>Docs, at last</p>"), 800);
+    });
+    await new Promise<void>((r) => slowServer?.listen(0, "localhost", r));
+    slowUrl = `http://localhost:${(slowServer.address() as AddressInfo).port}/slow`;
     await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
 
@@ -199,6 +251,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       });
       proc.on("exit", () => reject(new Error(`chrome exited: ${buf}`)));
     });
+    devtoolsPort = port;
     const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as Array<{
       type: string;
       id: string;
@@ -243,16 +296,21 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
         detach: async () => {},
         onDetach: { addListener: () => {} },
         onEvent: { addListener: (fn: EventListener) => eventListeners.push(fn) },
-        sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
-          const result = await cdp(method, params);
+        sendCommand: async (
+          target: { tabId?: number },
+          method: string,
+          params?: Record<string, unknown>,
+        ) => {
+          const result = await cdp(method, params, await socketFor(target.tabId));
           // One real page serves every test: remember injected scripts so
           // afterEach can drop them, as a fresh debugger session would.
           if (method === "Page.addScriptToEvaluateOnNewDocument") {
-            injected.push((result as { identifier: string }).identifier);
+            const identifier = (result as { identifier: string }).identifier;
+            injected.push({ identifier, tabId: target.tabId });
           } else if (method === "Page.removeScriptToEvaluateOnNewDocument") {
             // A second drivePage in one case re-arms the guard and drops its
             // own previous script; don't try to drop it again in afterEach.
-            const i = injected.indexOf(String(params?.identifier));
+            const i = injected.findIndex((s) => s.identifier === String(params?.identifier));
             if (i >= 0) injected.splice(i, 1);
           }
           return result;
@@ -281,12 +339,18 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
   afterEach(async () => {
     __resetDebugSessions();
     activated.length = 0;
+    for (const { identifier, tabId } of injected.splice(0)) {
+      const sock = await socketFor(tabId);
+      // A tab closed mid-test (a navigation away) has no scripts left to drop.
+      await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier }, sock).catch(() => {});
+    }
+    for (const sock of openedSockets.values()) (await sock).close();
+    openedSockets.clear();
     for (const targetId of openedTargets.splice(0)) {
       await cdp("Target.closeTarget", { targetId }).catch(() => {});
     }
-    for (const identifier of injected.splice(0)) {
-      await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier });
-    }
+    // An opened tab took the foreground; the fixture tab must have it back.
+    await cdp("Page.bringToFront").catch(() => {});
   });
 
   afterAll(() => {
@@ -294,6 +358,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     ws?.close();
     chromeProc?.kill();
     server?.close();
+    slowServer?.close();
     if (profile) rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
   });
 
@@ -644,6 +709,20 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(tabCreatedListeners).toEqual([]); // the watcher is gone after the act
     expect(openedTargets).toHaveLength(1);
   });
+
+  it("jev: the opened tab is handed over only once its page has loaded", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Slow docs")?.node as number;
+    const t0 = Date.now();
+    const r = await jevAct({ tabId: 1, op: "click", node, label: "Slow docs" });
+    expect(r).toEqual({ ok: true, openedTabId: 101 });
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(700); // the slow page had to arrive
+    // The first read of the new tab is of its loaded page, not about:blank.
+    const obs = await jevObserve({ tabId: 101 });
+    expect(obs).toMatchObject({ url: slowUrl, title: "slow docs" });
+    expect(obs.text).toContain("Docs, at last");
+  }, 10_000);
 
   it("jev: a node replaced after the read comes back stale, not clicked", async () => {
     await load("/jev");
