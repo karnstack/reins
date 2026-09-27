@@ -162,8 +162,10 @@ next: reins snapshot   # verify before trusting DONE
 
 A `done` line carries the self-check's probability when one ran:
 `done in 7.2s · 17 steps · 18 jev calls · 21k tokens · self-check 0.91`
-(see "DONE self-check" under the gate; the value can only be below the
-threshold when two earlier DONEs were already refused).
+(see "DONE self-check" under the gate). Below 0.5 it says so up front —
+`done (unsure: self-check 0.34) in 4.1s · …` — and the `next:` line's hint
+becomes `# self-check says the goal may not be met — verify`. The JSON is
+the same either way (`doneConfidence`).
 
 Errors that happen mid-run (disconnect, tab gone) still return `steps` so far.
 
@@ -233,16 +235,13 @@ the loop issues `jev_observe` / `jev_act` through the existing
      counts only where the page shows it applied, a query only once its
      results show, and "open X" only on X itself). The answer is one
      probability, validated like a choice (finite, in [0, 1]; anything else
-     is an unusable answer). Below 0.5 the DONE is refused: the run's history
-     gets a verdict note (`DONE rejected: the page does not yet satisfy the
-     goal (self-check 0.20)`, sent to Jev as `{action: "DONE", kind:
-     "verdict", rejected}`, never an act: it is not a step, counts neither as
-     progress nor toward `stuck`, and the unsubmitted-query rule looks past
-     it), the page is read again and the loop goes on. After two refused
-     DONEs in a run the third stands. The self-check is a Jev call like any
-     other (counted, token-metered, subject to the call cap — at the cap a
-     DONE stands unchecked), and the accepted DONE's probability is the
-     result's `doneConfidence`.
+     is an unusable answer). The check is report-only: the DONE stands
+     whatever the probability, which the result carries as
+     `doneConfidence`, and the human output flags it as unsure below 0.5
+     (refusing a low DONE and asking again was tried: Jev re-answered DONE
+     every time, so it changed no outcome and cost two extra calls). The
+     self-check is a Jev call like any other (counted, token-metered,
+     subject to the call cap — at the cap a DONE stands unchecked).
 5. **Act** (`jev_act`). A `stale` result means the target changed or is
    covered: re-observe without counting a step (counts toward the Jev-call
    cap).
@@ -262,8 +261,7 @@ new tab. The site rule applies to the new tab's host as to any observation.
 State sent to Jev per request: goal; url, title; visible viewport text
 (capped at 6,000 chars); elements (index, role, label, value,
 checked/selected/expanded, options for native selects); last 10 actions
-(`op`, label, fill name, pageChanged; a refused DONE as a `verdict` entry
-with why); fill names and values. Never sent:
+(`op`, label, fill name, pageChanged); fill names and values. Never sent:
 password, file, or hidden inputs (the snapshot skips them) and the key.
 
 ### Stop rules

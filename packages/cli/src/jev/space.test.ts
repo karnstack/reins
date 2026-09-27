@@ -111,10 +111,7 @@ describe("buildRequest", () => {
 describe("doneCheckRequest", () => {
   it("asks one yes/no question on the same state buildRequest sends, with the goal", () => {
     const obs = page([button(1, "Apply"), ...field(2, "Search", "cats")]);
-    const history = [
-      { op: "type" as const, label: "Search", fill: "q", pageChanged: true },
-      { op: "wait" as const, label: "DONE", pageChanged: null, note: "DONE rejected: no" },
-    ];
+    const history = [{ op: "type" as const, label: "Search", fill: "q", pageChanged: true }];
     const req = doneCheckRequest(obs, "filter by cats", history, { q: "cats" });
     expect(req.state).toEqual(
       buildRequest(obs, "filter by cats", history, { q: "cats" }).body.state,
@@ -125,9 +122,6 @@ describe("doneCheckRequest", () => {
       instructions: { goal: "filter by cats" },
       criteria: { true: expect.any(String), false: expect.any(String) },
     });
-    // A refused verdict reaches Jev as a verdict, not as an act.
-    const actions = (req.state as { recent_actions: unknown[] }).recent_actions;
-    expect(actions[1]).toEqual({ action: "DONE", kind: "verdict", rejected: "DONE rejected: no" });
   });
 
   it("reads the probability and refuses anything else", () => {

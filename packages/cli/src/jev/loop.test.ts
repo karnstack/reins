@@ -124,70 +124,17 @@ describe("runLoop", () => {
   });
 
   describe("DONE self-check", () => {
-    const rejected = (d: ReturnType<typeof deps>, n: number) =>
-      (d.ask.mock.calls[n]?.[0] as JevBody & { state: { recent_actions: unknown[] } }).state
-        .recent_actions;
-
-    it("refuses a DONE the check doubts, tells Jev on the next ask, and goes on", async () => {
+    it("reports a low self-check without refusing the DONE: one check, no re-read", async () => {
       const d = deps(
-        [
-          page([button(1, "Apply filter")]),
-          page([button(1, "Apply filter")]),
-          page([], { text: "filtered" }),
-        ],
-        [{ op: "DONE" }, { op: "CLICK", target: "1" }, { op: "DONE" }],
-        { checks: [0.2, 0.95] },
+        [page([button(1, "Apply filter")]), page([], { text: "filtered" })],
+        [{ op: "DONE" }, { op: "CLICK", target: "1" }],
+        { checks: [0.2] },
       );
       const { result, run } = await runLoop(d, input());
-      expect(result).toMatchObject({ status: "done", jevCalls: 5, doneConfidence: 0.95 });
-      expect(result.steps.map((s) => s.label)).toEqual(["Apply filter"]);
-      // The refused verdict is what the next request's history says, and it is not a step.
-      expect(rejected(d, 2)).toEqual([
-        {
-          action: "DONE",
-          kind: "verdict",
-          rejected: "DONE rejected: the page does not yet satisfy the goal (self-check 0.20)",
-        },
-      ]);
-      expect(run.history.filter((h) => h.note !== undefined)).toHaveLength(1);
-      expect(run.step).toBe(1);
-      // A refused DONE reads the page again before asking.
-      expect(d.observe).toHaveBeenCalledTimes(3);
-    });
-
-    it("accepts the third DONE after two refusals, and reports its probability", async () => {
-      const d = deps([page([button(1, "Go")])], [{ op: "DONE" }, { op: "DONE" }, { op: "DONE" }], {
-        checks: [0.1, 0.3, 0.34],
-      });
-      const { result, run } = await runLoop(d, input());
-      expect(result).toMatchObject({
-        status: "done",
-        jevCalls: 6,
-        steps: [],
-        doneConfidence: 0.34,
-      });
-      expect(run.history.filter((h) => h.note !== undefined)).toHaveLength(2);
-      expect(rejected(d, 4)).toHaveLength(2);
-    });
-
-    it("refusals do not count toward stuck, and a refusal after a no-op is not progress", async () => {
-      // Three no-op clicks with refused DONEs between them: still stuck.
-      const d = deps(
-        [page([button(1, "Go")])],
-        [
-          { op: "CLICK", target: "1" },
-          { op: "DONE" },
-          { op: "CLICK", target: "1" },
-          { op: "DONE" },
-          { op: "CLICK", target: "1" },
-        ],
-        { checks: [0.1, 0.1] },
-      );
-      const { result } = await runLoop(d, input());
-      expect(result).toMatchObject({
-        status: "stuck",
-        reason: "3 actions in a row changed nothing",
-      });
+      expect(result).toMatchObject({ status: "done", jevCalls: 2, steps: [], doneConfidence: 0.2 });
+      expect(d.act).not.toHaveBeenCalled();
+      expect(d.observe).toHaveBeenCalledTimes(1);
+      expect(run.history).toEqual([]);
     });
 
     it("a DONE at the Jev-call cap stands without a self-check", async () => {
@@ -207,29 +154,6 @@ describe("runLoop", () => {
         .mockImplementationOnce(async () => ({ satisfied: { noul: 1.5 } }));
       const { result } = await runLoop(d, input());
       expect(result).toMatchObject({ status: "error", reason: expect.stringMatching(/unusable/) });
-    });
-
-    it("a refused DONE right after typing a search query still submits it first", async () => {
-      const search = (value: string): JevAction => ({
-        id: "f1",
-        kind: "fill",
-        node: 1,
-        role: "searchbox",
-        label: "Search",
-        value,
-        submit: true,
-      });
-      const d = deps(
-        [page([search("")]), page([search("cats")]), page([], { text: "results" })],
-        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "query" } }, { op: "DONE" }, { op: "DONE" }],
-        { checks: [0.9] },
-      );
-      const { result } = await runLoop(
-        d,
-        input({ run: newRun("find cats", "x.com", { query: "cats" }, [], 0) }),
-      );
-      expect(result.steps.map((s) => s.op)).toEqual(["type", "submit"]);
-      expect(result).toMatchObject({ status: "done", jevCalls: 4 });
     });
   });
 

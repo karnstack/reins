@@ -2,6 +2,11 @@ import type { DoResult } from "./types.js";
 
 const MANUAL = "switch to manual (reins snapshot → click/type)";
 
+/** A done self-check below this is reported as unsure: verify before trusting it. */
+export const DONE_UNSURE_BELOW = 0.5;
+const doneUnsure = (r: DoResult) =>
+  r.doneConfidence !== undefined && r.doneConfidence < DONE_UNSURE_BELOW;
+
 /** POSIX single-quoted string: nothing inside expands, so a page-controlled label is inert. */
 export function shellQuote(s: string): string {
   return `'${s.replaceAll("'", "'\\''")}'`;
@@ -25,7 +30,9 @@ export function nextCommand(
   const route = `${p.tabId !== undefined ? ` --tab ${p.tabId}` : ""}${p.browserId !== undefined ? ` --browser ${shellQuote(p.browserId)}` : ""}`;
   switch (r.status) {
     case "done":
-      return `reins snapshot${route}   # verify before trusting DONE`;
+      return doneUnsure(r)
+        ? `reins snapshot${route}   # self-check says the goal may not be met — verify`
+        : `reins snapshot${route}   # verify before trusting DONE`;
     case "risky_action":
       return `reins do --continue --confirm ${shellQuote(r.pending?.label ?? "")}${route}`;
     case "needs_text":
@@ -60,7 +67,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function formatDoResult(r: DoResult): string {
   const lines: string[] = [
     r.status === "done"
-      ? `done in ${sec(r.elapsedMs)} · ${plural(r.steps.length, "step")} · ${plural(r.jevCalls, "jev call")} · ${tokens(r.inputTokens)}${r.doneConfidence !== undefined ? ` · self-check ${r.doneConfidence.toFixed(2)}` : ""}`
+      ? `done${doneUnsure(r) ? ` (unsure: self-check ${r.doneConfidence?.toFixed(2)})` : ""} in ${sec(r.elapsedMs)} · ${plural(r.steps.length, "step")} · ${plural(r.jevCalls, "jev call")} · ${tokens(r.inputTokens)}${r.doneConfidence !== undefined && !doneUnsure(r) ? ` · self-check ${r.doneConfidence.toFixed(2)}` : ""}`
       : `${r.status}: ${r.reason ?? ""}`.trimEnd(),
   ];
   for (const s of r.steps) {

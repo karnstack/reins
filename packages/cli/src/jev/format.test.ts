@@ -59,8 +59,25 @@ describe("formatDoResult", () => {
   });
 
   it("shows the DONE self-check's probability when the run had one", () => {
-    expect(formatDoResult({ ...base, doneConfidence: 0.34 }).split("\n")[0]).toBe(
-      "done in 7.2s · 2 steps · 17 jev calls · 21k tokens · self-check 0.34",
+    expect(formatDoResult({ ...base, doneConfidence: 0.91 }).split("\n")[0]).toBe(
+      "done in 7.2s · 2 steps · 17 jev calls · 21k tokens · self-check 0.91",
+    );
+  });
+
+  it("says so on the done line when the self-check is unsure, and hardens the verify hint", () => {
+    const unsure = { ...base, doneConfidence: 0.34, elapsedMs: 4100 };
+    expect(formatDoResult({ ...unsure, next: nextCommand(unsure, { goal: "g" }) })).toBe(
+      [
+        "done (unsure: self-check 0.34) in 4.1s · 2 steps · 17 jev calls · 21k tokens",
+        '  1 click  "Where from?"',
+        '  2 type   "Where from?" ← from',
+        'now: https://x.com/r — "Results"',
+        "next: reins snapshot   # self-check says the goal may not be met — verify",
+      ].join("\n"),
+    );
+    // Exactly 0.5 is not unsure.
+    expect(formatDoResult({ ...base, doneConfidence: 0.5 }).split("\n")[0]).toBe(
+      "done in 7.2s · 2 steps · 17 jev calls · 21k tokens · self-check 0.50",
     );
   });
 
@@ -155,6 +172,9 @@ describe("nextCommand", () => {
     );
     expect(nextCommand(r("done"), { goal: "g", tabId: 7, browserId: "b1" })).toBe(
       "reins snapshot --tab 7 --browser 'b1'   # verify before trusting DONE",
+    );
+    expect(nextCommand({ ...r("done"), doneConfidence: 0.34 }, { goal: "g", tabId: 7 })).toBe(
+      "reins snapshot --tab 7   # self-check says the goal may not be met — verify",
     );
   });
 

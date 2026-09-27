@@ -68,15 +68,8 @@ function timedOut(signal: AbortSignal): boolean {
   return r instanceof Error && r.name === "TimeoutError";
 }
 
-/** A DONE whose self-check puts the goal below this is refused. */
-export const DONE_CHECK_MIN = 0.5;
-/** After this many refused DONEs in a run, the next one is accepted as is. */
-export const DONE_REJECTIONS_MAX = 2;
-const DONE_REJECTED = "DONE rejected: the page does not yet satisfy the goal";
-
-/** The last act (not a refused verdict) in the history. */
-const lastEntry = (run: RunState): HistoryEntry | undefined =>
-  run.history.findLast((h) => h.note === undefined);
+/** The last entry in the history. */
+const lastEntry = (run: RunState): HistoryEntry | undefined => run.history.at(-1);
 
 /** The search field the last action typed into, when it still holds that
  *  value and the page offers Enter there — i.e. a query typed but not run. */
@@ -84,7 +77,7 @@ function unsubmittedQuery(
   run: RunState,
   candidates: Record<string, JevAction> | undefined,
 ): { index: string; action: JevAction } | undefined {
-  const last = run.history.findLast((h) => h.stale === undefined && h.note === undefined);
+  const last = run.history.findLast((h) => h.stale === undefined);
   if (last?.op !== "type" || last.fill === undefined || !candidates) return undefined;
   const typed = run.fills[last.fill];
   for (const [index, action] of Object.entries(candidates)) {
@@ -128,7 +121,7 @@ export async function runLoop(
     // when the last action's outcome was actually observed: an abort or
     // timeout before the next read says nothing about the page, and a stale
     // act (never happened) says nothing either — look past it.
-    const last = run.history.findLast((h) => h.stale === undefined && h.note === undefined);
+    const last = run.history.findLast((h) => h.stale === undefined);
     if (
       input.continued &&
       executed > 0 &&
@@ -275,27 +268,17 @@ export async function runLoop(
         }
       }
       if (decision.operation === "DONE") {
-        // Self-check: one more question on the same observation, so a DONE
-        // chosen while a requirement is still open (a filter unapplied, a
-        // query not run, a link not followed) is refused and Jev is told —
-        // twice at most; the third DONE stands, with its probability shown.
+        // Self-check: one more question on the same observation — is every
+        // requirement of the goal visibly satisfied? The DONE stands either
+        // way; the probability is reported (`doneConfidence`) so the caller
+        // can verify, or fall back to step-by-step, when it is low. (Refusing
+        // a low DONE and asking again never changed an outcome: Jev answered
+        // DONE again every time, at two extra calls.)
         if (calls >= callLimit) return stop("done");
         calls += 1;
-        const p = interpretDoneCheck(
+        doneConfidence = interpretDoneCheck(
           await deps.ask(doneCheckRequest(obs, run.goal, run.history, run.fills), input.signal),
         );
-        const rejected = run.history.filter((h) => h.note !== undefined).length;
-        if (p < DONE_CHECK_MIN && rejected < DONE_REJECTIONS_MAX) {
-          run.history.push({
-            op: "wait",
-            label: "DONE",
-            pageChanged: null,
-            note: `${DONE_REJECTED} (self-check ${p.toFixed(2)})`,
-          });
-          obs = undefined; // read again: a page mid-change may have moved on
-          continue;
-        }
-        doneConfidence = p;
         return stop("done");
       }
       if (decision.operation === "BLOCKED") {

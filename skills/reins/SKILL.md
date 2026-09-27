@@ -105,6 +105,8 @@ of snapshot → click → snapshot. It's much faster: Jev picks each action in
   shell from expanding them.
 - Exit 0 = `done`. **DONE is Jev's opinion — always verify** with
   `reins snapshot` / `reins text` (the printed `next:` line does exactly that).
+  A done line marked `unsure` (self-check below 0.5) means the goal is
+  probably not met: verify, and fall back to step-by-step for what is missing.
 - Exit 2 = a stop. The printed `next:` line is usually a command to run as
   printed (`reins do --continue …`). For `dialog` it names the `reins dialog`
   command with a choice to make (`--accept` or `--dismiss`), then

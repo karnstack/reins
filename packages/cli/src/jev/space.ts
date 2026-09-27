@@ -144,21 +144,16 @@ function stateOf(
   return json({
     page: { url: obs.url, title: obs.title, text: obs.text },
     elements: space.elements,
-    recent_actions: history.slice(-10).map((h) =>
-      // A verdict the loop refused: not an act, just what Jev is told.
-      h.note !== undefined
-        ? { action: h.label, kind: "verdict", rejected: h.note }
-        : {
-            action: h.label,
-            kind: h.op,
-            fill: h.fill ?? null,
-            page_changed: h.pageChanged,
-            // An act that never happened: say why, so Jev picks something else.
-            ...(h.stale !== undefined
-              ? { failed: `could not ${h.op} ${JSON.stringify(h.label)}: ${h.stale}` }
-              : {}),
-          },
-    ),
+    recent_actions: history.slice(-10).map((h) => ({
+      action: h.label,
+      kind: h.op,
+      fill: h.fill ?? null,
+      page_changed: h.pageChanged,
+      // An act that never happened: say why, so Jev picks something else.
+      ...(h.stale !== undefined
+        ? { failed: `could not ${h.op} ${JSON.stringify(h.label)}: ${h.stale}` }
+        : {}),
+    })),
     supplied_values: fills,
   });
 }

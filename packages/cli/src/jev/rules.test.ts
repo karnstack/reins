@@ -123,12 +123,6 @@ describe("noProgress", () => {
     expect(noProgress([stale, stale, stale])).toBe(false);
     expect(noProgress([h(false), h(false), stale])).toBe(false);
   });
-  it("skips refused verdicts: they are not acts", () => {
-    const note = { ...h(null, "wait"), label: "DONE", note: "DONE rejected" };
-    expect(noProgress([h(false), note, h(false), h(false)])).toBe(true);
-    expect(noProgress([h(false), h(false), note])).toBe(false);
-    expect(noProgress([note, note, note])).toBe(false);
-  });
 });
 
 describe("fingerprint", () => {

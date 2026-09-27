@@ -71,10 +71,9 @@ export function sameSite(start: string | undefined, host: string | undefined): b
 }
 
 /** 3 consecutive non-WAIT actions whose next read showed no change. A stale
- *  entry never acted, and a refused verdict is not an act: neither counts
- *  nor breaks the run of three. */
+ *  entry never acted: it neither counts nor breaks the run of three. */
 export function noProgress(history: HistoryEntry[]): boolean {
-  const last = history.filter((h) => h.stale === undefined && h.note === undefined).slice(-3);
+  const last = history.filter((h) => h.stale === undefined).slice(-3);
   return last.length === 3 && last.every((h) => h.op !== "wait" && h.pageChanged === false);
 }
 
