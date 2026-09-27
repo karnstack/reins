@@ -9,6 +9,7 @@ import {
   actionablePoint,
   drivePage,
   ensureVisible,
+  openLinkTab,
   PRESS_MISSED,
   pressAt,
   resolveTabId,
@@ -252,7 +253,7 @@ async function awaitOpenedTab(tabId: number): Promise<void> {
   }).catch(() => {}); // a tab that can't be driven is reported all the same
 }
 
-/** Watch for a tab this tab opens (a target=_blank link) while a click runs. */
+/** Watch for a tab this tab opens from script while a click runs. */
 function watchOpenedTab(tabId: number): { get: () => number | undefined; stop: () => void } {
   let opened: number | undefined;
   const onCreated = (tab: chrome.tabs.Tab) => {
@@ -467,13 +468,18 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
     if (!ACTIONABILITY_REFUSAL.test(reason)) throw err;
     return { stale: true, reason };
   }
-  // A click may open a new tab (target=_blank): the run follows it, so the
-  // tab is reported — and brought forward, since Chrome may open it behind.
+  // A click may open a new tab: the run follows it, so the tab is reported.
+  // A link to a new tab (target=_blank) is opened by the extension itself
+  // (pressAt's newTabUrl, from the probe that cancelled the link's own
+  // navigation — which would raise Chrome's window over the user's app); a
+  // tab the page opened from script is caught by the watcher and brought
+  // forward, since Chrome may open it behind.
   const opened = params.op === "click" ? watchOpenedTab(tabId) : undefined;
+  let newTabUrl: string | undefined;
   state.pressed = true;
   try {
     try {
-      await pressAt(tabId, point.x, point.y, `node ${node}`);
+      ({ newTabUrl } = await pressAt(tabId, point.x, point.y, `node ${node}`));
     } catch (err) {
       // The press was seen landing on another element: the page moved under
       // the pointer and nothing we intended happened — re-read, as for a
@@ -495,7 +501,7 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
   } finally {
     opened?.stop();
   }
-  const openedTabId = opened?.get();
+  const openedTabId = newTabUrl !== undefined ? await openLinkTab(tabId, newTabUrl) : opened?.get();
   if (openedTabId === undefined) return { ok: true };
   await chrome.tabs.update(openedTabId, { active: true }).catch(() => {});
   await awaitOpenedTab(openedTabId);

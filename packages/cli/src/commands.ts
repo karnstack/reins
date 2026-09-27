@@ -315,7 +315,10 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
         ...(count !== undefined ? { clickCount: count } : {}),
       };
     },
-    format: ok,
+    format: (r) => {
+      const { openedTabId } = r as { openedTabId?: number };
+      return openedTabId === undefined ? "ok" : `ok — opened tab ${openedTabId} (now active)`;
+    },
   },
   type: {
     method: "type",

@@ -254,6 +254,12 @@ otherwise, never guess. `reins browsers` shows who's connected.
   with `reins open`.
 - `click`, `hover`, and `press` bring a background tab to the front: the
   browser only delivers real input to visible tabs.
+- `click` on a link that opens a new tab (`target="_blank"`) opens that tab
+  itself, next to the current one and active, and prints
+  `ok — opened tab <id> (now active)` — use that id with `--tab`. (Letting
+  the link open it would raise Chrome's window over whatever the user is
+  working in.) A tab the page opens from script (`window.open`) is Chrome's
+  own and may still bring Chrome to the front.
 - Commands can fail with `blocked by policy: <host> is read-only/denied`.
   The user's site-permission policy blocks that action tier. Do not retry
   and do not try to change the policy yourself — `reins policy` can only

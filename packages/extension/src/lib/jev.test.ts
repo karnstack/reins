@@ -19,12 +19,17 @@ function stubChrome(tab?: { url?: string; title?: string; status?: string }) {
   const sendCommand = vi.fn();
   const created: Array<(t: chrome.tabs.Tab) => void> = [];
   const updated: Array<[number, unknown]> = [];
+  const opened: unknown[] = [];
   const detached: Array<(s: { tabId?: number }) => void> = [];
   vi.stubGlobal("chrome", {
     tabs: {
       get: vi.fn(async () => {
         if (!tab) throw new Error("No tab with id");
         return tab;
+      }),
+      create: vi.fn(async (props: unknown) => {
+        opened.push(props);
+        return { id: 9 };
       }),
       update: vi.fn(async (id: number, props: unknown) => {
         updated.push([id, props]);
@@ -56,6 +61,7 @@ function stubChrome(tab?: { url?: string; title?: string; status?: string }) {
     },
     created,
     updated,
+    opened,
     sendCommand,
   };
 }
@@ -374,6 +380,34 @@ describe("jevAct", () => {
       "https://docs.x.com/ loading",
       "https://docs.x.com/ interactive",
     ]);
+  });
+
+  it("opens the tab a new-tab link would have (next to the opener, active) and follows it", async () => {
+    // The probe cancelled the link's own navigation, which would raise
+    // Chrome's window over the user's app, and handed back its href.
+    const { updated, opened, sendCommand } = stubChrome({ url: "https://x.com/" });
+    (chrome.tabs.get as ReturnType<typeof vi.fn>).mockResolvedValue({ windowId: 1, index: 2 });
+    const page = pageAnswers({
+      onProbe: async () => ({
+        result: { value: { state: "hit", newTabUrl: "https://docs.x.com/" } },
+      }),
+    });
+    sendCommand.mockImplementation(
+      async (target: { tabId: number }, method: string, params?: Record<string, unknown>) => {
+        if (target.tabId === 9 && method === "Runtime.evaluate") {
+          return { result: { value: { href: "https://docs.x.com/", ready: "complete" } } };
+        }
+        return page(target, method, params as { expression?: string; type?: string });
+      },
+    );
+    await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toEqual({
+      ok: true,
+      openedTabId: 9,
+    });
+    expect(opened).toEqual([
+      { url: "https://docs.x.com/", windowId: 1, index: 3, openerTabId: 3, active: true },
+    ]);
+    expect(updated).toEqual([[9, { active: true }]]);
   });
 
   it("gives up waiting for a tab that never loads, and still hands it over", async () => {

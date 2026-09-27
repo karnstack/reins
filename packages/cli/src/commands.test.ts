@@ -256,6 +256,8 @@ describe("TOOL_COMMANDS: formatting", () => {
 
   it("open/nav/eval/text/cdp print their payloads", () => {
     expect(format("open", { tabId: 7 })).toBe("opened tab 7");
+    expect(format("click", { ok: true })).toBe("ok");
+    expect(format("click", { ok: true, openedTabId: 9 })).toBe("ok — opened tab 9 (now active)");
     expect(format("nav", { url: "https://x/" })).toBe("→ https://x/");
     expect(format("eval", { value: { a: 1 } })).toBe(JSON.stringify({ a: 1 }, null, 2));
     expect(format("text", { text: "hello" })).toBe("hello");

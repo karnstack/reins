@@ -1,5 +1,6 @@
 import type {
   ClickParams,
+  ClickResult,
   EvalParams,
   NavigateParams,
   OpenTabParams,
@@ -398,6 +399,25 @@ export async function actionablePoint(
 /** pressAt's refusal when the press was seen landing on another element. */
 export const PRESS_MISSED = /landed on .+ instead — the page changed under the pointer/;
 
+/**
+ * Open `url` — a link's cancelled new-tab navigation — as the tab a click on
+ * the link would have opened: next to the opener, active, owing it as opener.
+ * chrome.tabs.create shows the tab inside Chrome without raising Chrome's
+ * window over the app the user is working in, which the link's own
+ * navigation would have done.
+ */
+export async function openLinkTab(tabId: number, url: string): Promise<number | undefined> {
+  const opener = await chrome.tabs.get(tabId);
+  const created = await chrome.tabs.create({
+    url,
+    windowId: opener.windowId,
+    index: opener.index + 1,
+    openerTabId: tabId,
+    active: true,
+  });
+  return created.id;
+}
+
 export async function pressAt(
   tabId: number,
   x: number,
@@ -405,7 +425,7 @@ export async function pressAt(
   what: string,
   button: "left" | "right" | "middle" = "left",
   clickCount = 1,
-): Promise<void> {
+): Promise<{ newTabUrl?: string }> {
   // CDP synthesizes a real click only when the pressed-button bitmask is set
   // (button alone isn't enough — the target never sees a `click`). Move the
   // pointer first so hit-testing lands on the element under (x, y).
@@ -435,16 +455,26 @@ export async function pressAt(
       `click on ${what} landed on ${probe.by} instead — the page changed under the pointer. Re-snapshot and retry.`,
     );
   }
+  // The press activated a link to a new tab: the probe cancelled the link's
+  // own navigation (it would raise Chrome's window over the user's app) and
+  // the caller opens the URL as a tab itself — see actionPoint.
+  return probe?.newTabUrl !== undefined ? { newTabUrl: probe.newTabUrl } : {};
 }
 
-export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
+export async function cdpClick(params: ClickParams): Promise<ClickResult> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
+  const button = params.button ?? "left";
+  const clickCount = params.clickCount ?? 1;
   return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     const { x, y } = await actionablePoint(tabId, css, "click", true);
-    await pressAt(tabId, x, y, css, params.button ?? "left", params.clickCount ?? 1);
-    return { ok: true };
+    const { newTabUrl } = await pressAt(tabId, x, y, css, button, clickCount);
+    if (newTabUrl === undefined) return { ok: true };
+    // The user sees the new tab as after a normal click, without Chrome
+    // raising its window over the app they are working in.
+    const openedTabId = await openLinkTab(tabId, newTabUrl);
+    return openedTabId === undefined ? { ok: true } : { ok: true, openedTabId };
   });
 }
 

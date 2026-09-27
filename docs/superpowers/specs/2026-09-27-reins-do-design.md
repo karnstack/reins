@@ -251,12 +251,28 @@ the loop issues `jev_observe` / `jev_act` through the existing
 A `stale` act (target gone, covered, moving) uses no step but is remembered:
 the history Jev sees carries `could not <op> "<label>": <reason>`, and three
 stale acts in a row stop the run as `stuck`. A click that opens a new tab
-(`target=_blank`) comes back with `openedTabId`; the extension brings that
-tab forward (before any policy check on its host: activation is not a page
-action, and a denied host still fails at the next observe) and waits, bounded,
-for its document to load, and the run follows it — every later observe/act, the stored run
+comes back with `openedTabId`; the extension brings that tab forward (before
+any policy check on its host: activation is not a page action, and a denied
+host still fails at the next observe) and waits, bounded, for its document
+to load, and the run follows it — every later observe/act, the stored run
 (`browserId:<newTab>`), the result's `tabId` and every `next:` line use the
 new tab. The site rule applies to the new tab's host as to any observation.
+
+A link to a new tab (`<a target=_blank>`, or any target that is not
+`_self`/`_parent`/`_top` or the name of a frame in the page, `<base target>`
+included) is never left to Chrome: a trusted click on one opens a foreground
+tab *and* activates Chrome over whatever app the user is working in (a
+⌘/Ctrl-click only moves the tab behind; the window is still raised). The
+pointer probe armed for the click also listens for the `click` on `window`,
+last in line so the page's own handlers run first and see an ordinary click;
+if none cancelled it, the probe cancels the link's navigation and reports
+the resolved href, and the extension opens it with `chrome.tabs.create`
+(next to the opener, active, owing it as opener), which shows the tab inside
+Chrome without raising its window. `reins click` does the same and reports
+`ok — opened tab <id> (now active)` (`ClickResult.openedTabId`, optional).
+Out of scope, and still able to raise Chrome: tabs a page opens from script
+(`window.open` in a handler), and a link whose page stops the click's
+propagation before it reaches `window`.
 
 State sent to Jev per request: goal; url, title; visible viewport text
 (capped at 6,000 chars); elements (index, role, label, value,

@@ -50,7 +50,7 @@ const FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <button id="zero" style="width:0;height:0;padding:0;border:0"></button>
 <button id="off" disabled>disabled</button>
 <button id="pulse">pulsing</button>
-<iframe id="frame" style="width:200px;height:60px;border:0"
+<iframe id="frame" name="framed" style="width:200px;height:60px;border:0"
   srcdoc="<body style='margin:0'><button id=framed style='width:200px;height:60px' onclick='parent.__log.push(&quot;framed&quot;)'>in frame</button></body>"></iframe>
 <div class="spacer"></div>
 <button id="below">below the fold</button>
@@ -60,6 +60,10 @@ const FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <button id="anim">animating</button>
 <div id="host" style="display:inline-block"></div>
 <form id="form"><input id="field"><button id="submit">submit</button></form>
+<a id="blank" href="/" target="_blank">new tab</a>
+<a id="wrapped" href="/" target="_blank"><span id="inner-span">span in a new-tab link</span></a>
+<a id="framed-link" href="/" target="framed">into the frame</a>
+<a id="plain" href="#plain">same tab</a>
 <div class="spacer"></div>
 <script>
   window.__log = [];
@@ -157,6 +161,8 @@ const openedTargets: string[] = [];
 let pageTargetId = "";
 const tabCreatedListeners: Array<(tab: chrome.tabs.Tab) => void> = [];
 const activated: Array<[number, unknown]> = [];
+/** What the extension asked chrome.tabs.create for. */
+const createdTabs: unknown[] = [];
 let server: http.Server | undefined;
 let slowServer: http.Server | undefined;
 let slowUrl = "";
@@ -333,14 +339,14 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     sock.on("message", (data) => {
       const msg = JSON.parse(String(data));
       if (msg.id === undefined && msg.method) {
-        // A tab our page opened: what chrome.tabs.onCreated would report.
+        // A tab opened from our page — by the page itself or by the stubbed
+        // chrome.tabs.create on its behalf: what chrome.tabs.onCreated would
+        // report. The fixture tab is the only page here, so every other page
+        // target is one of these. (DevTools names an `openerId` only for a
+        // tab the renderer created, so it can't tell them apart.)
         if (msg.method === "Target.targetCreated") {
-          const info = msg.params.targetInfo as {
-            targetId: string;
-            type: string;
-            openerId?: string;
-          };
-          if (info.type === "page" && info.openerId === pageTargetId) {
+          const info = msg.params.targetInfo as { targetId: string; type: string };
+          if (info.type === "page" && info.targetId !== pageTargetId) {
             openedTargets.push(info.targetId);
             const tab = { id: 100 + openedTargets.length, openerTabId: 1, active: false };
             for (const fn of tabCreatedListeners) fn(tab as chrome.tabs.Tab);
@@ -396,8 +402,26 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
           activated.push([id, props]);
           return {};
         },
-        // What the extension would read while a dialog blocks CDP.
-        get: async () => ({ url: new URL("/jev", url).href, title: "jev fixture" }),
+        // What the extension would read while a dialog blocks CDP, and the
+        // opener's place for a tab it creates.
+        get: async () => ({
+          url: new URL("/jev", url).href,
+          title: "jev fixture",
+          windowId: 1,
+          index: 0,
+        }),
+        // A tab the extension opens for a new-tab link: a real page target,
+        // numbered as the harness numbers the tabs the fixture opens.
+        create: async (props: { url: string }) => {
+          createdTabs.push(props);
+          const { targetId } = await cdp<{ targetId: string }>("Target.createTarget", {
+            url: props.url,
+          });
+          for (let i = 0; i < 50 && !openedTargets.includes(targetId); i++) {
+            await new Promise((r) => setTimeout(r, 20));
+          }
+          return { id: 101 + openedTargets.indexOf(targetId) };
+        },
         onCreated: {
           addListener: (fn: (tab: chrome.tabs.Tab) => void) => tabCreatedListeners.push(fn),
           removeListener: (fn: (tab: chrome.tabs.Tab) => void) => {
@@ -414,6 +438,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
   afterEach(async () => {
     __resetDebugSessions();
     activated.length = 0;
+    createdTabs.length = 0;
     for (const { identifier, tabId } of injected.splice(0)) {
       const sock = await socketFor(tabId);
       // A tab closed mid-test (a navigation away) has no scripts left to drop.
@@ -497,6 +522,48 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     await load();
     await click("#host");
     expect(await log()).toEqual(["click:shadowbtn"]);
+  });
+
+  it("opens the tab a new-tab link would have, itself, and reports it", async () => {
+    // A trusted click on target=_blank makes Chrome open a foreground tab
+    // *and* raise its window over the app the user is in. The probe cancels
+    // the link's own navigation once the page's handlers have run, and the
+    // extension opens the URL with chrome.tabs.create, which raises nothing.
+    await load();
+    await expect(click("#blank")).resolves.toEqual({ ok: true, openedTabId: 101 });
+    expect(await log()).toEqual(["click:blank"]); // the page's own handler saw the click
+    expect(createdTabs).toEqual([{ url, windowId: 1, index: 1, openerTabId: 1, active: true }]);
+    expect(openedTargets).toHaveLength(1); // ours; the link opened none of its own
+    expect(await evaluate<string>("location.href")).toBe(url); // and didn't navigate here
+  });
+
+  it("a click inside a new-tab link (a span in the anchor) opens the tab the same way", async () => {
+    await load();
+    await expect(click("#inner-span")).resolves.toEqual({ ok: true, openedTabId: 101 });
+    expect(await log()).toEqual(["click:inner-span"]); // the probe saw the press land
+    expect(createdTabs).toHaveLength(1);
+    expect(openedTargets).toHaveLength(1);
+  });
+
+  it("a button, a same-tab link and a link into a named frame are left to the page", async () => {
+    await load();
+    await expect(click("#top")).resolves.toEqual({ ok: true });
+    await expect(click("#framed-link")).resolves.toEqual({ ok: true });
+    await expect(click("#plain")).resolves.toEqual({ ok: true }); // last: its hash jump smooth-scrolls
+    expect(createdTabs).toEqual([]);
+    expect(openedTargets).toHaveLength(0);
+    expect(await evaluate<string>("location.hash")).toBe("#plain"); // the same-tab link navigated
+  });
+
+  it("a new-tab link the page handles itself (preventDefault) is the page's business", async () => {
+    await load();
+    await evaluate(
+      `document.getElementById("blank").addEventListener("click", (e) => { e.preventDefault(); __log.push("handled"); })`,
+    );
+    await expect(click("#blank")).resolves.toEqual({ ok: true });
+    expect(await log()).toEqual(["click:blank", "handled"]);
+    expect(createdTabs).toEqual([]);
+    expect(openedTargets).toHaveLength(0);
   });
 
   it("names what covers the element instead of clicking it", async () => {
@@ -864,6 +931,11 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       ok: true,
       openedTabId: 101,
     });
+    // Opened by the extension (the link's own navigation would raise
+    // Chrome's window over the user's app), active, next to the opener.
+    expect(createdTabs).toEqual([
+      { url: new URL("/jev", url).href, windowId: 1, index: 1, openerTabId: 1, active: true },
+    ]);
     expect(activated).toEqual([[101, { active: true }]]);
     expect(tabCreatedListeners).toEqual([]); // the watcher is gone after the act
     expect(openedTargets).toHaveLength(1);

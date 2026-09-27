@@ -9,8 +9,16 @@
 /** Where to put the pointer, or why there's nowhere safe to put it. */
 export type ActionPoint = { x: number; y: number } | { error: string };
 
-/** What the armed pointer probe saw; null when the page navigated away. */
-export type ProbeResult = { state: "hit" } | { state: "none" } | { state: "missed"; by: string };
+/**
+ * What the armed pointer probe saw; null when the page navigated away.
+ * `newTabUrl`: the press activated a link to a new tab, whose own navigation
+ * the probe cancelled — the caller opens this URL in a tab itself.
+ */
+export type ProbeResult = (
+  | { state: "hit" }
+  | { state: "none" }
+  | { state: "missed"; by: string }
+) & { newTabUrl?: string };
 
 /**
  * Scroll `selector` into view, wait until it stops moving, and confirm a
@@ -28,6 +36,18 @@ export type ProbeResult = { state: "hit" } | { state: "none" } | { state: "misse
  *
  * With `node`, the target is the Jev node cache entry (`reins do` observed it
  * by id); `selector` then only names it in messages.
+ *
+ * A click target inside an `<a href target=_blank>` (or any link whose
+ * effective target, including a `<base target>`, names no frame of this page)
+ * also gets a click interceptor: Chrome answers a trusted click on such a
+ * link with a foreground tab *and* activates itself over whatever app the
+ * user is working in (a ⌘/Ctrl-click only moves the tab behind; the window
+ * is still raised). The interceptor, last in line on `window` so the page's
+ * own handlers run first and see an ordinary click, cancels the link's
+ * navigation and records its resolved href in the probe; the extension then
+ * opens that URL with chrome.tabs.create, which raises nothing. A page that
+ * stops the click's propagation keeps Chrome's own behaviour, and links a
+ * page opens from script (window.open in a handler) are out of this sight.
  */
 export async function actionPoint(
   selector: string,
@@ -52,6 +72,34 @@ export async function actionPoint(
     const cls = typeof n.className === "string" ? n.className.trim().split(/\s+/) : [];
     if (cls[0]) s += `.${cls.slice(0, 2).join(".")}`;
     return s;
+  };
+  // The link a click on `el` activates, if any: the nearest enclosing <a>/<area>
+  // with an href, looked up through shadow hosts (closest() stops at a root).
+  const enclosingLink = (start: Element): Element | null => {
+    for (let n: Node | null = start; n; ) {
+      if (n instanceof Element && /^(a|area)$/.test(n.localName) && n.hasAttribute("href")) {
+        return n;
+      }
+      n = n.parentNode ?? (n instanceof ShadowRoot ? n.host : null);
+    }
+    return null;
+  };
+  // Does activating this link open a new browsing context? Its target (or the
+  // document's <base target>) is neither a self/ancestor keyword nor the name
+  // of a frame in this document. A download link never opens a tab.
+  const opensNewTab = (link: Element): boolean => {
+    if (link.hasAttribute("download")) return false;
+    const target = (
+      link.getAttribute("target") ??
+      document.querySelector("base[target]")?.getAttribute("target") ??
+      ""
+    ).trim();
+    if (target === "" || /^_(self|parent|top)$/i.test(target)) return false;
+    if (target.toLowerCase() === "_blank") return true;
+    for (const f of document.querySelectorAll("iframe[name], frame[name]")) {
+      if (f.getAttribute("name") === target) return false;
+    }
+    return true;
   };
   const deadline = performance.now() + timeoutMs;
   // The element's rect, read in the next animation frame. rAF never fires in
@@ -153,9 +201,30 @@ export async function actionPoint(
                   : { state: "missed", by: describe(at instanceof Element ? at : null) };
             };
             window.addEventListener("pointerdown", onDown, { capture: true, once: true });
+            const link = enclosingLink(el);
+            const onClick =
+              link && opensNewTab(link)
+                ? (e: Event) => {
+                    // Only the click that activates this link; one the page
+                    // already cancelled is its own to handle.
+                    const me = e as MouseEvent;
+                    if (me.button !== 0 || me.defaultPrevented) return;
+                    if (!e.composedPath().includes(link)) return;
+                    e.preventDefault();
+                    const { href } = link as { href?: unknown }; // an SVG <a> has an animated one
+                    state.result.newTabUrl =
+                      typeof href === "string"
+                        ? href
+                        : new URL(link.getAttribute("href") ?? "", document.baseURI).href;
+                  }
+                : null;
+            if (onClick) window.addEventListener("click", onClick);
             (window as unknown as Record<symbol, unknown>)[Symbol.for("reins.pointerProbe")] = {
               state,
-              cancel: () => window.removeEventListener("pointerdown", onDown, true),
+              cancel: () => {
+                window.removeEventListener("pointerdown", onDown, true);
+                if (onClick) window.removeEventListener("click", onClick);
+              },
             };
           }
           return { x, y };

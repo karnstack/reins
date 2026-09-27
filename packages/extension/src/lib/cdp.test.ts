@@ -213,6 +213,7 @@ describe("cdpClick", () => {
     const events: Array<Record<string, unknown>> = [];
     const visible = [...(opts.visible ?? [true])];
     const update = vi.fn(async () => ({}));
+    const create = vi.fn(async () => ({ id: 41 }));
     vi.stubGlobal("chrome", {
       debugger: {
         attach: vi.fn(async () => {}),
@@ -236,10 +237,10 @@ describe("cdpClick", () => {
           return { result: { value: null } };
         }),
       },
-      tabs: { update },
+      tabs: { update, create, get: vi.fn(async () => ({ id: 7, windowId: 2, index: 4 })) },
     });
     initDebugSessionListeners();
-    return { events, update };
+    return { events, update, create };
   }
 
   it("moves, presses with the left-button bitmask, then releases", async () => {
@@ -263,6 +264,35 @@ describe("cdpClick", () => {
       clickCount: 1,
     });
     expect(events[2]).toMatchObject({ type: "mouseReleased", button: "left", clickCount: 1 });
+  });
+
+  it("opens the tab a new-tab link would have, next to the opener and active", async () => {
+    // The probe cancelled the link's own navigation (which raises Chrome's
+    // window over the user's app) and reported its href; the extension opens
+    // it with chrome.tabs.create, which shows the tab without raising Chrome.
+    const { create, update } = stubClickChrome({
+      probe: { state: "hit", newTabUrl: "https://docs.example/start" },
+    });
+    expect(await cdpClick({ tabId: 7, ref: "e1", button: "left", clickCount: 1 })).toEqual({
+      ok: true,
+      openedTabId: 41,
+    });
+    expect(create).toHaveBeenCalledWith({
+      url: "https://docs.example/start",
+      windowId: 2,
+      index: 5,
+      openerTabId: 7,
+      active: true,
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("a click that opened no new-tab link is a plain ok", async () => {
+    const { create } = stubClickChrome();
+    expect(await cdpClick({ tabId: 7, ref: "e1", button: "left", clickCount: 1 })).toEqual({
+      ok: true,
+    });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("uses the right-button bitmask for a right click", async () => {

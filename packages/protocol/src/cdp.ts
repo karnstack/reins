@@ -76,6 +76,14 @@ export type TypeParams = z.infer<typeof TypeParams>;
 export const OkResult = z.object({ ok: z.literal(true) });
 export type OkResult = z.infer<typeof OkResult>;
 
+/**
+ * `openedTabId`: the click was on a link to a new tab. The extension opened
+ * that tab itself, next to the clicked one and active — the link's own
+ * navigation would have raised Chrome's window over the app the user is in.
+ */
+export const ClickResult = OkResult.extend({ openedTabId: z.number().optional() });
+export type ClickResult = z.infer<typeof ClickResult>;
+
 export const OpenTabParams = z.object({
   browserId,
   url: z.string().min(1),
