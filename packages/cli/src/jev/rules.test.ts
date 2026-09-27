@@ -53,6 +53,13 @@ describe("riskyReason", () => {
     expect(riskyReason(click("Pay (now)"), "pay (now) please", [])).toBeUndefined();
   });
 
+  it("an underscore is not a word boundary in the goal", () => {
+    expect(riskyReason(click("Pay"), "pay_now", [])).toBeDefined();
+    expect(riskyReason(click("Pay"), "click_pay", [])).toBeDefined();
+    expect(riskyReason(click("Send"), "send_form_now", [])).toBeDefined();
+    expect(riskyReason(click("Pay"), "pay _now", [])).toBeUndefined();
+  });
+
   it("non-ASCII letters are not word boundaries in the goal", () => {
     expect(riskyReason(click("Pay"), "prépay the bill", [])).toBeDefined();
     expect(riskyReason(click("Pay"), "日本語pay", [])).toBeDefined();
