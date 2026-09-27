@@ -9,7 +9,7 @@ export const Route = createFileRoute("/docs/commands")({
     ...seo({
       title: "Commands · reins",
       description:
-        "The full reins command reference: tabs, snapshot, click, type, fill, screenshot, console, network, eval, and raw Chrome DevTools Protocol access.",
+        "The full reins command reference: do (delegate a task to Jev), tabs, snapshot, click, type, fill, screenshot, console, network, eval, and raw Chrome DevTools Protocol access.",
       path: "/docs/commands",
     }),
   }),
