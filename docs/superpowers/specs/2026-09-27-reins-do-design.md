@@ -388,7 +388,14 @@ like a foreground tab.
   work on shadow nodes (`jevSubmitFocus` reads the root's `activeElement`,
   since the document only knows the host); `actionPoint` already hit-tests
   through `shadowRoot.elementFromPoint`. A *closed* root cannot be reached
-  from the page and stays invisible.
+  from the page and stays invisible. Names are composed the way the
+  accessibility tree reads them: an element's own text is what it renders
+  — an open shadow root's children stand in for the host's light children
+  (which only show through slots), and a `<slot>` stands for its assigned
+  nodes (its fallback content when nothing is assigned) — so a
+  web-component option whose words sit in a nested root, or a button whose
+  caption is slotted, is named; a control with no words anywhere stays
+  unnamed and is still refused as risky.
 - Returns `{ url, title, text, visible, elements, fingerprint, pageKey,
   guards, dialog? }`. Nothing tracks dialogs today. Add a per-tab dialog
   flag fed by `chrome.debugger.onEvent` (`Page.javascriptDialogOpening` sets

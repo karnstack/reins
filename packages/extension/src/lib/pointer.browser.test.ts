@@ -112,6 +112,8 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <input id="yr" aria-label="Year" value="2000">
 <site-search id="ss" style="position:fixed;top:0;right:0;background:#fff"></site-search>
 <div id="sealed-host" style="position:fixed;top:40px;right:0"></div>
+<x-listbox id="xl" style="position:fixed;top:80px;right:0;background:#fff"></x-listbox>
+<x-btn id="xb" style="position:fixed;top:120px;right:0;background:#fff">Sort by</x-btn>
 <script>
   window.__log = [];
   // A site's search box built as a web component: its form lives in an open
@@ -120,6 +122,15 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
     root.innerHTML = '<form role="search"><input id="sq" aria-label="Search docs"><button id="sgo" type="submit">Go</button></form><p>Docs search</p>';
     root.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); __log.push("submit:shadow:" + root.getElementById("sq").value); });
     document.getElementById("sealed-host").attachShadow({ mode: "closed" }).innerHTML = '<button id="sealed">Sealed</button>'; }
+  // Web-component controls whose words are not their own light children: an
+  // option whose text sits two shadow roots down, and a button whose caption
+  // arrives through a slot.
+  { const lb = document.getElementById("xl").attachShadow({ mode: "open" });
+    lb.innerHTML = '<ul role="listbox"><x-opt role="option" id="o1"></x-opt></ul>';
+    const o = lb.getElementById("o1").attachShadow({ mode: "open" });
+    o.innerHTML = '<div><span aria-hidden="true">icon</span><x-txt id="t"></x-txt></div>';
+    o.getElementById("t").attachShadow({ mode: "open" }).innerHTML = "Reactive properties";
+    document.getElementById("xb").attachShadow({ mode: "open" }).innerHTML = '<button id="xbi"><slot></slot></button>'; }
   // A field that keeps its own model: keyup writes the value into it, blur
   // writes the model back (a date widget re-deriving its state).
   { let model = "2000"; const yr = document.getElementById("yr");
@@ -722,6 +733,14 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     const go = nodeOf(await snap(), "Go") as number;
     expect(await jevAct({ tabId: 1, op: "click", node: go })).toEqual({ ok: true });
     expect((await log()).filter((l) => l === "submit:shadow:shadow")).toHaveLength(2);
+  });
+
+  it("jev: names a control by the text its shadow root or slot renders", async () => {
+    await load("/jev");
+    const labels = (await snap()).actions.map((a) => `${a.kind}:${a.label}`);
+    expect(labels).toContain("click:Reactive properties"); // option: text two roots down
+    expect(labels).toContain("click:Sort by"); // button: caption slotted from the host
+    expect(labels.filter((l) => l === "click:option" || l === "click:button")).toEqual([]);
   });
 
   it("jev: a node keeps its id across snapshots", async () => {

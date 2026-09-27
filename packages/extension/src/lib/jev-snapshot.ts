@@ -85,6 +85,14 @@ export function jevSnapshot(): {
   const visible = (e: Element) =>
     !ancestor(e, '[aria-hidden="true"],[inert]') &&
     e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+  /** What an element renders, the way the accessibility tree reads it: an
+   *  open shadow root's children stand in for the host's own (which only
+   *  show through slots), and a slot stands for what is assigned to it. */
+  const rendered = (e: Element): Node[] => {
+    if (e.shadowRoot) return [...e.shadowRoot.childNodes];
+    if (e instanceof HTMLSlotElement) return e.assignedNodes({ flatten: true });
+    return [...e.childNodes];
+  };
   const name = (e: Element | null, seen = new Set<Element>()): string => {
     if (!e || seen.has(e)) return "";
     seen.add(e);
@@ -105,10 +113,12 @@ export function jevSnapshot(): {
         ? input.value
         : "") ||
       e.getAttribute("alt") ||
-      // A select's options are not its name.
+      // A select's options are not its name. Text is read through open
+      // shadow roots and slots, so a web-component option or button whose
+      // words sit in its own root (or come in through a slot) is named.
       (e.tagName === "INPUT" || e.tagName === "SELECT"
         ? ""
-        : [...e.childNodes]
+        : rendered(e)
             .map((n) =>
               n.nodeType === 3
                 ? (n.textContent ?? "")
