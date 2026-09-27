@@ -133,6 +133,9 @@ export async function runLoop(
 
   let obs = input.first;
   let first = true;
+  // The read after a retarget is of a tab the extension just brought
+  // forward; if that failed, it must not read as the user switching away.
+  let retargeted = false;
   try {
     for (;;) {
       if (input.signal.aborted) return aborted();
@@ -183,9 +186,10 @@ export async function runLoop(
       if (run.lockedFingerprint !== undefined && run.lockedFingerprint !== fp) {
         delete run.lockedFingerprint;
       }
-      if (!obs.visible && !first) {
+      if (!obs.visible && !first && !retargeted) {
         return stop("interrupted", { reason: "the tab was hidden (did you switch tabs?)" });
       }
+      retargeted = false;
       const host = hostOf(obs.url);
       // A run that began on about:blank / file:// / an error page has no
       // start host yet: the first http(s) page it reaches becomes the site.
@@ -277,7 +281,10 @@ export async function runLoop(
       }
       staleRun = 0;
       const openedTabId = "openedTabId" in res ? res.openedTabId : undefined;
-      if (openedTabId !== undefined) deps.retarget?.(openedTabId);
+      if (openedTabId !== undefined) {
+        deps.retarget?.(openedTabId);
+        retargeted = true;
+      }
 
       if (op === "click" || op === "submit") {
         const i = run.confirms.findIndex((c) => normalizeLabel(c) === normalizeLabel(action.label));

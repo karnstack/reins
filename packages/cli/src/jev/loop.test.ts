@@ -267,6 +267,51 @@ describe("runLoop", () => {
     expect(result.steps[0]).toMatchObject({ op: "click", label: "Docs", openedTabId: 9 });
   });
 
+  it("a dialog that beat a stale act is not that act's page change", async () => {
+    const d = deps(
+      [page([button(1, "Go")]), page([], { dialog: { type: "alert", message: "!" } })],
+      [{ op: "CLICK", target: "1" }],
+    );
+    d.act.mockResolvedValueOnce({ stale: true, reason: "a dialog opened before the action" });
+    const { result, run } = await runLoop(d, input());
+    expect(result).toMatchObject({ status: "dialog", pageChanges: 0, steps: [] });
+    expect(run.history[0]).toMatchObject({
+      stale: "a dialog opened before the action",
+      pageChanged: null,
+    });
+  });
+
+  it("a trailing stale act does not switch the --continue breaker off", async () => {
+    const run = { ...newRun("find flights", "x.com", {}, [], 0), step: 5 };
+    const d = deps(
+      [page([button(1, "Next")])],
+      [{ op: "CLICK", target: "1" }, { op: "CLICK", target: "1" }, { op: "BLOCKED" }],
+    );
+    d.act
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ stale: true, reason: "gone" });
+    const { result, run: after } = await runLoop(d, input({ run, continued: true }));
+    expect(result.status).toBe("stuck");
+    expect(result.reason).toContain("ran 1 action and none changed the page");
+    expect(after.lockedFingerprint).toBeDefined();
+  });
+
+  it("the first read of a tab the click opened is never 'the tab was hidden'", async () => {
+    const d = {
+      ...deps(
+        [
+          page([button(1, "Docs")]),
+          page([button(2, "x")], { url: "https://docs.x.com/", visible: false }),
+        ],
+        [{ op: "CLICK", target: "1" }, { op: "DONE" }],
+      ),
+      retarget: vi.fn(),
+    };
+    d.act.mockResolvedValueOnce({ ok: true, openedTabId: 9 });
+    const { result } = await runLoop(d, input());
+    expect(result.status).toBe("done");
+  });
+
   it("three stale results in a row are stuck, without using a step", async () => {
     const d = deps(
       [page([button(1, "Next")])],
