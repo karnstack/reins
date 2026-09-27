@@ -79,6 +79,9 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
   #hide { display: none }
 </style></head><body>
 <h1>Flights</h1>
+<table><tr><td>Start Date</td><td><table><tr><td><select id="sm"><option>Jan</option><option>Feb</option></select></td><td><input id="sy" title="Year"></td></tr></table></td></tr>
+<tr><td>End Date</td><td><input id="ey" title="Year"></td></tr></table>
+<fieldset><legend>Shipping</legend><input id="ship"></fieldset>
 <form id="f">
   <label for="from">Where from?</label><input id="from" value="San Francisco">
   <input id="to" aria-label="Where to?">
@@ -675,6 +678,16 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(consent("Accept invitation")).toBeUndefined(); // a dialog about something else
     expect(consent("Accept")).toBeUndefined(); // no banner around it
     expect(consent("Search")).toBeUndefined(); // not an accept label
+  });
+
+  it("jev: an unlabelled control is named by its row or group, never by its options", async () => {
+    await load("/jev");
+    const labels = (await snap()).actions.map((a) => `${a.kind}:${a.label}`);
+    expect(labels).toContain("select:Start Date → Feb"); // the outer row's first cell
+    expect(labels).toContain("fill:Start Date: Year"); // context + the weak title name
+    expect(labels).toContain("fill:End Date: Year");
+    expect(labels).toContain("fill:Shipping"); // the fieldset's legend
+    expect(labels.join()).not.toMatch(/Jan Feb/); // options are not a name
   });
 
   it("jev: a node keeps its id across snapshots", async () => {

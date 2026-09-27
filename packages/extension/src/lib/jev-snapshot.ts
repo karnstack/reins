@@ -84,7 +84,8 @@ export function jevSnapshot(): {
         ? input.value
         : "") ||
       e.getAttribute("alt") ||
-      (e.tagName === "INPUT"
+      // A select's options are not its name.
+      (e.tagName === "INPUT" || e.tagName === "SELECT"
         ? ""
         : [...e.childNodes]
             .map((n) =>
@@ -95,10 +96,58 @@ export function jevSnapshot(): {
                   : "",
             )
             .join(" ")) ||
-      e.getAttribute("title") ||
-      e.getAttribute("placeholder") ||
       "";
-    return raw.replace(/\s+/g, " ").trim();
+    const own = raw.replace(/\s+/g, " ").trim();
+    if (own) return own;
+    // No label of its own: a title or placeholder is a weak name, and a form
+    // control gets the row or group it sits in — the first cell of an
+    // enclosing table row that is not its own, a fieldset's legend, a
+    // labelled group — so "Year" under "Start Date" and "Year" under "End
+    // Date" read apart, and an unlabelled select is not just "combobox".
+    const weak = (e.getAttribute("title") || e.getAttribute("placeholder") || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!e.matches("input,select,textarea")) return weak;
+    const ctx = context(e);
+    return ctx ? (weak ? `${ctx}: ${weak}` : ctx) : weak;
+  };
+  // A cell's own words: what a person reads as the row's label. Controls in
+  // the cell (a select's options, a button's caption) are not that label.
+  const cellText = (cell: Element): string => {
+    let out = "";
+    const walk = (n: Node) => {
+      if (n.nodeType === 3) out += `${n.textContent ?? ""} `;
+      else if (n.nodeType === 1) {
+        const el = n as Element;
+        if (
+          /^(SELECT|INPUT|TEXTAREA|BUTTON|SCRIPT|STYLE)$/.test(el.tagName) ||
+          el.getAttribute("aria-hidden") === "true"
+        )
+          return;
+        for (const c of el.childNodes) walk(c);
+      }
+    };
+    walk(cell);
+    return out.replace(/\s+/g, " ").trim();
+  };
+  const context = (e: Element): string => {
+    for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+      if (p.tagName === "TR") {
+        for (const cell of p.children) {
+          if (cell.contains(e)) continue;
+          const t = cellText(cell);
+          if (t && t.length <= 60) return t;
+        }
+      } else if (p.tagName === "FIELDSET") {
+        const legend = p.querySelector(":scope > legend");
+        const t = legend ? name(legend) : "";
+        if (t) return t;
+      } else if (p.getAttribute("role") === "group") {
+        const t = name(p);
+        if (t) return t;
+      }
+    }
+    return "";
   };
   const roles = [
     "button",

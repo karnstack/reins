@@ -334,6 +334,16 @@ like a foreground tab.
   recursive label names). Node identity lives in an in-page cache under
   `Symbol.for("reins.jev")`, the same pattern as the existing pointer probe.
   It is separate from `reins snapshot`'s `data-reins-ref` (issue #37 may unify).
+- **Names.** A control's label is, in order: `aria-labelledby`,
+  `aria-label`, its `<label>`s, a button input's value, `alt`, its own text
+  (never for an `<input>` or a `<select>` — options are not a name). With
+  none of those, `title`/`placeholder` is a weak name, and a form control
+  (input/select/textarea) also takes the row or group it sits in: the first
+  other cell of an enclosing table row whose own words (controls excluded)
+  are ≤ 60 chars, a fieldset's legend, or a labelled `role=group` —
+  prefixed to the weak name ("Start Date: Year") or used alone ("Start
+  Date" for an unlabelled select). So two "Year" inputs in different rows
+  read apart, and an unlabelled select is not just its role.
 - Returns `{ url, title, text, visible, elements, fingerprint, pageKey,
   guards, dialog? }`. Nothing tracks dialogs today. Add a per-tab dialog
   flag fed by `chrome.debugger.onEvent` (`Page.javascriptDialogOpening` sets
