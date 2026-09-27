@@ -92,6 +92,13 @@ describe("credentials file", () => {
     expect(readKey(dir)).toBe("ts_live_abcd1234");
   });
 
+  it("clear removes a corrupt file: it is the documented remedy", () => {
+    writeFileSync(credentialsPath(dir), "{not json");
+    clearKey(dir);
+    expect(existsSync(credentialsPath(dir))).toBe(false);
+    expect(readKey(dir)).toBeUndefined();
+  });
+
   it("clear with no file is fine", () => {
     expect(() => clearKey(dir)).not.toThrow();
   });

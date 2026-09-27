@@ -67,7 +67,14 @@ export function writeKey(dir: string, key: string, provider: KeyProvider = "type
 }
 
 export function clearKey(dir: string, provider: KeyProvider = "typesafe"): void {
-  const creds = load(dir);
+  let creds: Credentials;
+  try {
+    creds = load(dir);
+  } catch {
+    // Unreadable: "fix or delete it" — clear is the delete, so do it here
+    // rather than send the user to the file.
+    creds = {};
+  }
   delete creds[provider];
   if (Object.keys(creds).length > 0) {
     save(dir, creds);
