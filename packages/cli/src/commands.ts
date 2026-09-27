@@ -27,6 +27,8 @@ export interface ToolCommand {
   format?(result: unknown, a: ParsedArgs): string;
   /** How long the CLI waits for the daemon's answer (default 30 s). */
   timeoutMs?(params: Record<string, unknown>): number;
+  /** What a daemon timeout may mean for this command (e.g. "the run may still be finishing"). */
+  timeoutHint?: string;
   /** Process exit code for a successful call (default 0). */
   exitCode?(result: unknown): number;
 }
@@ -282,6 +284,7 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
     // The loop cuts itself off at --timeout, but the jev_act in flight at that
     // moment can still take one full bridge call (30 s) to come back.
     timeoutMs: (p) => (Number(p.timeoutSec ?? 60) + 40) * 1000,
+    timeoutHint: "the run may still be finishing",
     exitCode: (r) => doExitCode(r as DoResult),
     format: (r) => formatDoResult(r as DoResult),
   },

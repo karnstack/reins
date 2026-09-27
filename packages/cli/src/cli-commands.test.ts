@@ -363,7 +363,14 @@ describe("usageText", () => {
 describe("rpcFailure", () => {
   it("turns a fetch timeout into one readable line", () => {
     const err = new DOMException("The operation was aborted due to timeout", "TimeoutError");
-    expect(rpcFailure(err, 100_000).message).toBe(
+    expect(rpcFailure(err, 30_000).message).toBe(
+      "the daemon did not answer within 30s — check `reins logs`",
+    );
+  });
+
+  it("adds the command's own hint", () => {
+    const err = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    expect(rpcFailure(err, 100_000, "the run may still be finishing").message).toBe(
       "the daemon did not answer within 100s — the run may still be finishing; check `reins logs`",
     );
   });

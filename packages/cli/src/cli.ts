@@ -34,6 +34,7 @@ async function rpc(
   method: string,
   params: Record<string, unknown>,
   timeoutMs = 30_000,
+  timeoutHint?: string,
 ): Promise<unknown> {
   const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
     method: "POST",
@@ -41,7 +42,7 @@ async function rpc(
     body: JSON.stringify({ method, params }),
     signal: AbortSignal.timeout(timeoutMs),
   }).catch((err: unknown) => {
-    throw rpcFailure(err, timeoutMs);
+    throw rpcFailure(err, timeoutMs, timeoutHint);
   });
   const body = (await res.json().catch(() => ({}))) as { result?: unknown; error?: string };
   if (!res.ok) throw new Error(body.error ?? `daemon replied ${res.status}`);
@@ -79,6 +80,7 @@ async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<
     cmd.methodFor?.(params) ?? cmd.method,
     params,
     cmd.timeoutMs?.(params),
+    cmd.timeoutHint,
   );
 
   if (name === "screenshot") {

@@ -12,23 +12,12 @@ export interface DaemonHealth {
   browsers: BrowserInfo[];
 }
 
-/** Usage text for `reins help` / unknown commands. */
-/** A `fetch` to the daemon that hit its own deadline: say so in one line
- *  instead of undici's stack. Every other failure passes through. */
-export function rpcFailure(err: unknown, timeoutMs: number): Error {
-  if (err instanceof Error && err.name === "TimeoutError") {
-    return new Error(
-      `the daemon did not answer within ${Math.round(timeoutMs / 1000)}s — the run may still be finishing; check \`reins logs\``,
-    );
-  }
-  return err instanceof Error ? err : new Error(String(err));
-}
-
 /** `reins help <tool>` / `reins <tool> --help`: the usage line and the summary. */
 export function usageText(cmd: ToolCommand): string {
   return `${cmd.usage}\n  ${cmd.summary}`;
 }
 
+/** Usage text for `reins help` / unknown commands. */
 export function helpText(version: string, tools: Record<string, ToolCommand>): string {
   // Floor: the longest management entry, so its summary never runs into the name.
   const width =
@@ -97,6 +86,18 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
 const knownVersion = (v: string) => v !== "0.0.0";
 
 /** A live daemon: its port and last /health reply. */
+/** A `fetch` to the daemon that hit its own deadline: say so in one line
+ *  instead of undici's stack, with the command's own hint (a `reins do` run
+ *  may still be finishing) when it has one. Every other failure passes through. */
+export function rpcFailure(err: unknown, timeoutMs: number, hint?: string): Error {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return new Error(
+      `the daemon did not answer within ${Math.round(timeoutMs / 1000)}s — ${hint ? `${hint}; ` : ""}check \`reins logs\``,
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 export interface Daemon {
   port: number;
   health: DaemonHealth;
