@@ -33,6 +33,7 @@ const OP_OF: Record<Exclude<Operation, "DONE" | "BLOCKED">, StepOp> = {
   CLICK: "click",
   TYPE_TEXT: "type",
   SELECT: "select",
+  SUBMIT_SEARCH: "submit",
   SCROLL_DOWN: "scroll",
   SCROLL_UP: "scroll",
   WAIT: "wait",
@@ -216,12 +217,15 @@ export async function runLoop(
           reason: `Jev chose ${decision.operation}, which this page doesn't offer`,
         });
       }
-      if (decision.operation === "CLICK") {
-        const why = riskyReason(action, run.goal, run.confirms);
+      if (decision.operation === "CLICK" || decision.operation === "SUBMIT_SEARCH") {
+        // Enter in a field is a click on its form's submit: the field's label
+        // gets the same check (a search label won't trip it).
+        const op = decision.operation === "CLICK" ? "click" : "submit";
+        const why = riskyReason({ ...action, kind: "click" }, run.goal, run.confirms);
         if (why) {
           return stop("risky_action", {
-            reason: `next click is ${JSON.stringify(action.label)} (${why})`,
-            pending: { op: "click", label: action.label },
+            reason: `next ${op} is ${JSON.stringify(action.label)} (${why})`,
+            pending: { op, label: action.label },
           });
         }
       }
@@ -252,7 +256,7 @@ export async function runLoop(
       obs = undefined;
       if ("stale" in res) continue; // nothing happened: read again, no step used
 
-      if (op === "click") {
+      if (op === "click" || op === "submit") {
         const i = run.confirms.findIndex((c) => normalizeLabel(c) === normalizeLabel(action.label));
         if (i >= 0) run.confirms.splice(i, 1);
       }

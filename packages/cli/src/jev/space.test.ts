@@ -100,6 +100,55 @@ describe("buildRequest", () => {
   });
 });
 
+describe("SUBMIT_SEARCH", () => {
+  const search = (node: number, value: string, submit = true): JevAction[] =>
+    field(node, "Search", value).map((a) =>
+      a.kind === "fill" && submit ? { ...a, submit: true } : a,
+    );
+
+  it("is absent when no field is submittable", () => {
+    const plan = buildRequest(page([...field(3, "Search", "cats"), button(4, "Go")]), "g", [], {});
+    expect(plan.operations).not.toContain("SUBMIT_SEARCH");
+    expect(plan.body.questions.submit_search_target).toBeUndefined();
+  });
+
+  it("is absent while the submittable field is still empty", () => {
+    const plan = buildRequest(page(search(3, "")), "g", [], {});
+    expect(plan.operations).not.toContain("SUBMIT_SEARCH");
+    expect(actionSpace(search(3, "")).elements[0]?.operations).toEqual(["TYPE_TEXT", "CLICK"]);
+  });
+
+  it("is offered for a submittable field that holds a query, targeting only such fields", () => {
+    const obs = page([...search(3, "cats"), ...field(5, "Message", "hi"), button(4, "Go")]);
+    const plan = buildRequest(obs, "g", [], {});
+    expect(plan.operations).toContain("SUBMIT_SEARCH");
+    expect(Object.keys(plan.space.targets.SUBMIT_SEARCH ?? {})).toEqual(["1"]);
+    expect(plan.space.elements[0]?.operations).toContain("SUBMIT_SEARCH");
+    expect(plan.space.elements[1]?.operations).not.toContain("SUBMIT_SEARCH");
+    const q = plan.body.questions.submit_search_target as { criteria: Record<string, unknown> };
+    expect(Object.keys(q.criteria)).toEqual(["1"]);
+    const ops = plan.body.questions.operation as { criteria: Record<string, string> };
+    expect(ops.criteria.SUBMIT_SEARCH).toMatch(/Press Enter in a search field/);
+  });
+
+  it("interprets a SUBMIT_SEARCH choice as that field", () => {
+    const obs = page([...search(3, "cats"), button(4, "Go")]);
+    const plan = buildRequest(obs, "g", [], {});
+    const d = interpret(
+      {
+        operation: answer("SUBMIT_SEARCH", plan.operations),
+        click_target: answer("1", ["1", "2"]),
+        type_text_target: answer("1", ["1"]),
+        submit_search_target: answer("1", ["1"]),
+      },
+      plan,
+    );
+    expect(d.operation).toBe("SUBMIT_SEARCH");
+    expect(d.action?.node).toBe(3);
+    expect(d.action?.submit).toBe(true);
+  });
+});
+
 describe("interpret", () => {
   const obs = page([...field(3, "Where from?"), ...field(5, "Where to?"), button(4, "Search")]);
   const plan = buildRequest(obs, "Zurich to London", [], { from: "Zurich", to: "London" });

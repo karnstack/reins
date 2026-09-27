@@ -126,6 +126,36 @@ describe("runLoop", () => {
     expect(after.confirms).toEqual([]);
   });
 
+  it("submits a search field with Enter and records the step", async () => {
+    const search: JevAction[] = field(3, "Search").map((a) =>
+      a.kind === "fill" ? { ...a, value: "cats", submit: true } : a,
+    );
+    const d = deps(
+      [page(search), page(search, { url: "https://x.com/results" })],
+      [{ op: "SUBMIT_SEARCH", target: "1" }, { op: "DONE" }],
+    );
+    const { result, run } = await runLoop(d, input());
+    expect(result.status).toBe("done");
+    expect(d.act).toHaveBeenCalledWith({ op: "submit", node: 3, label: "Search" });
+    expect(result.steps).toMatchObject([
+      { n: 1, op: "submit", label: "Search", pageChanged: true },
+    ]);
+    expect(run.history).toMatchObject([{ op: "submit", label: "Search", pageChanged: true }]);
+  });
+
+  it("a submit runs the field's label through the risky-label stop", async () => {
+    const send: JevAction[] = field(3, "Send message").map((a) =>
+      a.kind === "fill" ? { ...a, value: "hi", submit: true } : a,
+    );
+    const d = deps([page(send)], [{ op: "SUBMIT_SEARCH", target: "1" }]);
+    const { result } = await runLoop(d, input());
+    expect(result).toMatchObject({
+      status: "risky_action",
+      pending: { op: "submit", label: "Send message" },
+    });
+    expect(d.act).not.toHaveBeenCalled();
+  });
+
   it("types the fill Jev matched to that field", async () => {
     const run = newRun("Zurich to London", "x.com", { from: "Zurich", to: "London" }, [], 0);
     const d = deps(

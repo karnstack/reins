@@ -1,4 +1,4 @@
-export type StepOp = "click" | "type" | "select" | "scroll" | "wait";
+export type StepOp = "click" | "type" | "select" | "submit" | "scroll" | "wait";
 
 export interface HistoryEntry {
   op: StepOp;
@@ -36,7 +36,7 @@ export interface DoResult {
   reason?: string;
   /** The exact command to run next. */
   next?: string;
-  pending?: { op: "click" | "type"; label: string };
+  pending?: { op: "click" | "type" | "submit"; label: string };
   steps: DoStep[];
   url: string;
   title: string;

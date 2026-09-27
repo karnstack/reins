@@ -6,7 +6,8 @@ import { type JevBody, validateChoice } from "./client.js";
 import { FILL, NEXT_ACTION, TARGET } from "./prompts.js";
 import type { HistoryEntry } from "./types.js";
 
-export type TargetOp = "CLICK" | "TYPE_TEXT" | "SELECT";
+export type TargetOp = "CLICK" | "TYPE_TEXT" | "SELECT" | "SUBMIT_SEARCH";
+const TARGET_OPS: TargetOp[] = ["CLICK", "TYPE_TEXT", "SELECT", "SUBMIT_SEARCH"];
 export type ControlOp = "SCROLL_DOWN" | "SCROLL_UP" | "WAIT";
 export type Operation = TargetOp | ControlOp | "DONE" | "BLOCKED";
 
@@ -57,7 +58,15 @@ const OP_LABELS: Record<TargetOp, string> = {
   CLICK: "Click an element, button, menu option, autocomplete suggestion, or calendar day.",
   TYPE_TEXT: "Enter or replace text in an editable field with one of the values the user supplied.",
   SELECT: "Select an observed dropdown value.",
+  SUBMIT_SEARCH:
+    "Press Enter in a search field that already holds the typed query, to run the search.",
 };
+
+/** SUBMIT_SEARCH candidates: the page marked the field search-like (`submit`),
+ *  and it holds something to search for. Enter in any other field could mean
+ *  "send", which would slip past the risky-label check. */
+const submittable = (a: JevAction): boolean =>
+  a.kind === "fill" && a.submit === true && (a.current_value ?? a.value ?? "") !== "";
 
 /** JSON-safe copy (drops undefined), as the SDK's state type requires. */
 const json = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -117,6 +126,11 @@ export function actionSpace(actions: JevAction[]): ActionSpace {
     }
     targets[op] ??= {};
     targets[op][target] = action;
+    if (submittable(action)) {
+      element.operations.push("SUBMIT_SEARCH");
+      targets.SUBMIT_SEARCH ??= {};
+      targets.SUBMIT_SEARCH[index] = action;
+    }
   }
   return { elements, targets, controls };
 }
@@ -170,7 +184,7 @@ export function buildRequest(
 ): RequestPlan {
   const space = actionSpace(obs.actions);
   const operations: Record<string, string> = {};
-  for (const op of ["CLICK", "TYPE_TEXT", "SELECT"] as const) {
+  for (const op of TARGET_OPS) {
     if (space.targets[op]) operations[op] = OP_LABELS[op];
   }
   for (const [id, a] of Object.entries(space.controls)) operations[id] = a.label;
@@ -232,8 +246,8 @@ export function interpretFill(
 export function interpret(answers: Record<string, unknown>, plan: RequestPlan): Decision {
   const op = validateChoice(answers.operation, plan.operations);
   const operation = op.choice as Operation;
-  if (operation === "CLICK" || operation === "TYPE_TEXT" || operation === "SELECT") {
-    const candidates = plan.space.targets[operation] ?? {};
+  if (TARGET_OPS.includes(operation as TargetOp)) {
+    const candidates = plan.space.targets[operation as TargetOp] ?? {};
     // Only the chosen operation's head can act; the others were speculative.
     const t = validateChoice(answers[`${operation.toLowerCase()}_target`], Object.keys(candidates));
     const decision: Decision = {

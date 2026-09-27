@@ -20,6 +20,8 @@ export const JevAction = z.object({
   selected: z.string().optional(),
   expanded: z.string().optional(),
   delta: z.number().optional(),
+  /** A fill whose field may be submitted with Enter (search-like fields only). */
+  submit: z.boolean().optional(),
 });
 export type JevAction = z.infer<typeof JevAction>;
 
@@ -45,7 +47,7 @@ export type JevObserveParams = z.infer<typeof JevObserveParams>;
 export const JevActParams = z.object({
   browserId,
   tabId,
-  op: z.enum(["click", "type", "select", "scroll", "wait"]),
+  op: z.enum(["click", "type", "select", "submit", "scroll", "wait"]),
   node: z.number().optional(),
   /** The chosen element's label, for the audit trail; the extension ignores it. */
   label: z.string().optional(),
