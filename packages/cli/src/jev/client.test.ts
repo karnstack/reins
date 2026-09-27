@@ -84,6 +84,12 @@ describe("validateChoice", () => {
   ])("rejects %s", (_name, answer) => {
     expect(() => validateChoice(answer, ids)).toThrow(JevError);
   });
+
+  it("only counts a probability the answer itself carries, not one from the prototype", () => {
+    const answer = { choice: "a", confidence: 0.9, probabilities: { a: 1, toString: 0 } };
+    expect(() => validateChoice(answer, ["a", "b"])).toThrow(JevError);
+    expect(() => validateChoice(answer, ["a", "toString"])).not.toThrow();
+  });
 });
 
 describe("validateKey", () => {

@@ -101,7 +101,7 @@ export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
     !!probs &&
     typeof probs === "object" &&
     Object.keys(probs).length === ids.length &&
-    ids.every((id) => id in probs) &&
+    ids.every((id) => Object.hasOwn(probs, id)) &&
     [...values, a.confidence].every(
       (n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
     ) &&
