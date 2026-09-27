@@ -6,7 +6,14 @@ import type {
   JevObserveParams,
 } from "@reins/protocol";
 import { actionablePoint, drivePage, ensureVisible, pressAt, resolveTabId, send } from "./cdp.js";
-import { jevCheck, jevSelect, jevSettle, jevSnapshot, jevSubmitFocus } from "./jev-snapshot.js";
+import {
+  jevCheck,
+  jevSelect,
+  jevSettle,
+  jevSnapshot,
+  jevSubmitFocus,
+  jevSubmitted,
+} from "./jev-snapshot.js";
 
 /** reins do waits this long for a covered or moving target, then re-reads the page. */
 export const JEV_ACTION_TIMEOUT_MS = 500;
@@ -215,6 +222,9 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
     // Enter in the field: the keypress is what submits its form (keys.ts).
     const r = await evaluate<string>(tabId, `(${jevSubmitFocus})(${node})`);
     if (r !== "ok") return { stale: true, reason: r };
+    // Where the page is now: a router that lands the results by pushState
+    // moves the URL, and that move is the surest sign the search took effect.
+    const before = await evaluate<string>(tabId, "location.href");
     const enter = {
       key: "Enter",
       code: "Enter",
@@ -231,7 +241,11 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
     if (state.abandoned) return { ok: true };
     await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...enter });
     if (state.abandoned) return { ok: true };
-    await evaluate(tabId, `(${jevSettle})(${node}, false)`, true).catch(() => {});
+    // A SPA search (github.com) lands its URL and results a second or two
+    // after Enter: two frames would read the old page. Wait for the effect,
+    // bounded; a classic form navigation unloads the document, which rejects
+    // here, and observe waits for the new one.
+    await evaluate(tabId, `(${jevSubmitted})(${JSON.stringify(before)})`, true).catch(() => {});
     return { ok: true };
   }
 

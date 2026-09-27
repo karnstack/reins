@@ -380,3 +380,43 @@ export function jevSettle(node: number | null, typed: boolean): Promise<void> {
     requestAnimationFrame(ready);
   });
 }
+
+/**
+ * After Enter in a search field: wait for the submission to take effect, so
+ * the next read sees the results and not the page as it was. Resolves once
+ * the URL differs from `before` (a router's pushState lands with the results),
+ * once DOM changes have started and then stayed quiet for 300 ms, or after
+ * 1.5 s at most. A classic form navigation unloads the document instead,
+ * which rejects the evaluate; the caller treats that as settled.
+ */
+export function jevSubmitted(before: string): Promise<void> {
+  return new Promise((resolve) => {
+    let stopped = false;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const observer = new MutationObserver(() => {
+      if (stopped) return;
+      if (quiet !== undefined) clearTimeout(quiet);
+      quiet = setTimeout(finish, 300);
+    });
+    const finish = () => {
+      if (stopped) return;
+      stopped = true;
+      observer.disconnect();
+      clearInterval(poll);
+      clearTimeout(cap);
+      if (quiet !== undefined) clearTimeout(quiet);
+      resolve();
+    };
+    const cap = setTimeout(finish, 1500);
+    const poll = setInterval(() => {
+      if (location.href !== before) finish();
+    }, 50);
+    observer.observe(document, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+    });
+    if (location.href !== before) finish();
+  });
+}

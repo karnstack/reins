@@ -95,6 +95,8 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <a id="docs" href="/jev" target="_blank">Docs</a>
 <div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
 <form id="sf" role="search"><input id="q" name="q" aria-label="Search GitHub" value="cats"></form>
+<form id="spa" role="search"><input id="rq" name="q" aria-label="Search repos" value="browser automation"></form>
+<form id="go" role="search" action="/jev" method="get"><input id="gq" name="q" aria-label="Search issues" value="x"></form>
 <input id="s2" type="search" placeholder="Search…" value="x">
 <input id="s3" aria-label="Find a repo">
 <textarea id="ta" placeholder="Search notes"></textarea>
@@ -105,6 +107,14 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
   document.getElementById("cabin").addEventListener("change", (e) => __log.push("change:" + e.target.value));
   document.getElementById("f").addEventListener("submit", (e) => e.preventDefault());
   document.getElementById("sf").addEventListener("submit", (e) => { e.preventDefault(); __log.push("submit:sf"); });
+  // A router search: the URL and results land well after Enter.
+  document.getElementById("spa").addEventListener("submit", (e) => {
+    e.preventDefault();
+    setTimeout(() => {
+      history.pushState({}, "", "?q=" + encodeURIComponent(document.getElementById("rq").value).replace(/%20/g, "+"));
+      document.body.append(Object.assign(document.createElement("p"), { id: "results", textContent: "3 results" }));
+    }, 600);
+  });
 </script></body></html>`;
 
 let chromeProc: ChildProcess | undefined;
@@ -159,7 +169,8 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     server = http.createServer((q, s) => {
       s.setHeader("content-type", "text/html");
       // A login-style page whose password-manager host exists from first parse.
-      s.end(q.url === "/login" ? LOGIN_FIXTURE : q.url === "/jev" ? JEV_FIXTURE : FIXTURE);
+      const path = (q.url ?? "").split("?")[0];
+      s.end(path === "/login" ? LOGIN_FIXTURE : path === "/jev" ? JEV_FIXTURE : FIXTURE);
     });
     await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
@@ -570,9 +581,12 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     const fill = (label: string) =>
       s.actions.find((a) => a.kind === "fill" && a.label === label)?.node as number;
     const node = fill("Search GitHub");
+    // The form does nothing after Enter: the wait for an effect is bounded.
+    const started = Date.now();
     expect(await jevAct({ tabId: 1, op: "submit", node, label: "Search GitHub" })).toEqual({
       ok: true,
     });
+    expect(Date.now() - started).toBeLessThan(1700);
     expect(await log()).toContain("submit:sf");
     expect(await jevAct({ tabId: 1, op: "submit", node: fill("Message") })).toMatchObject({
       stale: true,
@@ -585,6 +599,37 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       stale: true,
       reason: "the element is gone",
     });
+  });
+
+  it("jev: submit returns once a router search has landed its URL and results", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.kind === "fill" && a.label === "Search repos")
+      ?.node as number;
+    const started = Date.now();
+    expect(await jevAct({ tabId: 1, op: "submit", node, label: "Search repos" })).toEqual({
+      ok: true,
+    });
+    // Resolved on the URL change (~600 ms), well before the 1.5 s cap.
+    expect(Date.now() - started).toBeLessThan(1400);
+    expect(await evaluate<string>("location.search")).toBe("?q=browser+automation");
+    expect(await evaluate<boolean>('!!document.getElementById("results")')).toBe(true);
+    // The next read is of the landed page.
+    expect((await jevObserve({ tabId: 1 })).url).toContain("?q=browser+automation");
+  });
+
+  it("jev: submit that navigates the document is settled, and the next read waits for the new page", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.kind === "fill" && a.label === "Search issues")
+      ?.node as number;
+    expect(await jevAct({ tabId: 1, op: "submit", node, label: "Search issues" })).toEqual({
+      ok: true,
+    });
+    const next = await jevObserve({ tabId: 1 });
+    expect(next.url).toBe(new URL("/jev?q=x", url).href);
+    expect(next.title).toBe(""); // the fixture has no <title>: it is the new document, read whole
+    expect(next.actions.some((a) => a.label === "Search issues")).toBe(true);
   });
 
   it("jev: a click that opens a new tab reports it, brought to the front", async () => {
