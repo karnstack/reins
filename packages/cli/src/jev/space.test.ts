@@ -1,6 +1,14 @@
 import type { JevAction, JevObservation } from "@reins/protocol";
 import { describe, expect, it } from "vitest";
-import { actionSpace, buildRequest, interpret, MAX_FILL_HEADS } from "./space.js";
+import { JevError } from "./client.js";
+import {
+  actionSpace,
+  buildRequest,
+  doneCheckRequest,
+  interpret,
+  interpretDoneCheck,
+  MAX_FILL_HEADS,
+} from "./space.js";
 
 const field = (node: number, label: string, value = ""): JevAction[] => [
   { id: `f${node}`, kind: "fill", node, role: "textbox", label, value },
@@ -97,6 +105,40 @@ describe("buildRequest", () => {
     expect(plan.fillHeads).toHaveLength(MAX_FILL_HEADS);
     const q = plan.body.questions.fill_for_1 as { criteria: Record<string, unknown> };
     expect(Object.keys(q.criteria)).toEqual(["from", "to", "NONE"]);
+  });
+});
+
+describe("doneCheckRequest", () => {
+  it("asks one yes/no question on the same state buildRequest sends, with the goal", () => {
+    const obs = page([button(1, "Apply"), ...field(2, "Search", "cats")]);
+    const history = [
+      { op: "type" as const, label: "Search", fill: "q", pageChanged: true },
+      { op: "wait" as const, label: "DONE", pageChanged: null, note: "DONE rejected: no" },
+    ];
+    const req = doneCheckRequest(obs, "filter by cats", history, { q: "cats" });
+    expect(req.state).toEqual(
+      buildRequest(obs, "filter by cats", history, { q: "cats" }).body.state,
+    );
+    expect(Object.keys(req.questions)).toEqual(["satisfied"]);
+    expect(req.questions.satisfied).toMatchObject({
+      type: "noul",
+      instructions: { goal: "filter by cats" },
+      criteria: { true: expect.any(String), false: expect.any(String) },
+    });
+    // A refused verdict reaches Jev as a verdict, not as an act.
+    const actions = (req.state as { recent_actions: unknown[] }).recent_actions;
+    expect(actions[1]).toEqual({ action: "DONE", kind: "verdict", rejected: "DONE rejected: no" });
+  });
+
+  it("reads the probability and refuses anything else", () => {
+    expect(interpretDoneCheck({ satisfied: { type: "noul", noul: 0.42 } })).toBe(0.42);
+    for (const bad of [
+      {},
+      { satisfied: {} },
+      { satisfied: { noul: "0.4" } },
+      { satisfied: { noul: 2 } },
+    ])
+      expect(() => interpretDoneCheck(bad)).toThrow(JevError);
   });
 });
 

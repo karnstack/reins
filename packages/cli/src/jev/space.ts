@@ -2,8 +2,8 @@
 // one fill question per text field instead of a text model.
 import type { JevAction, JevObservation } from "@reins/protocol";
 import type { ChoiceQuestion, Questions } from "@typesafe-ai/sdk";
-import { type JevBody, validateChoice } from "./client.js";
-import { FILL, NEXT_ACTION, TARGET } from "./prompts.js";
+import { type JevBody, validateChoice, validateNoul } from "./client.js";
+import { DONE_CHECK, FILL, NEXT_ACTION, TARGET } from "./prompts.js";
 import type { HistoryEntry } from "./types.js";
 
 export type TargetOp = "CLICK" | "TYPE_TEXT" | "SELECT" | "SUBMIT_SEARCH";
@@ -144,16 +144,21 @@ function stateOf(
   return json({
     page: { url: obs.url, title: obs.title, text: obs.text },
     elements: space.elements,
-    recent_actions: history.slice(-10).map((h) => ({
-      action: h.label,
-      kind: h.op,
-      fill: h.fill ?? null,
-      page_changed: h.pageChanged,
-      // An act that never happened: say why, so Jev picks something else.
-      ...(h.stale !== undefined
-        ? { failed: `could not ${h.op} ${JSON.stringify(h.label)}: ${h.stale}` }
-        : {}),
-    })),
+    recent_actions: history.slice(-10).map((h) =>
+      // A verdict the loop refused: not an act, just what Jev is told.
+      h.note !== undefined
+        ? { action: h.label, kind: "verdict", rejected: h.note }
+        : {
+            action: h.label,
+            kind: h.op,
+            fill: h.fill ?? null,
+            page_changed: h.pageChanged,
+            // An act that never happened: say why, so Jev picks something else.
+            ...(h.stale !== undefined
+              ? { failed: `could not ${h.op} ${JSON.stringify(h.label)}: ${h.stale}` }
+              : {}),
+          },
+    ),
     supplied_values: fills,
   });
 }
@@ -236,6 +241,36 @@ export function fillOnlyRequest(
     state: stateOf(obs, space, history, fills),
     questions: { [`fill_for_${index}`]: fillQuestion(goal, index, space, fills) },
   };
+}
+
+/** The self-check asked when Jev chooses DONE: on the same observation, one
+ *  yes/no question — is every requirement of the goal visibly satisfied? */
+export function doneCheckRequest(
+  obs: JevObservation,
+  goal: string,
+  history: HistoryEntry[],
+  fills: Record<string, string>,
+): JevBody {
+  const space = actionSpace(obs.actions);
+  return {
+    state: stateOf(obs, space, history, fills),
+    questions: {
+      satisfied: {
+        type: "noul",
+        instructions: { goal, rules: DONE_CHECK },
+        criteria: {
+          true: "The current page visibly satisfies every requirement of the goal.",
+          false:
+            "At least one requirement of the goal is not yet visibly satisfied on the current page.",
+        },
+      },
+    },
+  };
+}
+
+/** The self-check's probability that the goal is satisfied. */
+export function interpretDoneCheck(answers: Record<string, unknown>): number {
+  return validateNoul(answers.satisfied);
 }
 
 export function interpretFill(

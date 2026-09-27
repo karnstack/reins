@@ -60,7 +60,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function formatDoResult(r: DoResult): string {
   const lines: string[] = [
     r.status === "done"
-      ? `done in ${sec(r.elapsedMs)} · ${plural(r.steps.length, "step")} · ${plural(r.jevCalls, "jev call")} · ${tokens(r.inputTokens)}`
+      ? `done in ${sec(r.elapsedMs)} · ${plural(r.steps.length, "step")} · ${plural(r.jevCalls, "jev call")} · ${tokens(r.inputTokens)}${r.doneConfidence !== undefined ? ` · self-check ${r.doneConfidence.toFixed(2)}` : ""}`
       : `${r.status}: ${r.reason ?? ""}`.trimEnd(),
   ];
   for (const s of r.steps) {

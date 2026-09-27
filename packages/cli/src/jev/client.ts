@@ -120,6 +120,18 @@ export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
   return a as ChoiceAnswer;
 }
 
+/** Check a yes/no (`noul`) answer: one finite probability in [0, 1]. */
+export function validateNoul(answer: unknown): number {
+  const p = (answer as { noul?: unknown } | undefined)?.noul;
+  if (typeof p !== "number" || !Number.isFinite(p) || p < 0 || p > 1) {
+    throw new JevError(
+      "TypeSafe returned an unusable answer — no action was taken",
+      "invalid_answer",
+    );
+  }
+  return p;
+}
+
 /** One minimal call: resolves when TypeSafe accepts the key. */
 export async function validateKey(key: string, opts: { fetch?: Fetch } = {}): Promise<void> {
   const ask = createJevAsk({ key, ...opts });

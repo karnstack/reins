@@ -22,6 +22,8 @@ export interface JevTraceLine {
   targets: Record<string, JevTraceChoice>;
   /** Chosen fill name per `fill_for_*` head (NONE when Jev declined). */
   fills: Record<string, string>;
+  /** Yes/no answers (the DONE self-check), as P(yes) per question. */
+  checks?: Record<string, number>;
   inputTokens: number;
   error?: string;
 }
@@ -60,9 +62,18 @@ function choiceOf(v: unknown): JevTraceChoice | undefined {
 export function summarizeAnswers(
   questionKeys: string[],
   answers: Record<string, unknown>,
-): Pick<JevTraceLine, "operation" | "targets" | "fills"> {
-  const out: Pick<JevTraceLine, "operation" | "targets" | "fills"> = { targets: {}, fills: {} };
+): Pick<JevTraceLine, "operation" | "targets" | "fills" | "checks"> {
+  const out: Pick<JevTraceLine, "operation" | "targets" | "fills" | "checks"> = {
+    targets: {},
+    fills: {},
+  };
   for (const key of questionKeys) {
+    const p = (answers[key] as { noul?: unknown } | undefined)?.noul;
+    if (typeof p === "number") {
+      out.checks ??= {};
+      out.checks[key] = Number(p.toFixed(4));
+      continue;
+    }
     const c = choiceOf(answers[key]);
     if (!c) continue;
     if (key === "operation") out.operation = c;

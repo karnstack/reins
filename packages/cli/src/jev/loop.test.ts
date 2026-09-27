@@ -29,9 +29,16 @@ const page = (actions: JevAction[], opts: Partial<JevObservation> = {}): JevObse
 type Script = { op: string; target?: string; fill?: Record<string, string> };
 
 /** Fake Jev: answers each request from the next script entry, filling
- *  speculative heads with their first option. */
-function scriptedJev(script: Script[]) {
+ *  speculative heads with their first option. A request made only of yes/no
+ *  questions (the DONE self-check) is answered from `checks` (0.9 when that
+ *  runs out) without using a script entry. */
+function scriptedJev(script: Script[], checks: number[] = []) {
   return vi.fn(async (body: JevBody) => {
+    const qs = Object.values(body.questions) as Array<{ type: string }>;
+    if (qs.length > 0 && qs.every((q) => q.type === "noul")) {
+      const p = checks.shift() ?? 0.9;
+      return Object.fromEntries(Object.keys(body.questions).map((k) => [k, { noul: p }]));
+    }
     const s = script.shift();
     if (!s) throw new Error("script exhausted");
     const out: Record<string, unknown> = {};
@@ -61,7 +68,11 @@ function scriptedJev(script: Script[]) {
 }
 
 /** Pages served in order; the last one repeats. */
-function deps(pages: JevObservation[], script: Script[], opts: { now?: () => number } = {}) {
+function deps(
+  pages: JevObservation[],
+  script: Script[],
+  opts: { now?: () => number; checks?: number[] } = {},
+) {
   const queue = [...pages];
   const observe = vi.fn(async () =>
     queue.length > 1 ? (queue.shift() as JevObservation) : (queue[0] as JevObservation),
@@ -69,7 +80,12 @@ function deps(pages: JevObservation[], script: Script[], opts: { now?: () => num
   const act = vi.fn<(p: Omit<JevActParams, "browserId" | "tabId">) => Promise<JevActResult>>(
     async () => ({ ok: true }),
   );
-  return { observe, act, ask: scriptedJev(script), now: opts.now ?? (() => 0) } satisfies LoopDeps;
+  return {
+    observe,
+    act,
+    ask: scriptedJev(script, opts.checks),
+    now: opts.now ?? (() => 0),
+  } satisfies LoopDeps;
 }
 
 const input = (over: Partial<Parameters<typeof runLoop>[1]> = {}) => ({
@@ -90,13 +106,131 @@ describe("runLoop", () => {
       return scriptedJev([{ op: used === 1000 ? "CLICK" : "DONE", target: "1" }])(body);
     });
     const { result } = await runLoop({ ...d, inputTokens: () => used }, input());
-    expect(result).toMatchObject({ status: "done", jevCalls: 2, inputTokens: 2000 });
+    // click, DONE, and the DONE self-check
+    expect(result).toMatchObject({ status: "done", jevCalls: 3, inputTokens: 3000 });
   });
 
-  it("finishes when Jev says DONE", async () => {
-    const d = deps([page([])], [{ op: "DONE" }]);
+  it("finishes when Jev says DONE, after one self-check on the same page", async () => {
+    const d = deps([page([])], [{ op: "DONE" }], { checks: [0.83] });
     const { result } = await runLoop(d, input());
-    expect(result).toMatchObject({ status: "done", jevCalls: 1, steps: [] });
+    expect(result).toMatchObject({ status: "done", jevCalls: 2, steps: [], doneConfidence: 0.83 });
+    expect(d.observe).toHaveBeenCalledTimes(1);
+    const check = d.ask.mock.calls[1]?.[0] as JevBody;
+    expect(Object.keys(check.questions)).toEqual(["satisfied"]);
+    expect(check.questions.satisfied).toMatchObject({ type: "noul" });
+    expect(JSON.stringify(check.questions.satisfied)).toContain("find flights");
+    // The same page Jev judged, not a new read.
+    expect(check.state).toEqual((d.ask.mock.calls[0]?.[0] as JevBody).state);
+  });
+
+  describe("DONE self-check", () => {
+    const rejected = (d: ReturnType<typeof deps>, n: number) =>
+      (d.ask.mock.calls[n]?.[0] as JevBody & { state: { recent_actions: unknown[] } }).state
+        .recent_actions;
+
+    it("refuses a DONE the check doubts, tells Jev on the next ask, and goes on", async () => {
+      const d = deps(
+        [
+          page([button(1, "Apply filter")]),
+          page([button(1, "Apply filter")]),
+          page([], { text: "filtered" }),
+        ],
+        [{ op: "DONE" }, { op: "CLICK", target: "1" }, { op: "DONE" }],
+        { checks: [0.2, 0.95] },
+      );
+      const { result, run } = await runLoop(d, input());
+      expect(result).toMatchObject({ status: "done", jevCalls: 5, doneConfidence: 0.95 });
+      expect(result.steps.map((s) => s.label)).toEqual(["Apply filter"]);
+      // The refused verdict is what the next request's history says, and it is not a step.
+      expect(rejected(d, 2)).toEqual([
+        {
+          action: "DONE",
+          kind: "verdict",
+          rejected: "DONE rejected: the page does not yet satisfy the goal (self-check 0.20)",
+        },
+      ]);
+      expect(run.history.filter((h) => h.note !== undefined)).toHaveLength(1);
+      expect(run.step).toBe(1);
+      // A refused DONE reads the page again before asking.
+      expect(d.observe).toHaveBeenCalledTimes(3);
+    });
+
+    it("accepts the third DONE after two refusals, and reports its probability", async () => {
+      const d = deps([page([button(1, "Go")])], [{ op: "DONE" }, { op: "DONE" }, { op: "DONE" }], {
+        checks: [0.1, 0.3, 0.34],
+      });
+      const { result, run } = await runLoop(d, input());
+      expect(result).toMatchObject({
+        status: "done",
+        jevCalls: 6,
+        steps: [],
+        doneConfidence: 0.34,
+      });
+      expect(run.history.filter((h) => h.note !== undefined)).toHaveLength(2);
+      expect(rejected(d, 4)).toHaveLength(2);
+    });
+
+    it("refusals do not count toward stuck, and a refusal after a no-op is not progress", async () => {
+      // Three no-op clicks with refused DONEs between them: still stuck.
+      const d = deps(
+        [page([button(1, "Go")])],
+        [
+          { op: "CLICK", target: "1" },
+          { op: "DONE" },
+          { op: "CLICK", target: "1" },
+          { op: "DONE" },
+          { op: "CLICK", target: "1" },
+        ],
+        { checks: [0.1, 0.1] },
+      );
+      const { result } = await runLoop(d, input());
+      expect(result).toMatchObject({
+        status: "stuck",
+        reason: "3 actions in a row changed nothing",
+      });
+    });
+
+    it("a DONE at the Jev-call cap stands without a self-check", async () => {
+      const d = deps([page([button(1, "Go")])], [{ op: "CLICK", target: "1" }, { op: "DONE" }], {
+        checks: [0.1],
+      });
+      d.act.mockResolvedValue({ stale: true, reason: "covered" });
+      const { result } = await runLoop(d, input({ maxSteps: 1 }));
+      expect(result).toMatchObject({ status: "done", jevCalls: 2 });
+      expect(result.doneConfidence).toBeUndefined();
+    });
+
+    it("an unusable self-check answer is an error, never a DONE", async () => {
+      const d = deps([page([])], [{ op: "DONE" }]);
+      d.ask
+        .mockImplementationOnce(scriptedJev([{ op: "DONE" }]))
+        .mockImplementationOnce(async () => ({ satisfied: { noul: 1.5 } }));
+      const { result } = await runLoop(d, input());
+      expect(result).toMatchObject({ status: "error", reason: expect.stringMatching(/unusable/) });
+    });
+
+    it("a refused DONE right after typing a search query still submits it first", async () => {
+      const search = (value: string): JevAction => ({
+        id: "f1",
+        kind: "fill",
+        node: 1,
+        role: "searchbox",
+        label: "Search",
+        value,
+        submit: true,
+      });
+      const d = deps(
+        [page([search("")]), page([search("cats")]), page([], { text: "results" })],
+        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "query" } }, { op: "DONE" }, { op: "DONE" }],
+        { checks: [0.9] },
+      );
+      const { result } = await runLoop(
+        d,
+        input({ run: newRun("find cats", "x.com", { query: "cats" }, [], 0) }),
+      );
+      expect(result.steps.map((s) => s.op)).toEqual(["type", "submit"]);
+      expect(result).toMatchObject({ status: "done", jevCalls: 4 });
+    });
   });
 
   it("clicks, sees the page change, then finishes", async () => {
@@ -261,10 +395,10 @@ describe("runLoop", () => {
       [{ op: "TYPE_TEXT", target: "9" }, { op: "-", fill: { "9": "name" } }, { op: "DONE" }],
     );
     const { result } = await runLoop(d, input({ run }));
-    expect(d.ask).toHaveBeenCalledTimes(3);
+    expect(d.ask).toHaveBeenCalledTimes(4); // + the DONE self-check
     expect(Object.keys(d.ask.mock.calls[1]?.[0].questions ?? {})).toEqual(["fill_for_9"]);
     expect(d.act).toHaveBeenCalledWith({ op: "type", node: 9, text: "Bob", label: "Field 9" });
-    expect(result).toMatchObject({ status: "done", jevCalls: 3 });
+    expect(result).toMatchObject({ status: "done", jevCalls: 4 });
     expect(result.steps[0]).toMatchObject({ op: "type", fill: "name" });
   });
 

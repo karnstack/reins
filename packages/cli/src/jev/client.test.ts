@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createJevAsk, JevError, validateChoice, validateKey } from "./client.js";
+import { createJevAsk, JevError, validateChoice, validateKey, validateNoul } from "./client.js";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -103,6 +103,22 @@ describe("validateChoice", () => {
     const answer = { choice: "a", confidence: 0.9, probabilities: { a: 1, toString: 0 } };
     expect(() => validateChoice(answer, ["a", "b"])).toThrow(JevError);
     expect(() => validateChoice(answer, ["a", "toString"])).not.toThrow();
+  });
+});
+
+describe("validateNoul", () => {
+  it("accepts a probability in [0, 1] and rejects anything else", () => {
+    expect(validateNoul({ type: "noul", noul: 0 })).toBe(0);
+    expect(validateNoul({ noul: 0.5 })).toBe(0.5);
+    for (const bad of [
+      undefined,
+      {},
+      { noul: -0.1 },
+      { noul: 1.01 },
+      { noul: Number.NaN },
+      { noul: "1" },
+    ])
+      expect(() => validateNoul(bad)).toThrow(JevError);
   });
 });
 

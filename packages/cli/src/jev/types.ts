@@ -9,6 +9,10 @@ export interface HistoryEntry {
   /** Set when the act never happened (the target was gone, covered, moving):
    *  the reason, so Jev can choose differently. Not a step; never resolved. */
   stale?: string;
+  /** A verdict the loop refused (a DONE the self-check rejected): what Jev is
+   *  told about it. Not an act: never resolved, never counts as progress or
+   *  as its absence. */
+  note?: string;
 }
 
 export type DoStatus =
@@ -54,6 +58,10 @@ export interface DoResult {
   step: number;
   maxSteps: number;
   pageChanges: number;
+  /** For `done`: the self-check's probability that the goal is satisfied on
+   *  the final page (absent when the check could not run). Below the loop's
+   *  threshold only when two earlier DONEs were already rejected. */
+  doneConfidence?: number;
 }
 
 export interface RunState {

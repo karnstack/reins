@@ -37,6 +37,12 @@ describe("summarizeAnswers", () => {
     const s = summarizeAnswers(["operation", "click_target"], { operation: "nope" });
     expect(s.operation).toBeUndefined();
     expect(s.targets).toEqual({});
+    expect(s.checks).toBeUndefined();
+  });
+
+  it("keeps a yes/no answer's probability under checks", () => {
+    const s = summarizeAnswers(["satisfied"], { satisfied: { type: "noul", noul: 0.34567 } });
+    expect(s).toEqual({ targets: {}, fills: {}, checks: { satisfied: 0.3457 } });
   });
 });
 

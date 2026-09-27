@@ -58,6 +58,12 @@ describe("formatDoResult", () => {
     );
   });
 
+  it("shows the DONE self-check's probability when the run had one", () => {
+    expect(formatDoResult({ ...base, doneConfidence: 0.34 }).split("\n")[0]).toBe(
+      "done in 7.2s · 2 steps · 17 jev calls · 21k tokens · self-check 0.34",
+    );
+  });
+
   it("says 1 step and 1 jev call in the singular", () => {
     const one = { ...base, steps: base.steps.slice(0, 1), jevCalls: 1 };
     expect(formatDoResult(one).split("\n")[0]).toBe(

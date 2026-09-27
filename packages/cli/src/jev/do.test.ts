@@ -49,7 +49,12 @@ function bridge(observe: unknown = OBS): BridgePort {
 
 type AskBody = { questions: Record<string, { criteria: Record<string, unknown> }> };
 
+/** The DONE self-check request carries only the `satisfied` yes/no question. */
+const isCheck = (body: AskBody) => "satisfied" in body.questions;
+const checkAnswer = { satisfied: { type: "noul", noul: 0.9 } };
+
 const doneAsk = () => async (body: AskBody) => {
+  if (isCheck(body)) return checkAnswer;
   const ids = Object.keys(body.questions.operation?.criteria ?? {});
   return {
     operation: {
@@ -64,6 +69,7 @@ const doneAsk = () => async (body: AskBody) => {
 const clickThenDone = (onAsk?: (n: number) => void) => {
   let n = 0;
   return async (body: AskBody) => {
+    if (isCheck(body)) return checkAnswer;
     onAsk?.(n);
     const op = n++ === 0 ? "CLICK" : "DONE";
     const ids = Object.keys(body.questions.operation?.criteria ?? {});
@@ -202,7 +208,8 @@ describe("handleDo", () => {
         }) as never;
       },
     });
-    expect(r).toMatchObject({ status: "done", jevCalls: 2, inputTokens: 3000 });
+    // click, DONE, and the DONE self-check
+    expect(r).toMatchObject({ status: "done", jevCalls: 3, inputTokens: 4500 });
   });
 
   it("moves the run to a tab the click opened, and routes next there", async () => {
@@ -499,6 +506,7 @@ describe("handleDo", () => {
     });
     let n = 0;
     const ask = async (body: AskBody) => {
+      if (isCheck(body)) return checkAnswer;
       const op = n++ === 0 ? "SELECT" : "DONE";
       const ids = Object.keys(body.questions.operation?.criteria ?? {});
       const targets = Object.keys(body.questions.select_target?.criteria ?? {});
