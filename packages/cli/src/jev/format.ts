@@ -22,7 +22,7 @@ export function nextCommand(
   r: DoResult,
   p: { goal: string; tabId?: number; browserId?: string },
 ): string | undefined {
-  const route = `${p.tabId !== undefined ? ` --tab ${p.tabId}` : ""}${p.browserId !== undefined ? ` --browser ${p.browserId}` : ""}`;
+  const route = `${p.tabId !== undefined ? ` --tab ${p.tabId}` : ""}${p.browserId !== undefined ? ` --browser ${shellQuote(p.browserId)}` : ""}`;
   switch (r.status) {
     case "done":
       return `reins snapshot${route}   # verify before trusting DONE`;

@@ -102,8 +102,13 @@ describe("nextCommand", () => {
 
   it("appends --tab and --browser to the route when given", () => {
     expect(nextCommand(r("budget"), { goal: "g", tabId: 7, browserId: "b1" })).toBe(
-      "reins do --continue --tab 7 --browser b1",
+      "reins do --continue --tab 7 --browser 'b1'",
     );
+  });
+
+  it("single-quotes the --browser id like every other user-supplied value", () => {
+    const cmd = nextCommand(r("budget"), { goal: "g", browserId: "b$1 'x'" });
+    expect(cmd).toBe(`reins do --continue --browser 'b$1 '\\''x'\\'''`);
   });
 
   it("routes the verify hint after done to the same tab and browser", () => {
@@ -111,7 +116,7 @@ describe("nextCommand", () => {
       "reins snapshot   # verify before trusting DONE",
     );
     expect(nextCommand(r("done"), { goal: "g", tabId: 7, browserId: "b1" })).toBe(
-      "reins snapshot --tab 7 --browser b1   # verify before trusting DONE",
+      "reins snapshot --tab 7 --browser 'b1'   # verify before trusting DONE",
     );
   });
 
