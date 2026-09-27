@@ -19,12 +19,12 @@ const TASKS = [
   {
     id: "flights",
     url: "https://www.google.com/travel/flights?hl=en",
-    goal: "Find one-way flights from Zurich to London on September 20, 2026, for one adult in economy. Stop when matching flight options are visible.",
+    goal: "Find one-way flights from Zurich to London on November 20, 2026, for one adult in economy. Stop when matching flight options are visible.",
     fills: { from: "Zurich", to: "London" },
     // A results page carries the encoded search in `tfs=` and shows prices;
     // the filled-but-unsearched form and "no flights found" have neither.
     check:
-      "location.href.includes('/travel/flights') && /[?&]tfs=/.test(location.search) && /(CHF|£|€|\\$)\\s?\\d/.test(document.body.innerText) && /Zurich|ZRH/.test(document.body.innerText) && /London/.test(document.body.innerText) && /Sep 20|20 Sep|September 20/.test(document.body.innerText)",
+      "location.href.includes('/travel/flights') && /[?&]tfs=/.test(location.search) && /(CHF|£|€|\\$)\\s?\\d/.test(document.body.innerText) && /Zurich|ZRH/.test(document.body.innerText) && /London/.test(document.body.innerText) && /Nov 20|20 Nov|November 20/.test(document.body.innerText)",
   },
   {
     id: "wikipedia",
