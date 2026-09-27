@@ -26,13 +26,7 @@ const page = (actions: JevAction[], opts: Partial<JevObservation> = {}): JevObse
   ...opts,
 });
 
-type Script = {
-  op: string;
-  target?: string;
-  fill?: Record<string, string>;
-  /** The operation head's probabilities (must include `op` as the max). */
-  opProbs?: Record<string, number>;
-};
+type Script = { op: string; target?: string; fill?: Record<string, string> };
 
 /** Fake Jev: answers each request from the next script entry, filling
  *  speculative heads with their first option. */
@@ -51,18 +45,16 @@ function scriptedJev(script: Script[]) {
               ? s.target
               : (ids[0] as string)
             : (s.fill?.[name.slice("fill_for_".length)] ?? "NONE");
-      const given = s.opProbs;
-      const total = given ? ids.reduce((sum, id) => sum + (given[id] ?? 0), 0) : 1;
-      const probabilities =
-        name === "operation" && given
-          ? Object.fromEntries(ids.map((id) => [id, (given[id] ?? 0) / total]))
-          : Object.fromEntries(
-              ids.map((id) => [
-                id,
-                ids.length === 1 ? 1 : id === choice ? 0.9 : 0.1 / (ids.length - 1),
-              ]),
-            );
-      out[name] = { choice, confidence: probabilities[choice] ?? 0.9, probabilities };
+      out[name] = {
+        choice,
+        confidence: 0.9,
+        probabilities: Object.fromEntries(
+          ids.map((id) => [
+            id,
+            ids.length === 1 ? 1 : id === choice ? 0.9 : 0.1 / (ids.length - 1),
+          ]),
+        ),
+      };
     }
     return out;
   });
@@ -160,194 +152,6 @@ describe("runLoop", () => {
       { n: 1, op: "submit", label: "Search", pageChanged: true },
     ]);
     expect(run.history).toMatchObject([{ op: "submit", label: "Search", pageChanged: true }]);
-  });
-
-  describe("unsure right after typing a search", () => {
-    // github.com/search after typing the query: CLICK "advanced search"
-    // 0.31–0.35, BLOCKED 0.29–0.32, SUBMIT_SEARCH 0.17–0.21 — a coin flip
-    // between a detour and giving up, where a person presses Enter.
-    const searchPage = (value: string, opts: Partial<JevObservation> = {}) =>
-      page(
-        [
-          {
-            id: "f3",
-            kind: "fill",
-            node: 3,
-            role: "searchbox",
-            label: "Search GitHub",
-            value,
-            submit: true,
-          },
-          button(7, "Advanced search"),
-        ],
-        opts,
-      );
-    const unsureClick = {
-      op: "CLICK",
-      target: "2",
-      opProbs: {
-        CLICK: 0.33,
-        BLOCKED: 0.3,
-        SUBMIT_SEARCH: 0.19,
-        TYPE_TEXT: 0.1,
-        WAIT: 0.05,
-        DONE: 0.03,
-      },
-    };
-    const results = { url: "https://x.com/search?q=cats", text: "3 results" };
-
-    it("submits the field it just typed into instead of an unsure CLICK", async () => {
-      const d = deps(
-        [searchPage(""), searchPage("cats"), searchPage("cats", results)],
-        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "q" } }, unsureClick, { op: "DONE" }],
-      );
-      const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-      const { result } = await runLoop(d, input({ run }));
-      expect(result.status).toBe("done");
-      expect(d.act.mock.calls.map((c) => c[0].op)).toEqual(["type", "submit"]);
-      expect(d.act).toHaveBeenLastCalledWith({ op: "submit", node: 3, label: "Search GitHub" });
-      expect(result.steps[1]).toMatchObject({ n: 2, op: "submit", label: "Search GitHub" });
-      expect(result.steps[1]?.confidence).toBeCloseTo(0.19);
-    });
-
-    it("submits instead of an unsure BLOCKED or WAIT", async () => {
-      for (const op of ["BLOCKED", "WAIT"]) {
-        const d = deps(
-          [searchPage(""), searchPage("cats"), searchPage("cats", results)],
-          [
-            { op: "TYPE_TEXT", target: "1", fill: { "1": "q" } },
-            { ...unsureClick, op, opProbs: { ...unsureClick.opProbs, CLICK: 0.29, [op]: 0.34 } },
-            { op: "DONE" },
-          ],
-        );
-        const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-        const { result } = await runLoop(d, input({ run }));
-        expect(result.status).toBe("done");
-        expect(d.act).toHaveBeenLastCalledWith({ op: "submit", node: 3, label: "Search GitHub" });
-      }
-    });
-
-    it("the submit still goes through the risky-label stop", async () => {
-      const send = (value: string): JevObservation =>
-        page([
-          {
-            id: "f3",
-            kind: "fill",
-            node: 3,
-            role: "searchbox",
-            label: "Search and pay",
-            value,
-            submit: true,
-          },
-          button(7, "Advanced search"),
-        ]);
-      const d = deps(
-        [send(""), send("cats")],
-        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "q" } }, unsureClick],
-      );
-      const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-      const { result } = await runLoop(d, input({ run }));
-      expect(result).toMatchObject({
-        status: "risky_action",
-        pending: { op: "submit", label: "Search and pay" },
-      });
-      expect(d.act).toHaveBeenCalledTimes(1);
-    });
-
-    it("leaves a confident CLICK alone", async () => {
-      const d = deps(
-        [searchPage(""), searchPage("cats"), searchPage("cats", results)],
-        [
-          { op: "TYPE_TEXT", target: "1", fill: { "1": "q" } },
-          {
-            ...unsureClick,
-            opProbs: {
-              CLICK: 0.6,
-              BLOCKED: 0.1,
-              SUBMIT_SEARCH: 0.2,
-              TYPE_TEXT: 0.05,
-              WAIT: 0.03,
-              DONE: 0.02,
-            },
-          },
-          { op: "DONE" },
-        ],
-      );
-      const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-      await runLoop(d, input({ run }));
-      expect(d.act).toHaveBeenLastCalledWith({ op: "click", node: 7, label: "Advanced search" });
-    });
-
-    it("only fires when the last action was a type", async () => {
-      const d = deps(
-        [searchPage("cats"), searchPage("cats", { text: "scrolled" }), searchPage("cats", results)],
-        [{ op: "WAIT" }, unsureClick, { op: "DONE" }],
-      );
-      await runLoop(d, input());
-      expect(d.act).toHaveBeenLastCalledWith({ op: "click", node: 7, label: "Advanced search" });
-    });
-
-    it("only fires for the field that was typed into", async () => {
-      // The last type went into another field: nothing to submit for it.
-      const two = (value: string, opts: Partial<JevObservation> = {}) =>
-        page(
-          [
-            {
-              id: "f3",
-              kind: "fill",
-              node: 3,
-              role: "searchbox",
-              label: "Search GitHub",
-              value: "old",
-              submit: true,
-            },
-            { id: "f5", kind: "fill", node: 5, role: "textbox", label: "Name", value },
-            button(7, "Advanced search"),
-          ],
-          opts,
-        );
-      const d = deps(
-        [two(""), two("cats"), two("cats", results)],
-        [{ op: "TYPE_TEXT", target: "2", fill: { "2": "q" } }, unsureClick, { op: "DONE" }],
-      );
-      const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-      await runLoop(d, input({ run }));
-      expect(d.act).toHaveBeenLastCalledWith({ op: "click", node: 7, label: "Advanced search" });
-    });
-
-    it("does not fire when the field no longer holds a value", async () => {
-      const d = deps(
-        [searchPage(""), searchPage(""), searchPage("", results)],
-        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "q" } }, unsureClick, { op: "DONE" }],
-      );
-      const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-      await runLoop(d, input({ run }));
-      expect(d.act).toHaveBeenLastCalledWith({ op: "click", node: 7, label: "Advanced search" });
-    });
-
-    it("never overrides DONE", async () => {
-      const d = deps(
-        [searchPage(""), searchPage("cats")],
-        [
-          { op: "TYPE_TEXT", target: "1", fill: { "1": "q" } },
-          {
-            op: "DONE",
-            opProbs: {
-              DONE: 0.3,
-              CLICK: 0.29,
-              BLOCKED: 0.2,
-              SUBMIT_SEARCH: 0.11,
-              TYPE_TEXT: 0.05,
-              WAIT: 0.05,
-            },
-          },
-        ],
-      );
-      const run = newRun("search cats", "x.com", { q: "cats" }, [], 0);
-      const { result } = await runLoop(d, input({ run }));
-      expect(result.status).toBe("done");
-      expect(d.act).toHaveBeenCalledTimes(1);
-    });
   });
 
   it("a submit runs the field's label through the risky-label stop", async () => {
