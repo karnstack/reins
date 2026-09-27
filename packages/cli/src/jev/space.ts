@@ -45,7 +45,11 @@ export interface Decision {
   targetIndex?: string;
   /** Fill name; null = Jev chose NONE; undefined = no fill question was asked. */
   fill?: string | null;
+  /** min(operation head, target head) — the step's recorded confidence. */
   confidence: number;
+  /** The operation head alone: how sure Jev is of *what* to do. */
+  operationConfidence: number;
+  operationProbabilities: Record<string, number>;
 }
 
 const OPS: Record<"click" | "fill" | "select", TargetOp> = {
@@ -259,6 +263,8 @@ export function interpret(answers: Record<string, unknown>, plan: RequestPlan): 
       action: candidates[t.choice],
       targetIndex: t.choice,
       confidence: Math.min(op.confidence, t.confidence),
+      operationConfidence: op.confidence,
+      operationProbabilities: op.probabilities,
     };
     if (operation === "TYPE_TEXT" && plan.fillHeads.includes(t.choice)) {
       decision.fill = interpretFill(answers, plan.fillNames, t.choice);
@@ -266,5 +272,11 @@ export function interpret(answers: Record<string, unknown>, plan: RequestPlan): 
     return decision;
   }
   const control = plan.space.controls[operation as ControlOp];
-  return { operation, ...(control ? { action: control } : {}), confidence: op.confidence };
+  return {
+    operation,
+    ...(control ? { action: control } : {}),
+    confidence: op.confidence,
+    operationConfidence: op.confidence,
+    operationProbabilities: op.probabilities,
+  };
 }

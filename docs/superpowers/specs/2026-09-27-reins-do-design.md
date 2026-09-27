@@ -207,6 +207,21 @@ the loop issues `jev_observe` / `jev_act` through the existing
      answered per field, still in one round trip. If Jev picks a TYPE_TEXT
      target outside the first 8, one extra request asks that field's head
      alone.
+   - **Unsure right after typing a search → submit it.** If the previous
+     action of the run was a `type` into a field the current observation
+     still offers as a SUBMIT_SEARCH target (matched by node id, else label;
+     the field still holds a non-empty value), and Jev chose CLICK, BLOCKED
+     or WAIT with the *operation head's* probability below
+     `UNSURE_AFTER_TYPING = 0.5` (`interpret` exposes it as
+     `operationConfidence`; `confidence` stays min(op, target)), the loop runs
+     SUBMIT_SEARCH on that field instead — recorded as a normal `submit` step
+     whose confidence is Jev's SUBMIT_SEARCH probability, and still gated by
+     the risky-label check. Live data (github.com/search after typing the
+     query, three runs): CLICK "advanced search" 0.31–0.35, BLOCKED
+     0.29–0.32, SUBMIT_SEARCH 0.17–0.21 — a near tie that flipped between a
+     detour discarding the query and giving up, where a person presses
+     Enter. DONE, TYPE_TEXT, SELECT and a confident choice are never
+     overridden.
 4. **Gate** (stop rules below). Only the chosen operation's target is used.
 5. **Act** (`jev_act`). A `stale` result means the target changed or is
    covered: re-observe without counting a step (counts toward the Jev-call
@@ -227,7 +242,8 @@ new tab. The site rule applies to the new tab's host as to any observation.
 State sent to Jev per request: goal; url, title; visible viewport text
 (capped at 6,000 chars); elements (index, role, label, value,
 checked/selected/expanded, options for native selects); last 10 actions
-(`op`, label, fill name, pageChanged); fill names and values. Never sent:
+(`op`, label, fill name, pageChanged; the history also keeps each act's node
+id, for the loop's own matching, not for Jev); fill names and values. Never sent:
 password, file, or hidden inputs (the snapshot skips them) and the key.
 
 ### Stop rules

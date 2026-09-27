@@ -181,6 +181,19 @@ describe("interpret", () => {
     expect(interpret(answersFor("TYPE_TEXT", "1", {}), plan).fill).toBeNull();
   });
 
+  it("exposes the operation head on its own, next to the combined confidence", () => {
+    const a = answersFor("CLICK", "3", {});
+    a.operation = {
+      ...(a.operation as object),
+      confidence: 0.4,
+      probabilities: { CLICK: 0.4, TYPE_TEXT: 0.3, DONE: 0.2, BLOCKED: 0.05, WAIT: 0.05 },
+    };
+    const d = interpret(a, plan);
+    expect(d.operationConfidence).toBe(0.4);
+    expect(d.operationProbabilities).toMatchObject({ CLICK: 0.4, DONE: 0.2 });
+    expect(d.confidence).toBe(0.4); // min(op, target); the target head is 0.9
+  });
+
   it("ignores target questions for operations not chosen", () => {
     const d = interpret(answersFor("DONE", "1", {}), plan);
     expect(d).toMatchObject({ operation: "DONE" });

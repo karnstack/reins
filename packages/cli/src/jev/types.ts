@@ -3,6 +3,8 @@ export type StepOp = "click" | "type" | "select" | "submit" | "scroll" | "wait";
 export interface HistoryEntry {
   op: StepOp;
   label: string;
+  /** The element's Jev node id, when the act had one. */
+  node?: number;
   fill?: string;
   /** null until the next observation says whether the page changed. */
   pageChanged: boolean | null;

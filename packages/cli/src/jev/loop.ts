@@ -3,12 +3,14 @@ import type { JevAsk } from "./client.js";
 import { fingerprint, noProgress, normalizeLabel, riskyReason, sameSite } from "./rules.js";
 import {
   buildRequest,
+  type Decision,
   fillOnlyRequest,
   interpret,
   interpretFill,
   type Operation,
+  type RequestPlan,
 } from "./space.js";
-import type { DoResult, DoStatus, DoStep, RunState, StepOp } from "./types.js";
+import type { DoResult, DoStatus, DoStep, HistoryEntry, RunState, StepOp } from "./types.js";
 
 export interface LoopDeps {
   observe(): Promise<JevObservation>;
@@ -42,6 +44,43 @@ const OP_OF: Record<Exclude<Operation, "DONE" | "BLOCKED">, StepOp> = {
   SCROLL_UP: "scroll",
   WAIT: "wait",
 };
+
+/** Operation-head probability below which, right after typing a search
+ *  query, Jev's CLICK / BLOCKED / WAIT is a coin flip: on github.com/search
+ *  after typing into "Search GitHub" the head read CLICK "advanced search"
+ *  0.31–0.35, BLOCKED 0.29–0.32, SUBMIT_SEARCH 0.17–0.21 over three runs. */
+const UNSURE_AFTER_TYPING = 0.5;
+
+/** Unsure right after typing into a search field that can still be
+ *  submitted: a person presses Enter. The submit's confidence is Jev's own
+ *  SUBMIT_SEARCH probability. Never overrides DONE, TYPE_TEXT, SELECT, or a
+ *  confident choice. */
+function submitAfterTyping(
+  decision: Decision,
+  plan: RequestPlan,
+  history: HistoryEntry[],
+): Decision | undefined {
+  const last = history.at(-1);
+  if (last?.op !== "type" || last.stale !== undefined) return undefined;
+  if (!["CLICK", "BLOCKED", "WAIT"].includes(decision.operation)) return undefined;
+  if (decision.operationConfidence >= UNSURE_AFTER_TYPING) return undefined;
+  // SUBMIT_SEARCH candidates are search-like fields still holding a value
+  // (actionSpace), so the typed field is offered only if the query is there.
+  const submit = Object.entries(plan.space.targets.SUBMIT_SEARCH ?? {}).find(([, a]) =>
+    last.node !== undefined && a.node !== undefined ? a.node === last.node : a.label === last.label,
+  );
+  if (!submit) return undefined;
+  const [targetIndex, action] = submit;
+  const confidence = decision.operationProbabilities.SUBMIT_SEARCH ?? 0;
+  return {
+    operation: "SUBMIT_SEARCH",
+    action,
+    targetIndex,
+    confidence,
+    operationConfidence: confidence,
+    operationProbabilities: decision.operationProbabilities,
+  };
+}
 
 /** Statuses the --continue loop breaker may turn into `stuck`. The page-side
  *  stops (dialog, left_site, interrupted) stay as they are: they say what
@@ -204,7 +243,8 @@ export async function runLoop(
 
       const plan = buildRequest(obs, run.goal, run.history, run.fills);
       calls += 1;
-      const decision = interpret(await deps.ask(plan.body, input.signal), plan);
+      let decision = interpret(await deps.ask(plan.body, input.signal), plan);
+      decision = submitAfterTyping(decision, plan, run.history) ?? decision;
       if (
         decision.operation === "TYPE_TEXT" &&
         decision.fill === undefined &&
@@ -271,7 +311,13 @@ export async function runLoop(
       if ("stale" in res) {
         // Nothing happened: read again, no step used — but remember why, and
         // give up after three in a row.
-        run.history.push({ op, label: action.label, pageChanged: null, stale: res.reason });
+        run.history.push({
+          op,
+          label: action.label,
+          ...(action.node !== undefined ? { node: action.node } : {}),
+          pageChanged: null,
+          stale: res.reason,
+        });
         if (++staleRun >= 3) {
           return stop("stuck", {
             reason: `couldn't act on ${JSON.stringify(action.label)}: ${res.reason}`,
@@ -292,7 +338,13 @@ export async function runLoop(
       }
       run.step += 1;
       executed += 1;
-      run.history.push({ op, label: action.label, ...(fill ? { fill } : {}), pageChanged: null });
+      run.history.push({
+        op,
+        label: action.label,
+        ...(action.node !== undefined ? { node: action.node } : {}),
+        ...(fill ? { fill } : {}),
+        pageChanged: null,
+      });
       steps.push({
         n: run.step,
         op,
