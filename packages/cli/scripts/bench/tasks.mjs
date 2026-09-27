@@ -3,7 +3,7 @@
 // Each task:
 //   id         short name (used in --tasks and in trace dir names)
 //   tier       "fixture" (served by the runner from ./fixtures) | "live" (the public web)
-//   set        "dev" | "holdout2"
+//   set        "dev" (holdout2 was folded into dev; see below)
 //   url        start page; fixture tasks use `fixture:<file>` and the runner
 //              rewrites it to http://127.0.0.1:<port>/<file>
 //   goal       what `reins do` is told
@@ -25,11 +25,11 @@
 // generalisation. They are `set: "dev"` now.
 //
 // holdout2 (8 tasks, the last section below) was frozen on 2026-09-27 before
-// round 3 of fixing began. Its checkers were validated WITHOUT `reins do`
-// (false at start and on near-miss states, true on a goal state reached by
-// URL or by driving the page with `reins eval`) — `reins do` has never been
-// run on them. Fix reins against dev only; run holdout2 to judge a fix, never
-// to shape it. Evidence: .superpowers/sdd/2026-09-27-reins-do/holdout2-report.md.
+// round 3 of fixing began, its checkers validated WITHOUT `reins do` (evidence:
+// .superpowers/sdd/2026-09-27-reins-do/holdout2-report.md). holdout2 folded
+// into dev after its first run on 3c8a364 (16/40): those tasks have been seen
+// and their failures discussed, so they are `set: "dev"` now. A new holdout3
+// will be built separately; there is no holdout set in this file at present.
 //
 // The fixture pages are excluded from biome on purpose: they copy real sites'
 // markup (ul[role=listbox] > li[role=option], li[role=menuitemradio] menus,
@@ -347,11 +347,11 @@ export const TASKS = [
       "the calculator's result URL has today=01/01/2025 and ageat=03/01/2026 (start and end dates) and the result shows '424 calendar days'",
   },
 
-  // ── holdout2 (frozen 2026-09-27, before round 3; never run with `reins do`) ──
+  // ── former holdout2 (frozen 2026-09-27; folded into dev after its first run on 3c8a364) ──
   {
     id: "fx-settings",
     tier: "fixture",
-    set: "holdout2",
+    set: "dev",
     url: "fixture:settings.html",
     goal: "In the account settings, open the Notifications tab, turn on 'Weekly digest emails' and save the changes.",
     fills: {},
@@ -366,7 +366,7 @@ export const TASKS = [
   {
     id: "fx-orders",
     tier: "fixture",
-    set: "holdout2",
+    set: "dev",
     url: "fixture:orders.html",
     goal: "In the orders table, find the order placed by Nadia Okafor and open its details.",
     fills: {},
@@ -380,7 +380,7 @@ export const TASKS = [
   {
     id: "lit",
     tier: "live",
-    set: "holdout2",
+    set: "dev",
     url: "https://lit.dev/",
     goal: "Search the Lit docs for 'reactive properties' and open the 'Reactive properties' documentation page.",
     fills: { query: "reactive properties" },
@@ -393,7 +393,7 @@ export const TASKS = [
   {
     id: "musicbrainz",
     tier: "live",
-    set: "holdout2",
+    set: "dev",
     url: "https://musicbrainz.org/",
     goal: "Search MusicBrainz for 'OK Computer' with the search type set to 'Release group'.",
     fills: { query: "OK Computer" },
@@ -407,7 +407,7 @@ export const TASKS = [
   {
     id: "openlibrary",
     tier: "live",
-    set: "holdout2",
+    set: "dev",
     url: "https://openlibrary.org/",
     goal: "Search Open Library for 'the hobbit' and sort the results by 'Most Editions'.",
     fills: { query: "the hobbit" },
@@ -422,7 +422,7 @@ export const TASKS = [
   {
     id: "crates",
     tier: "live",
-    set: "holdout2",
+    set: "dev",
     url: "https://crates.io/",
     goal: "Search crates.io for 'serde', open the serde crate and show its Versions list.",
     fills: { query: "serde" },
@@ -436,7 +436,7 @@ export const TASKS = [
   {
     id: "iana",
     tier: "live",
-    set: "holdout2",
+    set: "dev",
     url: "https://www.iana.org/domains/root/db",
     goal: "In the Root Zone Database, open the record for the .ch top-level domain.",
     fills: {},
@@ -449,7 +449,7 @@ export const TASKS = [
   {
     id: "osm",
     tier: "live",
-    set: "holdout2",
+    set: "dev",
     url: "https://www.openstreetmap.org/",
     goal: "Search OpenStreetMap for 'Matterhorn' and open the result for the peak in Zermatt, Switzerland.",
     fills: { query: "Matterhorn" },
