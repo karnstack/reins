@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { fillName, formatDoResult, nextCommand, shellQuote } from "./format.js";
+import { fillName, formatDoResult, nextCommand, shellQuote, tokens } from "./format.js";
 import type { DoResult } from "./types.js";
 
 const base: DoResult = {
@@ -21,17 +21,33 @@ const base: DoResult = {
   title: "Results",
   elapsedMs: 7200,
   jevCalls: 17,
+  inputTokens: 21_400,
   step: 2,
   maxSteps: 30,
   pageChanges: 2,
 };
+
+describe("tokens", () => {
+  it.each([
+    [0, "0 tokens"],
+    [812, "812 tokens"],
+    [1000, "1k tokens"],
+    [2840, "2.8k tokens"],
+    [9940, "9.9k tokens"],
+    [9990, "10k tokens"],
+    [21_400, "21k tokens"],
+    [1_250_000, "1250k tokens"],
+  ])("%d → %s", (n, text) => {
+    expect(tokens(n)).toBe(text);
+  });
+});
 
 describe("formatDoResult", () => {
   it("prints a finished run with its steps and the verify hint", () => {
     const text = formatDoResult({ ...base, next: nextCommand(base, { goal: "g" }) });
     expect(text).toBe(
       [
-        "done in 7.2s · 2 steps · 17 jev calls",
+        "done in 7.2s · 2 steps · 17 jev calls · 21k tokens",
         '  1 click  "Where from?"',
         '  2 type   "Where from?" ← from',
         'now: https://x.com/r — "Results"',
@@ -60,7 +76,7 @@ describe("formatDoResult", () => {
     };
     const text = formatDoResult({ ...r, next: nextCommand(r, { goal: "g", tabId: 7 }) });
     expect(text).toContain('risky_action: next click is "Pay now"');
-    expect(text).toContain("stopped at step 9/30 · page changed 8× · 4.1s");
+    expect(text).toContain("stopped at step 9/30 · page changed 8× · 4.1s · 21k tokens");
     expect(text).toContain("next: reins do --continue --confirm 'Pay now' --tab 7");
   });
 

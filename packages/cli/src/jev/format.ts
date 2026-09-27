@@ -46,12 +46,17 @@ export function nextCommand(
 }
 
 const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+/** "812 tokens", "2.8k tokens", "21k tokens". */
+export const tokens = (n: number) =>
+  n < 1000
+    ? `${n} tokens`
+    : `${n < 10_000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") : Math.round(n / 1000)}k tokens`;
 
 /** Human output for a `reins do` run: header, steps, where we are, and what to run next. */
 export function formatDoResult(r: DoResult): string {
   const lines: string[] = [
     r.status === "done"
-      ? `done in ${sec(r.elapsedMs)} · ${r.steps.length} steps · ${r.jevCalls} jev calls`
+      ? `done in ${sec(r.elapsedMs)} · ${r.steps.length} steps · ${r.jevCalls} jev calls · ${tokens(r.inputTokens)}`
       : `${r.status}: ${r.reason ?? ""}`.trimEnd(),
   ];
   for (const s of r.steps) {
@@ -62,7 +67,7 @@ export function formatDoResult(r: DoResult): string {
   if (r.status === "done") lines.push(`now: ${r.url} — ${JSON.stringify(r.title)}`);
   else if (r.status !== "error" || r.steps.length > 0) {
     lines.push(
-      `stopped at step ${r.step}/${r.maxSteps} · page changed ${r.pageChanges}× · ${sec(r.elapsedMs)}`,
+      `stopped at step ${r.step}/${r.maxSteps} · page changed ${r.pageChanges}× · ${sec(r.elapsedMs)} · ${tokens(r.inputTokens)}`,
     );
   }
   if (r.next) lines.push(`next: ${r.next}`);

@@ -15,6 +15,8 @@ export interface LoopDeps {
   act(params: Omit<JevActParams, "browserId" | "tabId">): Promise<JevActResult>;
   ask: JevAsk;
   now(): number;
+  /** Input tokens `ask` has consumed so far (summed by whoever created it). */
+  inputTokens?(): number;
   /** A click opened a new tab: every later observe/act goes there. */
   retarget?(tabId: number): void;
 }
@@ -113,6 +115,7 @@ export async function runLoop(
         title,
         elapsedMs: deps.now() - started,
         jevCalls: calls,
+        inputTokens: deps.inputTokens?.() ?? 0,
         step: run.step,
         maxSteps: stepLimit,
         pageChanges: run.pageChanges,

@@ -28,6 +28,20 @@ describe("createJevAsk", () => {
     expect(JSON.parse(String(init.body)).model).toBe("jev-latest");
   });
 
+  it("reports each request's input tokens, 0 when the reply has no usage", async () => {
+    const onUsage = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { ...OK, usage: { input_tokens: 1234, output_tokens: 2 } }))
+      .mockResolvedValueOnce(json(200, { ...OK, usage: undefined }))
+      .mockImplementation(async () => json(500, {})); // a fresh Response per retry
+    const ask = createJevAsk({ key: "ts_key_12345678", fetch, retry: NO_WAIT, onUsage });
+    await ask(BODY);
+    await ask(BODY);
+    await expect(ask(BODY)).rejects.toMatchObject({ code: "http" });
+    expect(onUsage.mock.calls).toEqual([[1234], [0]]);
+  });
+
   it("retries a 429, then succeeds", async () => {
     const fetch = vi
       .fn()

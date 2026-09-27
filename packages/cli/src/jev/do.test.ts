@@ -187,6 +187,24 @@ describe("handleDo", () => {
     for (const [, payload] of calls.slice(1)) expect(payload).toMatchObject({ tabId: 5 });
   });
 
+  it("sums the input tokens of every Jev call, fill-only requests included", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const runs = new RunStore();
+    const r = await handleDo(bridge(), params, {
+      runs,
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+      createAsk: (_key, onUsage) => {
+        const inner = clickThenDone();
+        return (async (body: AskBody) => {
+          onUsage(1500);
+          return inner(body);
+        }) as never;
+      },
+    });
+    expect(r).toMatchObject({ status: "done", jevCalls: 2, inputTokens: 3000 });
+  });
+
   it("moves the run to a tab the click opened, and routes next there", async () => {
     writeKey(dir, "ts_live_abcd1234");
     const b = bridge();
@@ -260,6 +278,7 @@ describe("handleDo", () => {
     });
     expect(r).toMatchObject({
       status: "done",
+      inputTokens: 0,
       next: "reins snapshot   # verify before trusting DONE",
     });
     expect(runs.get("b1:5")?.goal).toBe("find it");

@@ -35,8 +35,8 @@ export interface DoContext {
   /** Aborted when the CLI hangs up or the daemon shuts down. */
   signal: AbortSignal;
   audit?: AuditHook;
-  /** Test seam: replaces the TypeSafe client. */
-  createAsk?: (key: string) => JevAsk;
+  /** Test seam: replaces the TypeSafe client; `onUsage` reports each call's input tokens. */
+  createAsk?: (key: string, onUsage: (inputTokens: number) => void) => JevAsk;
   now?: () => number;
 }
 
@@ -88,6 +88,7 @@ export async function handleDo(
     title: "",
     elapsedMs: now() - started,
     jevCalls: 0,
+    inputTokens: 0,
     step: 0,
     maxSteps: p.maxSteps,
     pageChanges: 0,
@@ -192,7 +193,11 @@ export async function handleDo(
     } else {
       run = newRun(p.goal as string, hostOf(first.url), p.fills, p.confirms, now());
     }
-    const ask = (ctx.createAsk ?? ((k: string) => createJevAsk({ key: k })))(key);
+    let inputTokens = 0;
+    const onUsage = (n: number) => {
+      inputTokens += n;
+    };
+    const ask = (ctx.createAsk ?? ((k: string) => createJevAsk({ key: k, onUsage })))(key, onUsage);
     // One signal for the loop: the hang-up/shutdown signal, plus --timeout.
     // A Jev call or jev_act in flight when the budget runs out is cut short,
     // so the run always answers inside the CLI's HTTP wait.
@@ -217,6 +222,7 @@ export async function handleDo(
             JevActResult.parse(await call("jev_act", a)),
           ask,
           now,
+          inputTokens: () => inputTokens,
           // A link opened a new tab: the run follows it (the extension has
           // brought it forward), and its memory moves with it.
           retarget: (id: number) => {

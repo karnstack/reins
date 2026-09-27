@@ -63,6 +63,8 @@ export function createJevAsk(opts: {
   key: string;
   fetch?: Fetch;
   retry?: Partial<RetryPolicy>;
+  /** Input tokens each answered request cost (0 when the reply carries no usage). */
+  onUsage?: (inputTokens: number) => void;
 }): JevAsk {
   const client = new TypeSafeClient({
     apiKey: opts.key,
@@ -78,6 +80,8 @@ export function createJevAsk(opts: {
         body as Parameters<typeof client.systemOne>[0],
         signal ? { signal } : {},
       );
+      const tokens = result.usage?.input_tokens;
+      opts.onUsage?.(typeof tokens === "number" && Number.isFinite(tokens) ? tokens : 0);
       return result.answers as Record<string, unknown>;
     } catch (err) {
       throw translate(err);

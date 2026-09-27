@@ -49,6 +49,8 @@ export interface DoResult {
   title: string;
   elapsedMs: number;
   jevCalls: number;
+  /** Input tokens over every Jev call of this invocation (output tokens are free). */
+  inputTokens: number;
   step: number;
   maxSteps: number;
   pageChanges: number;

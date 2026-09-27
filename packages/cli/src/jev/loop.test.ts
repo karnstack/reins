@@ -82,6 +82,17 @@ const input = (over: Partial<Parameters<typeof runLoop>[1]> = {}) => ({
 });
 
 describe("runLoop", () => {
+  it("carries the input tokens its asks consumed", async () => {
+    let used = 0;
+    const d = deps([page([button(1, "Go")])], [{ op: "CLICK", target: "1" }, { op: "DONE" }]);
+    d.ask.mockImplementation(async (body) => {
+      used += 1000;
+      return scriptedJev([{ op: used === 1000 ? "CLICK" : "DONE", target: "1" }])(body);
+    });
+    const { result } = await runLoop({ ...d, inputTokens: () => used }, input());
+    expect(result).toMatchObject({ status: "done", jevCalls: 2, inputTokens: 2000 });
+  });
+
   it("finishes when Jev says DONE", async () => {
     const d = deps([page([])], [{ op: "DONE" }]);
     const { result } = await runLoop(d, input());
