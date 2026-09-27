@@ -46,11 +46,13 @@ export function nextCommand(
 }
 
 const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
-/** "812 tokens", "2.8k tokens", "21k tokens". */
-export const tokens = (n: number) =>
-  n < 1000
-    ? `${n} tokens`
-    : `${n < 10_000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") : Math.round(n / 1000)}k tokens`;
+/** "812 tokens", "2.8k tokens", "21k tokens", "1.3M tokens". */
+export const tokens = (n: number) => {
+  const short = (v: number) => (v < 10 ? v.toFixed(1).replace(/\.0$/, "") : String(Math.round(v)));
+  if (n < 1000) return `${n} tokens`;
+  if (n < 1_000_000) return `${short(n / 1000)}k tokens`;
+  return `${short(n / 1_000_000)}M tokens`;
+};
 
 /** Human output for a `reins do` run: header, steps, where we are, and what to run next. */
 export function formatDoResult(r: DoResult): string {

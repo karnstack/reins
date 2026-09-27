@@ -36,7 +36,9 @@ describe("tokens", () => {
     [9940, "9.9k tokens"],
     [9990, "10k tokens"],
     [21_400, "21k tokens"],
-    [1_250_000, "1250k tokens"],
+    [999_400, "999k tokens"],
+    [1_250_000, "1.3M tokens"],
+    [12_000_000, "12M tokens"],
   ])("%d → %s", (n, text) => {
     expect(tokens(n)).toBe(text);
   });
