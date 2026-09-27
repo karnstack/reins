@@ -6,7 +6,7 @@ import type {
   JevObserveParams,
 } from "@reins/protocol";
 import { actionablePoint, drivePage, ensureVisible, pressAt, resolveTabId, send } from "./cdp.js";
-import { jevCheck, jevSelect, jevSettle, jevSnapshot } from "./jev-snapshot.js";
+import { jevCheck, jevSelect, jevSettle, jevSnapshot, jevSubmitFocus } from "./jev-snapshot.js";
 
 /** reins do waits this long for a covered or moving target, then re-reads the page. */
 export const JEV_ACTION_TIMEOUT_MS = 500;
@@ -194,6 +194,30 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
     );
     // A select is a mutation of uncertain outcome if it fails midway: never retry it.
     if (r !== "ok") throw new Error(`select failed: ${r} — check the page before retrying`);
+    if (state.abandoned) return { ok: true };
+    await evaluate(tabId, `(${jevSettle})(${node}, false)`, true).catch(() => {});
+    return { ok: true };
+  }
+
+  if (params.op === "submit") {
+    // Enter in the field: the keypress is what submits its form (keys.ts).
+    const r = await evaluate<string>(tabId, `(${jevSubmitFocus})(${node})`);
+    if (r !== "ok") return { stale: true, reason: r };
+    const enter = {
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,
+      nativeVirtualKeyCode: 13,
+    };
+    state.pressed = true;
+    await send(tabId, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      ...enter,
+      text: "\r",
+      unmodifiedText: "\r",
+    });
+    if (state.abandoned) return { ok: true };
+    await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...enter });
     if (state.abandoned) return { ok: true };
     await evaluate(tabId, `(${jevSettle})(${node}, false)`, true).catch(() => {});
     return { ok: true };

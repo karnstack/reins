@@ -17,6 +17,8 @@ interface JevCache {
   next: number;
   guards: Record<number, string>;
   guard: (el: Element | undefined) => string | null;
+  /** May Enter be pressed in this field? Re-checked at act time. */
+  submittable: (el: Element | undefined) => boolean;
 }
 
 /** The protocol's action, before jevView assigns ids. A type-only import is
@@ -35,7 +37,14 @@ export function jevSnapshot(): {
   const w = window as unknown as Record<symbol, JevCache | undefined>;
   let cache = w[KEY];
   if (!cache) {
-    cache = { ids: new WeakMap(), nodes: new Map(), next: 1, guards: {}, guard: () => null };
+    cache = {
+      ids: new WeakMap(),
+      nodes: new Map(),
+      next: 1,
+      guards: {},
+      guard: () => null,
+      submittable: () => false,
+    };
     w[KEY] = cache;
   }
   const c = cache;
@@ -150,6 +159,32 @@ export function jevSnapshot(): {
     ]);
   };
 
+  // Enter may be pressed only in a single-line text control that looks like
+  // search. Enter in a chat, comment or message box means *send*, and such a
+  // label carries no risky word for the daemon's gate to catch.
+  const SEARCHY = /\b(search|query|find)\b/i;
+  c.submittable = (e) => {
+    if (!e?.isConnected || e.tagName === "TEXTAREA" || (e as HTMLElement).isContentEditable)
+      return false;
+    const input = e as HTMLInputElement;
+    const explicit = e.getAttribute("role");
+    const single =
+      (e.tagName === "INPUT" && ["text", "search", "url", "email", "tel"].includes(input.type)) ||
+      explicit === "searchbox" ||
+      explicit === "combobox";
+    if (!single || input.type === "password") return false;
+    const nm = e.getAttribute("name") ?? "";
+    return (
+      input.type === "search" ||
+      explicit === "searchbox" ||
+      e.closest('form[role="search"],search,[role="search"]') !== null ||
+      ["q", "query", "search"].includes(nm.toLowerCase()) ||
+      [name(e), e.getAttribute("placeholder"), e.getAttribute("aria-label"), nm].some(
+        (t) => t !== null && SEARCHY.test(t),
+      )
+    );
+  };
+
   const actions: Action[] = [];
   for (const e of document.querySelectorAll(selector)) {
     if (!safe(e) || !visible(e) || e.matches(":disabled") || e.closest('[aria-disabled="true"]'))
@@ -201,7 +236,12 @@ export function jevSnapshot(): {
         : (e as HTMLElement).isContentEditable || rname === "combobox"
           ? (e as HTMLElement).innerText.trim()
           : "";
-    actions.push({ ...base, kind: editable ? "fill" : "click", value });
+    actions.push({
+      ...base,
+      kind: editable ? "fill" : "click",
+      value,
+      ...(editable && c.submittable(e) ? { submit: true } : {}),
+    });
     if (editable) actions.push({ ...base, kind: "click", value, label: `Open ${base.label}` });
   }
 
@@ -264,6 +304,18 @@ export function jevCheck(node: number): string {
   const now = cache.guard(el);
   if (now === null) return "the element is hidden now";
   return now === cache.guards[node] ? "ok" : "the element changed since the page was read";
+}
+
+/** Focus the field Jev chose to submit, once it still qualifies for Enter. */
+export function jevSubmitFocus(node: number): string {
+  const cache = (window as unknown as Record<symbol, JevCache | undefined>)[
+    Symbol.for("reins.jev")
+  ];
+  const el = cache?.nodes.get(node);
+  if (!cache || !el?.isConnected) return "the field is gone";
+  if (!cache.submittable(el)) return "the field is not a search field";
+  (el as HTMLElement).focus();
+  return document.activeElement === el ? "ok" : "the field would not take focus";
 }
 
 /** Choose `value` on a native <select> the way a user's pick would. */

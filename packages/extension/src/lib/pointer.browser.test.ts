@@ -93,10 +93,17 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <button id="swap">Swap me</button>
 <button id="ask" onclick="confirm('Leave?')">Ask</button>
 <div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
+<form id="sf" role="search"><input id="q" name="q" aria-label="Search GitHub" value="cats"></form>
+<input id="s2" type="search" placeholder="Search…" value="x">
+<input id="s3" aria-label="Find a repo">
+<textarea id="ta" placeholder="Search notes"></textarea>
+<div id="ce" contenteditable="true" aria-label="Search drafts">x</div>
+<input id="msg" aria-label="Message">
 <script>
   window.__log = [];
   document.getElementById("cabin").addEventListener("change", (e) => __log.push("change:" + e.target.value));
   document.getElementById("f").addEventListener("submit", (e) => e.preventDefault());
+  document.getElementById("sf").addEventListener("submit", (e) => { e.preventDefault(); __log.push("submit:sf"); });
 </script></body></html>`;
 
 let chromeProc: ChildProcess | undefined;
@@ -486,6 +493,43 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       await jevAct({ tabId: 1, op: "select", node: opt?.node as number, value: "biz" }),
     ).toEqual({ ok: true });
     expect(await log()).toContain("change:biz");
+  });
+
+  it("jev: marks search-like single-line fields submittable, nothing else", async () => {
+    await load("/jev");
+    const s = await snap();
+    const submit = (label: string) =>
+      s.actions.find((a) => a.kind === "fill" && a.label === label)?.submit;
+    expect(submit("Search GitHub")).toBe(true); // form[role=search] + name=q
+    expect(submit("Search…")).toBe(true); // type=search
+    expect(submit("Find a repo")).toBe(true); // label says find
+    expect(submit("Search notes")).toBeUndefined(); // textarea
+    expect(submit("Search drafts")).toBeUndefined(); // contenteditable
+    expect(submit("Message")).toBeUndefined(); // Enter would send
+    expect(submit("Where from?")).toBeUndefined();
+  });
+
+  it("jev: submit presses Enter in the search field; other fields and gone ones are stale", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const fill = (label: string) =>
+      s.actions.find((a) => a.kind === "fill" && a.label === label)?.node as number;
+    const node = fill("Search GitHub");
+    expect(await jevAct({ tabId: 1, op: "submit", node, label: "Search GitHub" })).toEqual({
+      ok: true,
+    });
+    expect(await log()).toContain("submit:sf");
+    expect(await jevAct({ tabId: 1, op: "submit", node: fill("Message") })).toMatchObject({
+      stale: true,
+      reason: "the field is not a search field",
+    });
+    await evaluate(
+      'document.getElementById("q").replaceWith(Object.assign(document.createElement("input"), { id: "q" }))',
+    );
+    expect(await jevAct({ tabId: 1, op: "submit", node })).toMatchObject({
+      stale: true,
+      reason: "the element is gone",
+    });
   });
 
   it("jev: a node replaced after the read comes back stale, not clicked", async () => {
