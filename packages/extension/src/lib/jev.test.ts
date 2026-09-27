@@ -7,6 +7,7 @@ import {
   initDialogTracking,
   jevAct,
   jevObserve,
+  NETWORK_IDLE_MS,
   OBSERVE_LOAD_MS,
   openDialog,
   PER_KEY_MAX_CHARS,
@@ -145,6 +146,52 @@ describe("jevObserve", () => {
     const t0 = Date.now();
     expect(await jevObserve({ tabId: 3 })).toEqual(SNAP);
     expect(Date.now() - t0).toBeLessThan(150);
+  });
+
+  it("reads a settled page again once its in-flight data requests have landed", async () => {
+    const { sendCommand, fire } = stubChrome({
+      url: "https://x.com/b",
+      title: "B",
+      status: "complete",
+    });
+    let reads = 0;
+    sendCommand.mockImplementation(
+      docAnswers(
+        () => ({ ready: "complete", body: true }),
+        () => {
+          reads += 1;
+          return { result: { value: { ...SNAP, text: reads === 1 ? "Loading…" : "3 results" } } };
+        },
+      ),
+    );
+    fire(3, "Network.requestWillBeSent", { requestId: "r1", type: "XHR" });
+    fire(3, "Network.requestWillBeSent", { requestId: "r2", type: "Image" }); // not data
+    setTimeout(() => fire(3, "Network.loadingFinished", { requestId: "r1" }), 250);
+    const t0 = Date.now();
+    expect(await jevObserve({ tabId: 3 })).toMatchObject({ text: "3 results" });
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(250);
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(sendCommand).toHaveBeenCalledWith({ tabId: 3 }, "Network.enable", {});
+  });
+
+  it("gives up waiting for a data request after NETWORK_IDLE_MS and reads the page as it is", async () => {
+    const { sendCommand, fire } = stubChrome({
+      url: "https://x.com/b",
+      title: "B",
+      status: "complete",
+    });
+    sendCommand.mockImplementation(
+      docAnswers(
+        () => ({ ready: "complete", body: true }),
+        () => ({ result: { value: SNAP } }),
+      ),
+    );
+    fire(4, "Network.requestWillBeSent", { requestId: "slow", type: "Fetch" });
+    const t0 = Date.now();
+    expect(await jevObserve({ tabId: 4 })).toEqual(SNAP);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(NETWORK_IDLE_MS - 50);
+    expect(Date.now() - t0).toBeLessThan(NETWORK_IDLE_MS + 600);
+    fire(4, "Network.loadingFailed", { requestId: "slow" }); // tidy the per-tab set
   });
 
   it("re-attaches when the debugger session drops mid-observe", async () => {

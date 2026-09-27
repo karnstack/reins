@@ -442,7 +442,15 @@ like a foreground tab.
   loading tab), polling every 100 ms; past the bound it reads whatever
   document has a body, and throws `the page did not finish loading` only
   when none does. A page script exception is surfaced as `page script
-  failed: …`, never mistaken for loading.
+  failed: …`, never mistaken for loading. A settled document whose data
+  requests are still in flight is read again once they land: the driven
+  session enables the Network domain (on every act and observe) and
+  counts XHR/Fetch `requestWillBeSent` per tab until
+  `loadingFinished`/`loadingFailed`; observe re-reads when the count
+  reaches zero (plus 150 ms for the render), or `NETWORK_IDLE_MS` (1.5 s)
+  after the first settled read at the latest — so a search page that
+  shows "Loading…" until its XHR returns is read with its results, not
+  the placeholder. A page with nothing in flight is read at once.
 
 **`jev_act { tabId?, node, op, value?, delta? } → { ok: true } | { stale: true, reason }`**
 

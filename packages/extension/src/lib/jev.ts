@@ -29,6 +29,12 @@ import {
 export const JEV_ACTION_TIMEOUT_MS = 500;
 
 const DIALOGS = new Map<number, JevDialog>();
+/** Per tab: XHR/fetch requests in flight, from the driven session's Network events. */
+const PENDING = new Map<number, Set<string>>();
+/** Request types that carry the data a page renders as results. */
+const DATA_REQUESTS = new Set(["XHR", "Fetch"]);
+/** How long observe waits, past a settled document, for in-flight data requests. */
+export const NETWORK_IDLE_MS = 1500;
 /** Acts in flight, waiting to hear that a dialog opened on their tab. */
 const DIALOG_WAITERS = new Map<number, Set<(dialog: JevDialog) => void>>();
 
@@ -48,10 +54,26 @@ export function initDialogTracking(): void {
       for (const resolve of DIALOG_WAITERS.get(tabId) ?? []) resolve(dialog);
     } else if (method === "Page.javascriptDialogClosed") {
       DIALOGS.delete(tabId);
+    } else if (method === "Network.requestWillBeSent") {
+      const p = (params ?? {}) as { requestId?: string; type?: string };
+      if (p.requestId !== undefined && DATA_REQUESTS.has(p.type ?? "")) {
+        let set = PENDING.get(tabId);
+        if (!set) {
+          set = new Set();
+          PENDING.set(tabId, set);
+        }
+        set.add(p.requestId);
+      }
+    } else if (method === "Network.loadingFinished" || method === "Network.loadingFailed") {
+      const p = (params ?? {}) as { requestId?: string };
+      if (p.requestId !== undefined) PENDING.get(tabId)?.delete(p.requestId);
     }
   });
   chrome.debugger.onDetach.addListener((source) => {
-    if (source.tabId !== undefined) DIALOGS.delete(source.tabId);
+    if (source.tabId !== undefined) {
+      DIALOGS.delete(source.tabId);
+      PENDING.delete(source.tabId);
+    }
   });
 }
 
@@ -63,6 +85,16 @@ try {
 
 export function openDialog(tabId: number): JevDialog | undefined {
   return DIALOGS.get(tabId);
+}
+
+/** XHR/fetch requests the tab has in flight (as far as the driven session saw). */
+export function pendingRequests(tabId: number): number {
+  return PENDING.get(tabId)?.size ?? 0;
+}
+
+/** Have the session report the tab's requests (idempotent; best-effort). */
+async function armNetwork(tabId: number): Promise<void> {
+  await send(tabId, "Network.enable", {}).catch(() => {});
 }
 
 /** Resolves when a dialog opens on the tab; `cancel` drops the waiter. */
@@ -164,17 +196,41 @@ async function readWhenSettled(tabId: number, terms: string[]): Promise<Snapshot
   const until = Date.now() + OBSERVE_LOAD_MS;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   let lastFailure: string | undefined;
+  // The results a click asked for may still be on their way when the document
+  // has settled (a search page that shows "Loading…" until its data request
+  // lands). Such a page is read again once the in-flight XHR/fetch requests
+  // have finished, or NETWORK_IDLE_MS after the first settled read; a
+  // page with nothing in flight is read at once.
+  let idleUntil: number | undefined;
+  let waited = false;
   for (;;) {
     const overdue = Date.now() >= until;
     let snap: Snapshot | undefined;
     try {
-      snap = await drivePage(tabId, () => readOnce(tabId, overdue, terms));
+      snap = await drivePage(tabId, async () => {
+        await armNetwork(tabId);
+        return readOnce(tabId, overdue, terms);
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (SCRIPT_FAILED.test(msg)) throw err;
       lastFailure = msg; // the context is being swapped, or the session dropped
     }
-    if (snap) return snap;
+    if (snap) {
+      idleUntil ??= Date.now() + NETWORK_IDLE_MS;
+      if (!overdue && pendingRequests(tabId) > 0 && Date.now() < idleUntil) {
+        waited = true;
+        await sleep(100);
+        continue;
+      }
+      if (waited) {
+        // The last request just landed: give the page a moment to render it.
+        waited = false;
+        await sleep(150);
+        continue;
+      }
+      return snap;
+    }
     if (overdue) {
       throw new Error(
         lastFailure === undefined
@@ -211,6 +267,8 @@ export async function jevAct(params: JevActParams): Promise<JevActResult> {
     return { ok: true };
   }
   return drivePage(tabId, async () => {
+    // Requests the act sets off are what the next observe waits for.
+    await armNetwork(tabId);
     // A handler that opens alert/confirm/prompt freezes the renderer: the
     // input's own response, the press probe and settle all block. Listen for
     // the dialog before sending anything, and let it win the race — the press
