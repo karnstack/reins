@@ -208,6 +208,15 @@ the loop issues `jev_observe` / `jev_act` through the existing
      target outside the first 8, one extra request asks that field's head
      alone.
 4. **Gate** (stop rules below). Only the chosen operation's target is used.
+   - **Unsubmitted query.** A DONE or BLOCKED verdict whose immediately
+     preceding action was TYPE_TEXT into a field the page marked `submit`
+     (search-like), while that field still holds the typed value, is
+     premature: the query has not run, so neither "everything is satisfied"
+     nor "nothing can progress" has been tested. The loop presses Enter there
+     (SUBMIT_SEARCH on that field, recorded as a `submit` step with the
+     verdict's confidence) and the next read decides. Anything else since the
+     typing — a click, a select, a stale act aside — leaves the verdict
+     alone; so does a non-search field.
 5. **Act** (`jev_act`). A `stale` result means the target changed or is
    covered: re-observe without counting a step (counts toward the Jev-call
    cap).

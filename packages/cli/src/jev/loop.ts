@@ -1,4 +1,10 @@
-import { hostOf, type JevActParams, type JevActResult, type JevObservation } from "@reins/protocol";
+import {
+  hostOf,
+  type JevAction,
+  type JevActParams,
+  type JevActResult,
+  type JevObservation,
+} from "@reins/protocol";
 import type { JevAsk } from "./client.js";
 import { fingerprint, noProgress, normalizeLabel, riskyReason, sameSite } from "./rules.js";
 import {
@@ -58,6 +64,23 @@ function abortReason(signal: AbortSignal): string {
 function timedOut(signal: AbortSignal): boolean {
   const r = signal.reason as unknown;
   return r instanceof Error && r.name === "TimeoutError";
+}
+
+/** The search field the last action typed into, when it still holds that
+ *  value and the page offers Enter there — i.e. a query typed but not run. */
+function unsubmittedQuery(
+  run: RunState,
+  candidates: Record<string, JevAction> | undefined,
+): { index: string; action: JevAction } | undefined {
+  const last = run.history.findLast((h) => h.stale === undefined);
+  if (last?.op !== "type" || last.fill === undefined || !candidates) return undefined;
+  const typed = run.fills[last.fill];
+  for (const [index, action] of Object.entries(candidates)) {
+    if (action.label === last.label && (action.current_value ?? action.value) === typed) {
+      return { index, action };
+    }
+  }
+  return undefined;
 }
 
 /** The `reins do` state machine: observe → ask Jev → gate → act → record,
@@ -204,7 +227,7 @@ export async function runLoop(
 
       const plan = buildRequest(obs, run.goal, run.history, run.fills);
       calls += 1;
-      const decision = interpret(await deps.ask(plan.body, input.signal), plan);
+      let decision = interpret(await deps.ask(plan.body, input.signal), plan);
       if (
         decision.operation === "TYPE_TEXT" &&
         decision.fill === undefined &&
@@ -221,6 +244,22 @@ export async function runLoop(
         );
       }
 
+      // A stop verdict right after typing a query into a search field is
+      // premature: the query has not run yet, so nothing has been decided by
+      // it. Press Enter there first (the same act Jev could have chosen), and
+      // let the next read judge. Only the field just typed into, still
+      // holding the typed value, and only when the page marked it search-like.
+      if (decision.operation === "DONE" || decision.operation === "BLOCKED") {
+        const submit = unsubmittedQuery(run, plan.space.targets.SUBMIT_SEARCH);
+        if (submit) {
+          decision = {
+            operation: "SUBMIT_SEARCH",
+            action: submit.action,
+            targetIndex: submit.index,
+            confidence: decision.confidence,
+          };
+        }
+      }
       if (decision.operation === "DONE") return stop("done");
       if (decision.operation === "BLOCKED") {
         return stop("blocked", { reason: "Jev found nothing on the page that can make progress" });

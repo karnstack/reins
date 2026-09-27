@@ -112,6 +112,61 @@ describe("runLoop", () => {
     ]);
   });
 
+  describe("a stop verdict right after typing a search query submits it instead", () => {
+    const search = (value: string): JevAction[] => [
+      { id: "f1", kind: "fill", node: 1, role: "searchbox", label: "Search", value, submit: true },
+      { id: "o1", kind: "click", node: 1, role: "searchbox", label: "Open Search", value },
+    ];
+    const fills = { query: "cats" };
+    const withFills = () => input({ run: newRun("find cats", "x.com", fills, [], 0) });
+
+    it.each(["DONE", "BLOCKED"])("%s after TYPE_TEXT → Enter in that field", async (verdict) => {
+      const d = deps(
+        [page(search("")), page(search("cats")), page([], { text: "results" })],
+        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "query" } }, { op: verdict }, { op: "DONE" }],
+      );
+      const { result } = await runLoop(d, withFills());
+      expect(d.act).toHaveBeenNthCalledWith(2, { op: "submit", node: 1, label: "Search" });
+      expect(result.status).toBe("done");
+      expect(result.steps.map((s) => s.op)).toEqual(["type", "submit"]);
+    });
+
+    it("is left alone when the field no longer holds the typed value", async () => {
+      const d = deps(
+        [page(search("")), page(search("dogs"))],
+        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "query" } }, { op: "DONE" }],
+      );
+      const { result } = await runLoop(d, withFills());
+      expect(d.act).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("done");
+    });
+
+    it("is left alone when the field is not search-like", async () => {
+      const plain = field(1, "Name").map((a) => (a.kind === "fill" ? { ...a, value: "cats" } : a));
+      const d = deps(
+        [page(field(1, "Name")), page(plain)],
+        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "query" } }, { op: "BLOCKED" }],
+      );
+      const { result } = await runLoop(d, withFills());
+      expect(d.act).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("blocked");
+    });
+
+    it("is left alone when something else happened since the typing", async () => {
+      const d = deps(
+        [page(search("")), page([...search("cats"), button(2, "Filter")]), page(search("cats"))],
+        [
+          { op: "TYPE_TEXT", target: "1", fill: { "1": "query" } },
+          { op: "CLICK", target: "2" },
+          { op: "DONE" },
+        ],
+      );
+      const { result } = await runLoop(d, withFills());
+      expect(d.act).toHaveBeenCalledTimes(2);
+      expect(result.status).toBe("done");
+    });
+  });
+
   it("stops before a risky click and names it", async () => {
     const d = deps([page([button(1, "Pay now")])], [{ op: "CLICK", target: "1" }]);
     const { result } = await runLoop(d, input());
