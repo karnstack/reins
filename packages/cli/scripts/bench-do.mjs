@@ -23,8 +23,9 @@ const TASKS = [
     fills: { from: "Zurich", to: "London" },
     // A results page carries the encoded search in `tfs=` and shows prices;
     // the filled-but-unsearched form and "no flights found" have neither.
+    // Prices follow the viewer's locale (₹ from India), so any currency sign.
     check:
-      "location.href.includes('/travel/flights') && /[?&]tfs=/.test(location.search) && /(CHF|£|€|\\$)\\s?\\d/.test(document.body.innerText) && /Zurich|ZRH/.test(document.body.innerText) && /London/.test(document.body.innerText) && /Nov 20|20 Nov|November 20/.test(document.body.innerText)",
+      "location.href.includes('/travel/flights') && /[?&]tfs=/.test(location.search) && /(CHF|\\p{Sc})\\s?\\d/u.test(document.body.innerText) && /Zurich|ZRH/.test(document.body.innerText) && /London/.test(document.body.innerText) && /Nov 20|20 Nov|November 20/.test(document.body.innerText)",
   },
   {
     id: "wikipedia",
