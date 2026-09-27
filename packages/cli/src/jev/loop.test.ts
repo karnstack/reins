@@ -234,10 +234,11 @@ describe("runLoop", () => {
     expect((await runLoop(d, input())).result).toMatchObject({ status: "dialog" });
   });
 
-  it("a dialog observation leaves the run's page state alone", async () => {
+  it("a dialog observation is the click's outcome, but never the run's fingerprint", async () => {
     // The blocked page can't be read: the observation under a dialog has no
     // text or actions (and, from an older extension, no url/title). Treating
-    // that as "the page" would fake a page change and poison the fingerprint.
+    // that as "the page" would poison the fingerprint; the dialog itself is
+    // what the click did.
     const before = page([button(1, "Go")]);
     const d = deps(
       [
@@ -255,9 +256,9 @@ describe("runLoop", () => {
     );
     const { result, run: after } = await runLoop(d, input());
     expect(result).toMatchObject({ status: "dialog", url: "https://x.com/a", title: "X", step: 1 });
-    expect(result.steps[0]?.pageChanged).toBeNull();
-    expect(after.history[0]?.pageChanged).toBeNull();
-    expect(after.pageChanges).toBe(0);
+    expect(result.steps[0]?.pageChanged).toBe(true);
+    expect(after.history[0]?.pageChanged).toBe(true);
+    expect(after.pageChanges).toBe(1);
     expect(after.lastFingerprint).toBe(fingerprint(before));
   });
 
@@ -382,9 +383,30 @@ describe("runLoop", () => {
     );
     const { result, run: after } = await runLoop(d, input({ run, continued: true }));
     expect(result).toMatchObject({ status: "dialog", title: "Y", step: 6 });
-    // The page under the dialog wasn't read: the click's outcome is still open.
-    expect(result.steps[0]?.pageChanged).toBeNull();
+    // The dialog is the click's outcome: progress, so no lock.
+    expect(result.steps[0]?.pageChanged).toBe(true);
     expect(after.lockedFingerprint).toBeUndefined();
+  });
+
+  it("clicks that open dialogs count as progress, not toward stuck", async () => {
+    // Each --continue: the dismissed dialog left the page as it was, the
+    // click opens another one. Three in a row must not read as "nothing
+    // changed": the dialog was the change.
+    const same = page([button(1, "Ask")]);
+    const blocked = page([], { dialog: { type: "confirm", message: "Sure?" } });
+    let run = newRun("answer the question", "x.com", {}, [], 0);
+    let continued = false;
+    for (let i = 0; i < 3; i++) {
+      const d = deps([same, blocked], [{ op: "CLICK", target: "1" }]);
+      const out = await runLoop(d, input({ run, continued }));
+      expect(out.result.status).toBe("dialog");
+      expect(out.result.steps[0]?.pageChanged).toBe(true);
+      run = out.run;
+      continued = true;
+    }
+    expect(run.history.map((h) => h.pageChanged)).toEqual([true, true, true]);
+    expect(run.pageChanges).toBe(3);
+    expect(run.lastFingerprint).toBe(fingerprint(same));
   });
 
   it("a --continue that is aborted after acting is interrupted, not stuck", async () => {

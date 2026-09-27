@@ -128,12 +128,22 @@ export async function runLoop(
       if (deps.now() - started >= input.timeoutMs) return stop("budget", { reason: timeoutReason });
       obs ??= await deps.observe();
       // A blocked page can't be read: the observation under a dialog carries
-      // no text or actions, so it says nothing about the last action's
-      // outcome and must not become the run's fingerprint. Keep the previous
+      // no text or actions, so it must not become the run's fingerprint. But
+      // the dialog is what the last action did — count it as a page change,
+      // or three clicks that each opened one (and were each dismissed) would
+      // read as three no-ops and stop the run as stuck. Keep the previous
       // url/title when the observation has none (older extensions).
       if (obs.dialog) {
         if (obs.url) url = obs.url;
         if (obs.title) title = obs.title;
+        const prev = run.history.at(-1);
+        if (prev && prev.pageChanged === null) {
+          prev.pageChanged = true;
+          run.pageChanges += 1;
+          changed += 1;
+          const s = steps.at(-1);
+          if (s && s.n === run.step) s.pageChanged = true;
+        }
         return stop("dialog", {
           reason: `a JavaScript ${obs.dialog.type} is open: ${JSON.stringify(obs.dialog.message)}`,
         });
