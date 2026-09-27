@@ -54,11 +54,13 @@ export const tokens = (n: number) => {
   return `${short(n / 1_000_000)}M tokens`;
 };
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 /** Human output for a `reins do` run: header, steps, where we are, and what to run next. */
 export function formatDoResult(r: DoResult): string {
   const lines: string[] = [
     r.status === "done"
-      ? `done in ${sec(r.elapsedMs)} · ${r.steps.length} steps · ${r.jevCalls} jev calls · ${tokens(r.inputTokens)}`
+      ? `done in ${sec(r.elapsedMs)} · ${plural(r.steps.length, "step")} · ${plural(r.jevCalls, "jev call")} · ${tokens(r.inputTokens)}`
       : `${r.status}: ${r.reason ?? ""}`.trimEnd(),
   ];
   for (const s of r.steps) {

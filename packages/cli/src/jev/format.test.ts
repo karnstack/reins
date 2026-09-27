@@ -58,6 +58,13 @@ describe("formatDoResult", () => {
     );
   });
 
+  it("says 1 step and 1 jev call in the singular", () => {
+    const one = { ...base, steps: base.steps.slice(0, 1), jevCalls: 1 };
+    expect(formatDoResult(one).split("\n")[0]).toBe(
+      "done in 7.2s · 1 step · 1 jev call · 21k tokens",
+    );
+  });
+
   it("notes a step that opened a new tab", () => {
     const step = { ...(base.steps[0] as DoResult["steps"][number]), openedTabId: 9 };
     expect(formatDoResult({ ...base, steps: [step] })).toContain(
