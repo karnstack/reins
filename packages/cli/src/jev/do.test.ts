@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -196,6 +196,20 @@ describe("handleDo", () => {
     expect(r.status).toBe("error");
     expect(r.reason).toContain("reins key set typesafe");
     expect(r.reason).toContain("extension popup");
+  });
+
+  it("an unreadable credentials file is an error, not a missing key", async () => {
+    writeFileSync(join(dir, "credentials.json"), "{not json");
+    const b = bridge();
+    const r = await handleDo(b, params, {
+      runs: new RunStore(),
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+    });
+    expect(r.status).toBe("error");
+    expect(r.reason).toMatch(/credentials\.json is not valid JSON/);
+    expect(r.reason).not.toContain("reins key set");
+    expect(b.requestFull).not.toHaveBeenCalled();
   });
 
   it("runs, stores the run, and prints the next command", async () => {

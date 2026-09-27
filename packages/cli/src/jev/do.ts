@@ -94,7 +94,12 @@ export async function handleDo(
   });
   const fail = (reason: string): DoResult => stop("error", reason);
 
-  const key = readKey(ctx.credentialsDir);
+  let key: string | undefined;
+  try {
+    key = readKey(ctx.credentialsDir);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
   if (!key) {
     return fail(
       "no TypeSafe key — run `reins key set typesafe`, or add one in the extension popup",
