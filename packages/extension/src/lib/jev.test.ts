@@ -2,15 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
-import { initDialogTracking, jevAct, jevObserve, openDialog } from "./jev.js";
+import { initDebugSessionListeners } from "./cdp.js";
+import { initDialogTracking, jevAct, jevObserve, OBSERVE_LOAD_MS, openDialog } from "./jev.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function stubChrome(tab?: { url?: string; title?: string }) {
+function stubChrome(tab?: { url?: string; title?: string; status?: string }) {
   let onEvent: ((s: { tabId?: number }, m: string, p?: unknown) => void) | undefined;
   const sendCommand = vi.fn();
   const created: Array<(t: chrome.tabs.Tab) => void> = [];
   const updated: Array<[number, unknown]> = [];
+  const detached: Array<(s: { tabId?: number }) => void> = [];
   vi.stubGlobal("chrome", {
     tabs: {
       get: vi.fn(async () => {
@@ -31,13 +33,17 @@ function stubChrome(tab?: { url?: string; title?: string }) {
       attach: vi.fn(),
       detach: vi.fn(),
       sendCommand,
-      onDetach: { addListener: () => {} },
+      onDetach: { addListener: (fn: (s: { tabId?: number }) => void) => detached.push(fn) },
       onEvent: { addListener: (fn: typeof onEvent) => (onEvent = fn) },
     },
   });
   initDialogTracking();
   return {
     fire: (tabId: number, m: string, p?: unknown) => onEvent?.({ tabId }, m, p),
+    /** Chrome dropped the debugger session on this tab. */
+    detach: (tabId: number) => {
+      for (const fn of detached) fn({ tabId });
+    },
     tabCreated: (t: { id: number; openerTabId: number }) => {
       for (const fn of created) fn(t as chrome.tabs.Tab);
     },
@@ -77,6 +83,149 @@ describe("dialog tracking", () => {
     fire(9, "Page.javascriptDialogOpening", { type: "alert", message: "Hi" });
     const obs = await jevObserve({ tabId: 9 });
     expect(obs).toMatchObject({ url: "", title: "", dialog: { type: "alert", message: "Hi" } });
+  });
+});
+
+describe("jevObserve", () => {
+  const SNAP = { url: "https://x.com/b", title: "B", text: "hi", visible: true, actions: [] };
+  /** Answer observe's page reads: the document state, then the snapshot. */
+  function docAnswers(state: () => { ready: string; body: boolean }, snapshot: () => unknown) {
+    return async (_t: unknown, method: string, params?: { expression?: string }) => {
+      if (method !== "Runtime.evaluate") return {};
+      const expr = params?.expression ?? "";
+      if (expr.includes("document.readyState")) return { result: { value: state() } };
+      if (expr.includes("function jevSnapshot")) return snapshot();
+      return { result: { value: undefined } };
+    };
+  }
+
+  it("waits while the tab is loading, then reads the settled document", async () => {
+    const tab = { url: "https://x.com/b", title: "B", status: "loading" };
+    const { sendCommand } = stubChrome(tab);
+    let reads = 0;
+    sendCommand.mockImplementation(
+      docAnswers(
+        () => ({ ready: "complete", body: true }), // the old document, until the commit
+        () => {
+          reads += 1;
+          return { result: { value: SNAP } };
+        },
+      ),
+    );
+    setTimeout(() => {
+      tab.status = "complete";
+    }, 250);
+    const t0 = Date.now();
+    expect(await jevObserve({ tabId: 3 })).toEqual(SNAP);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(200);
+    expect(reads).toBe(1); // never read the page before it settled
+  });
+
+  it("reads a parsed new document at once, even while its subresources still load", async () => {
+    const { sendCommand } = stubChrome({ url: "https://x.com/b", title: "B", status: "loading" });
+    sendCommand.mockImplementation(
+      docAnswers(
+        () => ({ ready: "interactive", body: true }),
+        () => ({ result: { value: SNAP } }),
+      ),
+    );
+    const t0 = Date.now();
+    expect(await jevObserve({ tabId: 3 })).toEqual(SNAP);
+    expect(Date.now() - t0).toBeLessThan(150);
+  });
+
+  it("re-attaches when the debugger session drops mid-observe", async () => {
+    const { sendCommand, detach } = stubChrome({
+      url: "https://x.com/b",
+      title: "B",
+      status: "complete",
+    });
+    initDebugSessionListeners();
+    let polls = 0;
+    sendCommand.mockImplementation(
+      docAnswers(
+        () => {
+          polls += 1;
+          if (polls === 1) {
+            // A password manager's frame appeared: Chrome dropped the session.
+            detach(7);
+            throw new Error("Debugger is not attached to the tab with id: 7.");
+          }
+          return { ready: "complete", body: true };
+        },
+        () => ({ result: { value: SNAP } }),
+      ),
+    );
+    expect(await jevObserve({ tabId: 7 })).toEqual(SNAP);
+    expect(polls).toBe(2);
+    const attaches = (chrome.debugger.attach as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([target]) => (target as { tabId: number }).tabId === 7,
+    );
+    expect(attaches).toHaveLength(2);
+  });
+
+  it("reports the last failure when the page never became readable", async () => {
+    vi.useFakeTimers();
+    try {
+      const { sendCommand } = stubChrome({
+        url: "https://x.com/b",
+        title: "B",
+        status: "complete",
+      });
+      sendCommand.mockImplementation(
+        docAnswers(
+          () => {
+            throw new Error("Cannot access a chrome-extension:// URL of different extension");
+          },
+          () => ({ result: { value: SNAP } }),
+        ),
+      );
+      const failed = jevObserve({ tabId: 8 }).then(
+        () => "resolved",
+        (e: Error) => e.message,
+      );
+      await vi.advanceTimersByTimeAsync(OBSERVE_LOAD_MS + 200);
+      expect(await failed).toBe(
+        "the page could not be read: Cannot access a chrome-extension:// URL of different extension",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("surfaces a page script failure instead of calling the page unloaded", async () => {
+    const { sendCommand } = stubChrome({ url: "https://x.com/b", title: "B", status: "complete" });
+    sendCommand.mockImplementation(
+      docAnswers(
+        () => ({ ready: "complete", body: true }),
+        () => ({ result: {}, exceptionDetails: { text: "Uncaught TypeError: boom" } }),
+      ),
+    );
+    await expect(jevObserve({ tabId: 3 })).rejects.toThrow(
+      "page script failed: Uncaught TypeError: boom",
+    );
+  });
+
+  it("gives up after the bound when no document ever appears", async () => {
+    vi.useFakeTimers();
+    try {
+      const { sendCommand } = stubChrome({ url: "about:blank", title: "", status: "loading" });
+      sendCommand.mockImplementation(
+        docAnswers(
+          () => ({ ready: "loading", body: false }),
+          () => ({ result: { value: null } }),
+        ),
+      );
+      const p = jevObserve({ tabId: 3 });
+      const failed = p.then(
+        () => "resolved",
+        (e: Error) => e.message,
+      );
+      await vi.advanceTimersByTimeAsync(OBSERVE_LOAD_MS + 200);
+      expect(await failed).toBe("the page did not finish loading");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

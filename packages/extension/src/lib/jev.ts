@@ -99,12 +99,81 @@ async function evaluate<T>(tabId: number, expression: string, awaitPromise = fal
   return res.result.value;
 }
 
-/** url/title from the tabs API (no CDP), or nothing when the lookup fails. */
-async function tabInfo(tabId: number): Promise<{ url?: string; title?: string } | undefined> {
+/** url/title/status from the tabs API (no CDP), or nothing when the lookup fails. */
+async function tabInfo(
+  tabId: number,
+): Promise<{ url?: string; title?: string; status?: string } | undefined> {
   try {
     return await chrome.tabs.get(tabId);
   } catch {
     return undefined;
+  }
+}
+
+/** How long observe waits for a navigating or loading document to settle. */
+export const OBSERVE_LOAD_MS = 4000;
+
+/** A page script threw (as opposed to the evaluate itself failing). */
+const SCRIPT_FAILED = /^page script failed/;
+
+type Snapshot = Omit<JevObservation, "dialog">;
+
+/**
+ * One attempt to read the page, on a tab that is already driven: nothing
+ * when the document is not worth reading yet. After an action that
+ * navigates, the tab is "loading" while the old document is still the one an
+ * evaluate would see (the commit comes later), and the new one has no body
+ * or is still parsing for a while after that. Past the bound (`overdue`),
+ * whatever document has a body is read.
+ */
+async function readOnce(tabId: number, overdue: boolean): Promise<Snapshot | undefined> {
+  const tab = await tabInfo(tabId);
+  const doc = await evaluate<{ ready: string; body: boolean }>(
+    tabId,
+    "({ ready: document.readyState, body: !!document.body })",
+  );
+  if (!doc.body) return undefined;
+  // Under a loading tab, "complete" is the old document (finished before the
+  // click) and "loading" a new one still parsing; "interactive" can only be
+  // the new document, parsed, so it is safe to read even while its
+  // subresources still load.
+  const settled = tab?.status !== "loading" || doc.ready === "interactive";
+  if (!settled && !overdue) return undefined;
+  return (await evaluate<Snapshot | null>(tabId, `(${jevSnapshot})()`)) ?? undefined;
+}
+
+/**
+ * Read the page once it is worth reading, polling every 100 ms up to
+ * OBSERVE_LOAD_MS. Each poll drives the tab afresh: a password manager's
+ * frame drops the debugger session mid-observe (the autofill guard removes
+ * the frame, but the drop has happened by then), and only a new drive
+ * re-attaches. A page whose script throws is an error to surface at once,
+ * not "still loading"; any other failure is retried until the bound, and
+ * the last one is reported when the bound passes.
+ */
+async function readWhenSettled(tabId: number): Promise<Snapshot> {
+  const until = Date.now() + OBSERVE_LOAD_MS;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let lastFailure: string | undefined;
+  for (;;) {
+    const overdue = Date.now() >= until;
+    let snap: Snapshot | undefined;
+    try {
+      snap = await drivePage(tabId, () => readOnce(tabId, overdue));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (SCRIPT_FAILED.test(msg)) throw err;
+      lastFailure = msg; // the context is being swapped, or the session dropped
+    }
+    if (snap) return snap;
+    if (overdue) {
+      throw new Error(
+        lastFailure === undefined
+          ? "the page did not finish loading"
+          : `the page could not be read: ${lastFailure}`,
+      );
+    }
+    await sleep(100);
   }
 }
 
@@ -123,18 +192,7 @@ export async function jevObserve(params: JevObserveParams): Promise<JevObservati
       dialog,
     };
   }
-  return drivePage(tabId, async () => {
-    // A navigating document has no body yet: give it up to ~0.5 s.
-    for (let i = 0; i < 10; i++) {
-      const snap = await evaluate<Omit<JevObservation, "dialog"> | null>(
-        tabId,
-        `(${jevSnapshot})()`,
-      ).catch(() => null);
-      if (snap) return snap;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    throw new Error("the page did not finish loading");
-  });
+  return readWhenSettled(tabId);
 }
 
 export async function jevAct(params: JevActParams): Promise<JevActResult> {

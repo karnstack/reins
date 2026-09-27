@@ -333,6 +333,15 @@ like a foreground tab.
   `jev_observe` checks the flag **before** evaluating, because an open dialog
   blocks `Runtime.evaluate` (`cdp.ts:163`). A dialog opened by an action
   surfaces on the next observe.
+- **Settling.** An action that navigates leaves the tab `loading` while the
+  old document is still the one an evaluate sees (the commit comes later),
+  and the new document has no body or is still parsing for a while after
+  that. Observe waits, bounded by 4 s, until the tab is no longer loading or
+  the document reports `interactive` (only a new document can, under a
+  loading tab), polling every 100 ms; past the bound it reads whatever
+  document has a body, and throws `the page did not finish loading` only
+  when none does. A page script exception is surfaced as `page script
+  failed: …`, never mistaken for loading.
 
 **`jev_act { tabId?, node, op, value?, delta? } → { ok: true } | { stale: true, reason }`**
 
