@@ -13,6 +13,7 @@ import { createJevAsk, type JevAsk } from "./client.js";
 import { readKey } from "./credentials.js";
 import { nextCommand } from "./format.js";
 import { runLoop } from "./loop.js";
+import { goalTerms } from "./rules.js";
 import { newRun, RunStore } from "./runs.js";
 import { type TraceSink, traceAsk } from "./trace.js";
 import type { DoResult, RunState } from "./types.js";
@@ -164,7 +165,7 @@ export async function handleDo(
 
   let first: JevObservation;
   try {
-    first = JevObservation.parse(await call("jev_observe", {}));
+    first = JevObservation.parse(await call("jev_observe", { terms: goalTerms(p.goal ?? "") }));
   } catch (err) {
     return fail(err instanceof Error ? err.message : String(err));
   }
@@ -224,7 +225,8 @@ export async function handleDo(
     try {
       ({ result, run: after } = await runLoop(
         {
-          observe: async () => JevObservation.parse(await call("jev_observe", {})),
+          observe: async () =>
+            JevObservation.parse(await call("jev_observe", { terms: goalTerms(run.goal) })),
           act: async (a: Omit<JevActParams, "browserId" | "tabId">) =>
             JevActResult.parse(await call("jev_act", a)),
           ask,

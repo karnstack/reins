@@ -81,6 +81,7 @@ function targetCriterion(index: string, a: JevAction): Record<string, string> {
     const v = a[key];
     if (v !== undefined) out[key] = v;
   }
+  if (a.offscreen) out.offscreen = "true";
   return out;
 }
 

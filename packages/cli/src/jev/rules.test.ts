@@ -1,6 +1,6 @@
 import type { JevAction } from "@reins/protocol";
 import { describe, expect, it } from "vitest";
-import { fingerprint, noProgress, riskyReason, sameSite } from "./rules.js";
+import { fingerprint, goalTerms, noProgress, riskyReason, sameSite } from "./rules.js";
 
 const click = (label: string, role = "button"): JevAction => ({
   id: "e1",
@@ -134,5 +134,21 @@ describe("fingerprint", () => {
   it("does not change with visibility or title alone", () => {
     const obs = { url: "u", title: "t", text: "x", visible: true, actions: [] };
     expect(fingerprint(obs)).toBe(fingerprint({ ...obs, visible: false, title: "t2" }));
+  });
+});
+
+describe("goalTerms", () => {
+  it("keeps distinctive words and drops common ones", () => {
+    expect(
+      goalTerms("In the Root Zone Database, open the record for the .ch top-level domain."),
+    ).toEqual(["Root", "Zone", "Database", "record", ".ch", "top-level", "domain"]);
+  });
+  it("keeps short tokens that carry a digit or a dot, strips quotes, dedupes", () => {
+    expect(
+      goalTerms("Find the order placed by 'Nadia Okafor' (v2.1, 2026) and the order's page 3"),
+    ).toEqual(["order", "placed", "Nadia", "Okafor", "v2.1", "2026", "order's", "3"]);
+  });
+  it("is empty for an empty goal", () => {
+    expect(goalTerms("")).toEqual([]);
   });
 });

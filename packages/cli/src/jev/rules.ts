@@ -85,3 +85,29 @@ export function fingerprint(obs: JevObservation): string {
     .update(JSON.stringify({ url: obs.url, text: obs.text, actions: obs.actions }))
     .digest("hex");
 }
+
+/** Words a goal shares with most goals: they single nothing out on a page. */
+const COMMON = new Set(
+  `the and for its into onto from with that this then than but not are was were all any one two out off use using via per set open opens find click search show page pages tab site list get goes go to in on at by an as is be it of or if so do does done my your their his her our`.split(
+    /\s+/,
+  ),
+);
+
+/** The goal's distinctive words, for matching off-screen controls by name:
+ *  every token of three or more characters that is not a common word, and
+ *  every token carrying a digit or a dot (".ch", "v2.1", "2026") whatever its
+ *  length. Quotes and enclosing punctuation are stripped; the tokens keep
+ *  their case (matching is case-insensitive page-side). */
+export function goalTerms(goal: string): string[] {
+  const out: string[] = [];
+  for (const raw of goal.split(/[\s,;:!?()[\]{}"“”‘’]+/)) {
+    // Enclosing quotes and a sentence's final period go; a leading dot stays
+    // (".ch" is a name), as does a dot inside ("v2.1").
+    const t = raw.replace(/^['`]+|['`.]+$/g, "");
+    if (!t) continue;
+    const marked = /[\d.]/.test(t);
+    if (!marked && (t.length < 3 || COMMON.has(t.toLowerCase()))) continue;
+    if (!out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t);
+  }
+  return out;
+}

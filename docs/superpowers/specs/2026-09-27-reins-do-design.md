@@ -412,6 +412,20 @@ like a foreground tab.
   web-component option whose words sit in a nested root, or a button whose
   caption is slotted, is named; a control with no words anywhere stays
   unnamed and is still refused as risky.
+- **Off-screen controls.** The observation is viewport-only, but two kinds
+  of control beyond the viewport are listed after it, at most 12, marked
+  `offscreen: true` (the target question shows `offscreen: "true"`): a
+  pager — `rel` next/prev, a name like next / previous / page N / load
+  more, or a bare number inside a nav that calls itself pagination/pager,
+  never the `aria-current` one — and a link or button whose accessible name
+  carries a distinctive word of the goal. `jev_observe` takes those words
+  as `terms` (daemon-side `goalTerms()`: tokens of ≥ 3 characters minus a
+  common-word list, plus any token with a digit or a dot such as ".ch",
+  quotes and a final period stripped). Only links and buttons qualify;
+  an unnamed one never does. Page text stays viewport-only. Acting on
+  such a control scrolls it into view first (actionPoint does). A target
+  far down a long page, or a pager below the fold, is otherwise invisible
+  until a scroll happens to land on it.
 - Returns `{ url, title, text, visible, elements, fingerprint, pageKey,
   guards, dialog? }`. Nothing tracks dialogs today. Add a per-tab dialog
   flag fed by `chrome.debugger.onEvent` (`Page.javascriptDialogOpening` sets

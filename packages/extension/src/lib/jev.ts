@@ -128,7 +128,11 @@ type Snapshot = Omit<JevObservation, "dialog">;
  * or is still parsing for a while after that. Past the bound (`overdue`),
  * whatever document has a body is read.
  */
-async function readOnce(tabId: number, overdue: boolean): Promise<Snapshot | undefined> {
+async function readOnce(
+  tabId: number,
+  overdue: boolean,
+  terms: string[],
+): Promise<Snapshot | undefined> {
   const tab = await tabInfo(tabId);
   const doc = await evaluate<{ ready: string; body: boolean }>(
     tabId,
@@ -141,7 +145,10 @@ async function readOnce(tabId: number, overdue: boolean): Promise<Snapshot | und
   // subresources still load.
   const settled = tab?.status !== "loading" || doc.ready === "interactive";
   if (!settled && !overdue) return undefined;
-  return (await evaluate<Snapshot | null>(tabId, `(${jevSnapshot})()`)) ?? undefined;
+  return (
+    (await evaluate<Snapshot | null>(tabId, `(${jevSnapshot})(${JSON.stringify(terms)})`)) ??
+    undefined
+  );
 }
 
 /**
@@ -153,7 +160,7 @@ async function readOnce(tabId: number, overdue: boolean): Promise<Snapshot | und
  * not "still loading"; any other failure is retried until the bound, and
  * the last one is reported when the bound passes.
  */
-async function readWhenSettled(tabId: number): Promise<Snapshot> {
+async function readWhenSettled(tabId: number, terms: string[]): Promise<Snapshot> {
   const until = Date.now() + OBSERVE_LOAD_MS;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   let lastFailure: string | undefined;
@@ -161,7 +168,7 @@ async function readWhenSettled(tabId: number): Promise<Snapshot> {
     const overdue = Date.now() >= until;
     let snap: Snapshot | undefined;
     try {
-      snap = await drivePage(tabId, () => readOnce(tabId, overdue));
+      snap = await drivePage(tabId, () => readOnce(tabId, overdue, terms));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (SCRIPT_FAILED.test(msg)) throw err;
@@ -194,7 +201,7 @@ export async function jevObserve(params: JevObserveParams): Promise<JevObservati
       dialog,
     };
   }
-  return readWhenSettled(tabId);
+  return readWhenSettled(tabId, params.terms ?? []);
 }
 
 export async function jevAct(params: JevActParams): Promise<JevActResult> {

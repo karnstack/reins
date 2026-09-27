@@ -116,6 +116,10 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <input id="yr" aria-label="Year" value="2000">
 <site-search id="ss" style="position:fixed;top:0;right:0;background:#fff"></site-search>
 <div id="sealed-host" style="position:fixed;top:40px;right:0"></div>
+<div style="height:2500px"></div>
+<nav aria-label="Pagination"><a href="#p1" aria-current="page">1</a><a href="#p2">2</a><a rel="next" href="#n">Next</a></nav>
+<a id="far" href="/jev?tld=ch" onclick="event.preventDefault(); __log.push('click:far')">.ch</a>
+<a href="/jev?x">Unrelated</a>
 <x-listbox id="xl" style="position:fixed;top:80px;right:0;background:#fff"></x-listbox>
 <x-btn id="xb" style="position:fixed;top:120px;right:0;background:#fff">Sort by</x-btn>
 <script>
@@ -134,7 +138,8 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
     const o = lb.getElementById("o1").attachShadow({ mode: "open" });
     o.innerHTML = '<div><span aria-hidden="true">icon</span><x-txt id="t"></x-txt></div>';
     o.getElementById("t").attachShadow({ mode: "open" }).innerHTML = "Reactive properties";
-    document.getElementById("xb").attachShadow({ mode: "open" }).innerHTML = '<button id="xbi"><slot></slot></button>'; }
+    document.getElementById("xb").attachShadow({ mode: "open" }).innerHTML = '<button id="xbi"><slot></slot></button>';
+    document.getElementById("xb").shadowRoot.getElementById("xbi").addEventListener("click", () => __log.push("click:xbi")); }
   // A field that keeps its own model: keyup writes the value into it, blur
   // writes the model back (a date widget re-deriving its state).
   { let model = "2000"; const yr = document.getElementById("yr");
@@ -808,6 +813,21 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(labels).toContain("click:Reactive properties"); // option: text two roots down
     expect(labels).toContain("click:Sort by"); // button: caption slotted from the host
     expect(labels.filter((l) => l === "click:option" || l === "click:button")).toEqual([]);
+  });
+
+  it("jev: lists off-screen pagers and goal-named controls, marked offscreen, and clicks them", async () => {
+    await load("/jev");
+    const plain = await jevObserve({ tabId: 1 });
+    const off = (s: typeof plain) =>
+      s.actions.filter((a) => a.offscreen).map((a) => `${a.role}:${a.label}`);
+    expect(off(plain)).toEqual(["link:2", "link:Next"]); // the pager alone, page 1 being current
+    expect(plain.text).not.toContain("Unrelated"); // text stays viewport-only
+    const s = await jevObserve({ tabId: 1, terms: [".ch", "Flights"] });
+    expect(off(s)).toEqual(["link:2", "link:Next", "link:.ch"]); // a goal word names the far link
+    expect(s.actions.find((a) => a.label === "Search")?.offscreen).toBeUndefined();
+    const far = s.actions.find((a) => a.label === ".ch")?.node as number;
+    expect(await jevAct({ tabId: 1, op: "click", node: far })).toEqual({ ok: true });
+    expect(await log()).toContain("click:far"); // scrolled into view, then pressed
   });
 
   it("jev: a node keeps its id across snapshots", async () => {

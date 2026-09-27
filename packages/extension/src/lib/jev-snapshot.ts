@@ -25,7 +25,7 @@ interface JevCache {
  *  erased, so the serialized function stays self-contained. */
 type Action = Omit<JevAction, "id"> & { id?: string };
 
-export function jevSnapshot(): {
+export function jevSnapshot(terms: string[] = []): {
   url: string;
   title: string;
   text: string;
@@ -33,6 +33,8 @@ export function jevSnapshot(): {
   actions: Action[];
 } | null {
   if (!document.body) return null;
+  /** Off-screen controls listed beside the viewport's, at most. */
+  const OFFSCREEN_MAX = 12;
   const KEY = Symbol.for("reins.jev");
   const w = window as unknown as Record<symbol, JevCache | undefined>;
   let cache = w[KEY];
@@ -308,6 +310,35 @@ export function jevSnapshot(): {
   };
   collect(document.documentElement);
   const actions: Action[] = [];
+  // Beyond the viewport, two kinds of control are worth listing (the page's
+  // text stays viewport-only): a pager — a next/previous/page-N control, or
+  // one inside a navigation region that calls itself pagination — and a
+  // link or button whose name carries one of the goal's distinctive words.
+  // A target far down a long page, or a pager below the fold, is otherwise
+  // invisible until a scroll happens to land on it. Acting on one scrolls
+  // it into view first (actionPoint does).
+  const PAGER_NAME = /^(next|previous|prev|newer|older)( page)?$|^page \d+$|^(load|show) more/i;
+  const PAGER_REGION = /pagination|pager/i;
+  const quoted = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const termRes = terms.map(
+    (t) => new RegExp(`(^|[^\\p{L}\\p{N}])${quoted(t)}([^\\p{L}\\p{N}]|$)`, "iu"),
+  );
+  const pager = (e: Element, label: string): boolean => {
+    if (e.hasAttribute("aria-current")) return false; // the page it is on
+    if (/\b(next|prev)\b/i.test(e.getAttribute("rel") ?? "") || PAGER_NAME.test(label)) return true;
+    if (!/^\d+$/.test(label)) return false;
+    const nav = ancestor(e, 'nav,[role="navigation"]');
+    return (
+      nav !== null &&
+      PAGER_REGION.test(
+        [nav.getAttribute("aria-label"), nav.id, nav.getAttribute("class")]
+          .filter(Boolean)
+          .join(" "),
+      )
+    );
+  };
+  const wanted = (label: string): boolean => termRes.some((re) => re.test(label));
+  const offscreen: Action[] = [];
   for (const e of controls) {
     if (!safe(e) || !visible(e) || e.matches(":disabled") || ancestor(e, '[aria-disabled="true"]'))
       continue;
@@ -315,16 +346,15 @@ export function jevSnapshot(): {
     const x = r.x + r.width / 2;
     const y = r.y + r.height / 2;
     const rname = role(e);
-    if (
-      !rname ||
-      r.width <= 0 ||
-      r.height <= 0 ||
-      x < 0 ||
-      y < 0 ||
-      x >= innerWidth ||
-      y >= innerHeight
-    )
+    if (!rname || r.width <= 0 || r.height <= 0) continue;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) {
+      if (offscreen.length >= OFFSCREEN_MAX || (rname !== "link" && rname !== "button")) continue;
+      const label = name(e) || rname;
+      if (label !== rname && (pager(e, label) || wanted(label))) {
+        offscreen.push({ kind: "click", node: identity(e), role: rname, label, offscreen: true });
+      }
       continue;
+    }
     if (rname === "gridcell" && e.querySelector('button,[role="button"]')) continue;
     const base: Action = { kind: "click", node: identity(e), role: rname, label: name(e) || rname };
     if (CONSENT_LABEL.test(base.label) && inConsent(e)) base.consent = true;
@@ -407,6 +437,7 @@ export function jevSnapshot(): {
   };
   walkText(document.body);
 
+  actions.push(...offscreen);
   c.guards = {};
   for (const a of actions) {
     if (a.node !== undefined && !(a.node in c.guards))
