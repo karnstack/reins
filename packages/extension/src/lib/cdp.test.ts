@@ -110,10 +110,35 @@ describe("withDebugger session", () => {
   it("leaves the page untouched for everything else (reads, dialogs, eval)", async () => {
     // Read-tier commands must not mutate the page, and a command that has to
     // work under a JS dialog can't wait on an evaluate the dialog blocks.
+    // Focus emulation is the one exception: session-level, no page script,
+    // and a dialog doesn't block it.
     stubChrome();
     const calls = recordCommands();
     await withDebugger(7, async () => "read");
-    expect(calls).toEqual([]);
+    expect(calls.map((c) => c.method)).toEqual(["Emulation.setFocusEmulationEnabled"]);
+  });
+
+  it("emulates page focus once per attach, for every command", async () => {
+    // A tab reins opened has Chrome's omnibox focused: document.hasFocus() is
+    // false and sites that key behaviour off focus diverge from a human session.
+    stubChrome();
+    const calls = recordCommands();
+    await withDebugger(7, async () => "read");
+    await withDebugger(7, async () => "drive", { guard: true });
+    expect(calls.filter((c) => c.method === "Emulation.setFocusEmulationEnabled")).toEqual([
+      { method: "Emulation.setFocusEmulationEnabled", params: { enabled: true } },
+    ]);
+    // A new session emulates again: the setting died with the old one.
+    onDetach?.({ tabId: 7 });
+    await withDebugger(7, async () => "again");
+    expect(calls.filter((c) => c.method === "Emulation.setFocusEmulationEnabled")).toHaveLength(2);
+  });
+
+  it("still runs the command when focus emulation is refused", async () => {
+    stubChrome();
+    (chrome.debugger as unknown as { sendCommand: () => Promise<never> }).sendCommand = async () =>
+      Promise.reject(new Error("'Emulation.setFocusEmulationEnabled' wasn't found"));
+    expect(await withDebugger(7, async () => "ran")).toBe("ran");
   });
 
   it("re-registers the new-document guard with an absolute expiry on every renewal", async () => {

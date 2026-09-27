@@ -53,10 +53,28 @@ async function attachErrorMessage(tabId: number, attempt: number, msg: string): 
   }
 }
 
+/**
+ * Make the page report focus. A tab reins opened (about:blank, then
+ * navigated) or drives from the shell leaves Chrome's omnibox focused, so in
+ * the page `document.hasFocus()` is false — and sites that key behaviour off
+ * focus (GitHub's search combobox, a password manager's "menu is available"
+ * text) diverge from a human session. The emulation belongs to the debugger
+ * session, so every attach — any command, not only `reins do` — enables it
+ * once. Best-effort: a target that refuses it still runs the command.
+ */
+export async function emulateFocus(tabId: number): Promise<void> {
+  try {
+    await send(tabId, "Emulation.setFocusEmulationEnabled", { enabled: true });
+  } catch {
+    // Not a page target, or an older Chrome — the command itself still runs.
+  }
+}
+
 async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       await chrome.debugger.attach({ tabId }, PROTOCOL);
+      await emulateFocus(tabId);
       return;
     } catch (err) {
       // A monitor may have grabbed the session mid-race; the caller reuses it.

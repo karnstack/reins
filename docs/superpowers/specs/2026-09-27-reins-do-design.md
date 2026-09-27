@@ -302,6 +302,14 @@ Two new bridge methods, both `full` in `METHOD_TIERS`, gated per call by
 `observe` needs `full` because page content leaves the machine; `do` acts
 anyway.
 
+Every debugger attach (any command, not only `jev_*`; the monitor's session
+too, since drive commands reuse it) enables `Emulation.setFocusEmulationEnabled`
+once, best-effort. A tab `reins open` created sits behind Chrome's omnibox, so
+in the page `document.hasFocus()` is false, and sites that key behaviour off
+focus (GitHub's search combobox, a password manager's "menu is available"
+text) diverge from a human session; with the emulation the page reports focus
+like a foreground tab.
+
 **`jev_observe { tabId? } → JevObservation`**
 
 - One `Runtime.evaluate` of `lib/jev-snapshot.ts`: a port of jev's

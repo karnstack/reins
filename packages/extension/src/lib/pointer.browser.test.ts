@@ -19,7 +19,7 @@ import { WebSocket } from "ws";
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
-import { __resetDebugSessions, cdpClick, cdpType } from "./cdp.js";
+import { __resetDebugSessions, cdpClick, cdpType, drivePage } from "./cdp.js";
 import { initDialogTracking, jevAct, jevObserve, openDialog } from "./jev.js";
 import { jevSnapshot } from "./jev-snapshot.js";
 import { handleDialog, hover, pressKey } from "./page-actions.js";
@@ -502,6 +502,25 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       a.parentNode.insertBefore(b, a);
     }, { once: true })`);
     await expect(click("#top")).rejects.toThrow(/landed on button#other/);
+  });
+
+  it("the page reports focus once reins drives it", async () => {
+    // A tab `reins open` created sits behind the omnibox and reports no
+    // focus; focus emulation makes the page report focus like a foreground
+    // tab a person is looking at. Here another target takes the real focus
+    // (the harness brings the fixture forward after every test).
+    await load();
+    await cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
+    const { targetId } = await cdp<{ targetId: string }>("Target.createTarget", {
+      url: "about:blank",
+    });
+    try {
+      expect(await evaluate<boolean>("document.hasFocus()")).toBe(false);
+      await drivePage(1, async () => {});
+      expect(await evaluate<boolean>("document.hasFocus()")).toBe(true);
+    } finally {
+      await cdp("Target.closeTarget", { targetId }).catch(() => {});
+    }
   });
 
   it("hovers an element below the fold", async () => {
