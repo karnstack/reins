@@ -94,7 +94,9 @@ of snapshot → click → snapshot. It's much faster: Jev picks each action in
       --fill from=Zurich --fill to=London --tab 12
 
 - Pass **every value the goal mentions** as `--fill name=value`. Jev picks which
-  field gets which value; it never invents text.
+  field gets which value; it never invents text. `--fill` values are sent to
+  TypeSafe along with the page, so never pass a password as `--fill`: password
+  fields are never read anyway, so do logins manually.
 - If the user already asked for the final action (book, send, pay), pre-approve
   it: `--confirm 'Book'`. Otherwise risky clicks stop the run.
 - Single-quote goals and labels, as `reins do` itself does in every `next:`
@@ -102,8 +104,11 @@ of snapshot → click → snapshot. It's much faster: Jev picks each action in
   shell from expanding them.
 - Exit 0 = `done`. **DONE is Jev's opinion — always verify** with
   `reins snapshot` / `reins text` (the printed `next:` line does exactly that).
-- Exit 2 = a stop. Run the printed `next:` line exactly (usually
-  `reins do --continue …`). `--continue` resumes the same run on the same tab.
+- Exit 2 = a stop. Run the printed `next:` line as printed (usually
+  `reins do --continue …`). For `dialog` it is the `reins dialog` command
+  (pick `--accept` or `--dismiss`), then `reins do --continue`. `--continue`
+  resumes the same run on the same tab; runs are forgotten after 15 minutes or
+  a daemon restart, so start over with the goal if `--continue` says so.
 - Exit 1 = an error; no `next:` line is printed.
 - `stuck` or `blocked` → switch to manual commands for that part.
 - The risky-label stop is a heuristic (English words; unlabeled buttons stop).

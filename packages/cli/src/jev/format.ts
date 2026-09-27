@@ -31,7 +31,7 @@ export function nextCommand(
     case "needs_text":
       return `reins do --continue --fill ${fillName(r.pending?.label ?? "")}="…"${route}`;
     case "dialog":
-      return `reins dialog --accept (or --dismiss), then reins do --continue${route}`;
+      return `reins dialog --accept${route}   # or --dismiss; then: reins do --continue${route}`;
     case "left_site":
       return `reins do ${shellQuote(p.goal)}${route}   # from this page, if the new site is expected`;
     case "interrupted":

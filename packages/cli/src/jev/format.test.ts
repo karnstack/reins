@@ -83,7 +83,7 @@ describe("nextCommand", () => {
     ["budget", r("budget"), "reins do --continue"],
     ["stuck", r("stuck"), "switch to manual (reins snapshot → click/type)"],
     ["blocked", r("blocked"), "switch to manual (reins snapshot → click/type)"],
-    ["dialog", r("dialog"), "reins dialog --accept (or --dismiss), then reins do --continue"],
+    ["dialog", r("dialog"), "reins dialog --accept   # or --dismiss; then: reins do --continue"],
     ["left_site", r("left_site"), "reins do 'g'   # from this page, if the new site is expected"],
     ["interrupted", r("interrupted"), "reins do --continue"],
   ])("%s", (_status, result, expected) => {
@@ -92,6 +92,12 @@ describe("nextCommand", () => {
 
   it("gives no next command for errors", () => {
     expect(nextCommand(r("error"), { goal: "g" })).toBeUndefined();
+  });
+
+  it("routes both halves of the dialog line", () => {
+    expect(nextCommand(r("dialog"), { goal: "g", tabId: 7 })).toBe(
+      "reins dialog --accept --tab 7   # or --dismiss; then: reins do --continue --tab 7",
+    );
   });
 
   it("appends --tab and --browser to the route when given", () => {
