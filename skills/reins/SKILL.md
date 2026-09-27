@@ -98,17 +98,20 @@ of snapshot → click → snapshot. It's much faster: Jev picks each action in
   TypeSafe along with the page, so never pass a password as `--fill`: password
   fields are never read anyway, so do logins manually.
 - If the user already asked for the final action (book, send, pay), pre-approve
-  it: `--confirm 'Book'`. Otherwise risky clicks stop the run.
+  it: `--confirm 'Book'`. A goal that names the button as a whole word
+  ("… and pay now") pre-approves it too. Otherwise risky clicks stop the run.
 - Single-quote goals and labels, as `reins do` itself does in every `next:`
   line: page labels can contain `$` or backticks, and single quotes keep the
   shell from expanding them.
 - Exit 0 = `done`. **DONE is Jev's opinion — always verify** with
   `reins snapshot` / `reins text` (the printed `next:` line does exactly that).
-- Exit 2 = a stop. Run the printed `next:` line as printed (usually
-  `reins do --continue …`). For `dialog` it is the `reins dialog` command
-  (pick `--accept` or `--dismiss`), then `reins do --continue`. `--continue`
-  resumes the same run on the same tab; runs are forgotten after 15 minutes or
-  a daemon restart, so start over with the goal if `--continue` says so.
+- Exit 2 = a stop. The printed `next:` line is usually a command to run as
+  printed (`reins do --continue …`). For `dialog` it names the `reins dialog`
+  command with a choice to make (`--accept` or `--dismiss`), then
+  `reins do --continue`; for `stuck`/`blocked` it says to switch to manual
+  and is not a command. `--continue` resumes the same run on the same tab;
+  runs are forgotten after 15 minutes or a daemon restart, so start over with
+  the goal if `--continue` says so.
 - Exit 1 = an error; no `next:` line is printed.
 - `stuck` or `blocked` → switch to manual commands for that part.
 - The risky-label stop is a heuristic (English words; unlabeled buttons stop).
