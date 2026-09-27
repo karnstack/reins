@@ -128,6 +128,12 @@ function SecurityPage() {
         Never sent: password, file and hidden inputs. The extension itself makes no remote requests.
       </P>
       <P>
+        Before every click or keystroke, reins re-checks the chosen element (still present, visible,
+        not covered, not moving) and refuses to act when the check fails. The page still controls
+        its own DOM, so what sits under a chosen element can change between the check and the
+        action; keep <Code>--confirm</Code> for anything you would not click blind.
+      </P>
+      <P>
         <Code>reins do</Code> hands page state to TypeSafe's Jev model, which answers typed
         multiple-choice questions: which operation, and which observed element. Jev can only choose
         among elements reins actually read from the page; its output never becomes a selector,

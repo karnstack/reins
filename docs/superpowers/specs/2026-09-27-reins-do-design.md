@@ -318,7 +318,8 @@ anyway.
 - **select**: native `<select>` only. Set `value`, dispatch `input` and
   `change`. If the option vanished, return an error (not `stale`), so the loop
   never retries an uncertain mutation.
-- **scroll**: `mouseWheel` at viewport centre, `deltaY ±600`.
+- **scroll**: `mouseWheel` at viewport centre, `deltaY ±560` (the
+  snapshot's scroll pseudo-actions carry that delta).
 - **wait**: 250 ms.
 - **Settle**, after any input: at most 2 animation frames or 50 ms; for a
   typed combobox, up to 200 ms or until a visible `[role=option]` appears
