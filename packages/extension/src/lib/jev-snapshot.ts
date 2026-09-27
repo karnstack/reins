@@ -9,6 +9,8 @@
  * scrollIntoView); guards are kept page-side for jevCheck.
  */
 
+import type { JevAction } from "@reins/protocol";
+
 interface JevCache {
   ids: WeakMap<Element, number>;
   nodes: Map<number, Element>;
@@ -17,19 +19,9 @@ interface JevCache {
   guard: (el: Element | undefined) => string | null;
 }
 
-type Action = {
-  id?: string;
-  kind: "click" | "fill" | "select" | "scroll" | "wait";
-  node?: number;
-  role?: string;
-  label: string;
-  value?: string;
-  current_value?: string;
-  checked?: string;
-  selected?: string;
-  expanded?: string;
-  delta?: number;
-};
+/** The protocol's action, before jevView assigns ids. A type-only import is
+ *  erased, so the serialized function stays self-contained. */
+type Action = Omit<JevAction, "id"> & { id?: string };
 
 export function jevSnapshot(): {
   url: string;

@@ -84,10 +84,30 @@ async function evaluate<T>(tabId: number, expression: string, awaitPromise = fal
   return res.result.value;
 }
 
+/** url/title from the tabs API (no CDP), or nothing when the lookup fails. */
+async function tabInfo(tabId: number): Promise<{ url?: string; title?: string } | undefined> {
+  try {
+    return await chrome.tabs.get(tabId);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function jevObserve(params: JevObserveParams): Promise<JevObservation> {
   const tabId = await resolveTabId(params.tabId);
   const dialog = openDialog(tabId);
-  if (dialog) return { url: "", title: "", text: "", visible: true, actions: [], dialog };
+  if (dialog) {
+    // The page is blocked, but the tabs API still knows where we are.
+    const tab = await tabInfo(tabId);
+    return {
+      url: tab?.url ?? "",
+      title: tab?.title ?? "",
+      text: "",
+      visible: true,
+      actions: [],
+      dialog,
+    };
+  }
   return drivePage(tabId, async () => {
     // A navigating document has no body yet: give it up to ~0.5 s.
     for (let i = 0; i < 10; i++) {

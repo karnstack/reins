@@ -6,10 +6,16 @@ import { initDialogTracking, jevAct, jevObserve, openDialog } from "./jev.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function stubChrome() {
+function stubChrome(tab?: { url?: string; title?: string }) {
   let onEvent: ((s: { tabId?: number }, m: string, p?: unknown) => void) | undefined;
   const sendCommand = vi.fn();
   vi.stubGlobal("chrome", {
+    tabs: {
+      get: vi.fn(async () => {
+        if (!tab) throw new Error("No tab with id");
+        return tab;
+      }),
+    },
     debugger: {
       attach: vi.fn(),
       detach: vi.fn(),
@@ -35,11 +41,26 @@ describe("dialog tracking", () => {
   });
 
   it("observe reports the dialog without touching the blocked page", async () => {
-    const { fire, sendCommand } = stubChrome();
+    const { fire, sendCommand } = stubChrome({ url: "https://x.com/a", title: "X" });
     fire(9, "Page.javascriptDialogOpening", { type: "alert", message: "Hi" });
     const obs = await jevObserve({ tabId: 9 });
-    expect(obs.dialog).toEqual({ type: "alert", message: "Hi" });
+    expect(obs).toEqual({
+      url: "https://x.com/a",
+      title: "X",
+      text: "",
+      visible: true,
+      actions: [],
+      dialog: { type: "alert", message: "Hi" },
+    });
+    // The url and title come from the tabs API, never from CDP (blocked).
     expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it("observe under a dialog still answers when the tab can't be looked up", async () => {
+    const { fire } = stubChrome();
+    fire(9, "Page.javascriptDialogOpening", { type: "alert", message: "Hi" });
+    const obs = await jevObserve({ tabId: 9 });
+    expect(obs).toMatchObject({ url: "", title: "", dialog: { type: "alert", message: "Hi" } });
   });
 });
 

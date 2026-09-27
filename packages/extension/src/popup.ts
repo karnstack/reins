@@ -511,7 +511,9 @@ function jevStopReplacing(): void {
   if (!jevReplacing) return;
   jevReplacing = false;
   jevKey.value = "";
-  void renderJev(true).then(() => jevReplace.focus());
+  void jevConnected()
+    .then((connected) => renderJev(connected))
+    .then(() => jevReplace.focus());
 }
 
 jevForm.addEventListener("submit", (ev) => {
@@ -544,7 +546,9 @@ jevForm.addEventListener("submit", (ev) => {
 
 jevReplace.addEventListener("click", () => {
   jevReplacing = true;
-  void renderJev(true).then(() => jevKey.focus());
+  void jevConnected()
+    .then((connected) => renderJev(connected))
+    .then(() => jevKey.focus());
 });
 
 jevCancel.addEventListener("click", jevStopReplacing);

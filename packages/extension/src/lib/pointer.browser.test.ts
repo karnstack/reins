@@ -217,7 +217,11 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
           return result;
         },
       },
-      tabs: { update: async () => ({}) },
+      tabs: {
+        update: async () => ({}),
+        // What the extension would read while a dialog blocks CDP.
+        get: async () => ({ url: new URL("/jev", url).href, title: "jev fixture" }),
+      },
     });
     // jev.ts registered at import against no `chrome`; register on the stub.
     initDialogTracking();
@@ -514,6 +518,8 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(Date.now() - t0).toBeLessThan(2000);
     const after = await jevObserve({ tabId: 1 });
     expect(after.dialog).toEqual({ type: "confirm", message: "Leave?" });
+    // The blocked page can't be read, but the tab's url/title still come through.
+    expect(after).toMatchObject({ url: new URL("/jev", url).href, title: "jev fixture" });
     // Dismiss it so later cases aren't blocked; Page.javascriptDialogClosed clears the record.
     await handleDialog({ tabId: 1, accept: false });
     await new Promise((r) => setTimeout(r, 200));
