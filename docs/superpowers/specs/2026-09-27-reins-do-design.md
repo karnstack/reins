@@ -188,8 +188,15 @@ the loop issues `jev_observe` / `jev_act` through the existing
    is hidden → stop `interrupted` (except on the first step, where `jev_act`'s
    `ensureVisible` brings the tab forward as `click` does today).
 3. **Ask Jev** (one request, speculative fan-out):
-   - `operation`: CLICK / TYPE_TEXT / SELECT (only those with candidates),
-     SCROLL_UP / SCROLL_DOWN / WAIT, DONE, BLOCKED
+   - `operation`: CLICK / TYPE_TEXT / SELECT / SUBMIT_SEARCH (only those with
+     candidates), SCROLL_UP / SCROLL_DOWN / WAIT, DONE, BLOCKED
+   - SUBMIT_SEARCH presses Enter in a search field that already holds the
+     query, for pages with no Search button. Only fields the snapshot marks
+     `submit` (single-line text controls that look like search: `type=search`,
+     `role=searchbox`, inside a search form/landmark, named `q`/`query`/
+     `search`, or labeled search/query/find) with a non-empty value are
+     offered — Enter in a chat or comment box means *send*, and its label
+     ("Message") carries no risky word for the gate to catch.
    - `click_target`, `type_text_target`, `select_target`: one per offered
      operation, each listing only compatible elements
    - **fill heads, one per text field:** when fills exist, `fill_for_<i>` for
