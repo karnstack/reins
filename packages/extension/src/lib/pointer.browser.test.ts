@@ -106,8 +106,14 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <textarea id="ta" placeholder="Search notes"></textarea>
 <div id="ce" contenteditable="true" aria-label="Search drafts">x</div>
 <input id="msg" aria-label="Message">
+<input id="yr" aria-label="Year" value="2000">
 <script>
   window.__log = [];
+  // A field that keeps its own model: keyup writes the value into it, blur
+  // writes the model back (a date widget re-deriving its state).
+  { let model = "2000"; const yr = document.getElementById("yr");
+    yr.addEventListener("keyup", () => { model = yr.value; });
+    yr.addEventListener("blur", () => { yr.value = model; }); }
   document.getElementById("cabin").addEventListener("change", (e) => __log.push("change:" + e.target.value));
   document.getElementById("f").addEventListener("submit", (e) => e.preventDefault());
   document.getElementById("sf").addEventListener("submit", (e) => { e.preventDefault(); __log.push("submit:sf"); });
@@ -692,6 +698,15 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     const node = s.actions.find((a) => a.label === "Where from?")?.node as number;
     expect(await jevAct({ tabId: 1, op: "type", node, text: "Zurich" })).toEqual({ ok: true });
     expect(await evaluate<string>('document.getElementById("from").value')).toBe("Zurich");
+  });
+
+  it("jev: a field that re-derives its value from keyup keeps the typed value", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Year")?.node as number;
+    expect(await jevAct({ tabId: 1, op: "type", node, text: "2024" })).toEqual({ ok: true });
+    await evaluate('document.getElementById("yr").blur()');
+    expect(await evaluate<string>('document.getElementById("yr").value')).toBe("2024");
   });
 
   it("jev: picks a native select option and fires change", async () => {

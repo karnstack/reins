@@ -2,8 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
-import { initDebugSessionListeners } from "./cdp.js";
-import { initDialogTracking, jevAct, jevObserve, OBSERVE_LOAD_MS, openDialog } from "./jev.js";
+import { __resetDebugSessions, initDebugSessionListeners } from "./cdp.js";
+import {
+  initDialogTracking,
+  jevAct,
+  jevObserve,
+  OBSERVE_LOAD_MS,
+  openDialog,
+  PER_KEY_MAX_CHARS,
+} from "./jev.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -420,5 +427,150 @@ describe("jevAct", () => {
     const sent = sendCommand.mock.calls.map((c) => c[1]);
     expect(sent).not.toContain("Input.insertText");
     expect(sent).not.toContain("Input.dispatchKeyEvent");
+  });
+
+  it("types a value key by key: keyDown with its text, then keyUp, per character", async () => {
+    const { sendCommand } = stubChrome();
+    sendCommand.mockImplementation(pageAnswers({}));
+    await expect(jevAct({ tabId: 3, op: "type", node: 1, text: "a1 ?" })).resolves.toEqual({
+      ok: true,
+    });
+    const keys = sendCommand.mock.calls
+      .filter((c) => c[1] === "Input.dispatchKeyEvent")
+      .map((c) => c[2] as Record<string, unknown>)
+      .filter((p) => p.commands === undefined && p.modifiers === undefined); // not the select-all
+    expect(keys.map((p) => `${p.type}:${p.key}`)).toEqual([
+      "keyDown:a",
+      "keyUp:a",
+      "keyDown:1",
+      "keyUp:1",
+      "keyDown: ",
+      "keyUp: ",
+      "keyDown:?",
+      "keyUp:?",
+    ]);
+    // The keyDown carries the text (that is what generates keypress + input); keyUp does not.
+    expect(keys[0]).toMatchObject({ text: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+    expect(keys[1]).not.toHaveProperty("text");
+    expect(keys[2]).toMatchObject({ text: "1", code: "Digit1", windowsVirtualKeyCode: 49 });
+    expect(keys[6]).toMatchObject({ text: "?" });
+    expect(keys[6]).not.toHaveProperty("code");
+    expect(sendCommand.mock.calls.map((c) => c[1])).not.toContain("Input.insertText");
+  });
+
+  describe("a debugger session dropped mid-typing", () => {
+    /** Keys sent so far, "keyDown:x" form, select-all excluded. */
+    const typed = (sendCommand: ReturnType<typeof vi.fn>) =>
+      sendCommand.mock.calls
+        .filter((c) => c[1] === "Input.dispatchKeyEvent")
+        .map((c) => c[2] as Record<string, unknown>)
+        .filter((p) => p.commands === undefined && p.modifiers === undefined)
+        .map((p) => `${p.type}:${p.key}`);
+
+    /** The second character's keyDown dies with the session; the field then holds `landed`. */
+    function dropping(landed: string) {
+      const stub = stubChrome();
+      __resetDebugSessions();
+      initDebugSessionListeners();
+      let downs = 0;
+      let dropped = false;
+      const base = pageAnswers({});
+      stub.sendCommand.mockImplementation(
+        async (t: unknown, method: string, params?: Record<string, unknown>) => {
+          if (
+            method === "Input.dispatchKeyEvent" &&
+            params?.type === "keyDown" &&
+            !params.commands
+          ) {
+            downs += 1;
+            if (downs === 2 && !dropped) {
+              dropped = true;
+              stub.detach(3);
+              throw new Error("Detached while handling command.");
+            }
+          }
+          if (method === "Runtime.evaluate") {
+            const expr = (params as { expression?: string })?.expression ?? "";
+            if (expr.includes("function jevFieldValue")) return { result: { value: landed } };
+          }
+          return base(t, method, params as { expression?: string; type?: string });
+        },
+      );
+      return stub;
+    }
+
+    it("drives the tab again and resumes after the character that landed", async () => {
+      const { sendCommand } = dropping("ab");
+      await expect(jevAct({ tabId: 3, op: "type", node: 1, text: "abc" })).resolves.toEqual({
+        ok: true,
+      });
+      expect(typed(sendCommand)).toEqual([
+        "keyDown:a",
+        "keyUp:a",
+        "keyDown:b", // died with the session, but landed
+        "keyDown:c",
+        "keyUp:c",
+      ]);
+      expect(chrome.debugger.attach).toHaveBeenCalledTimes(2);
+    });
+
+    it("retypes the character that did not land", async () => {
+      const { sendCommand } = dropping("a");
+      await jevAct({ tabId: 3, op: "type", node: 1, text: "abc" });
+      expect(typed(sendCommand)).toEqual([
+        "keyDown:a",
+        "keyUp:a",
+        "keyDown:b",
+        "keyDown:b",
+        "keyUp:b",
+        "keyDown:c",
+        "keyUp:c",
+      ]);
+    });
+
+    it("starts over when the field holds something else", async () => {
+      const { sendCommand } = dropping("A-");
+      await jevAct({ tabId: 3, op: "type", node: 1, text: "abc" });
+      expect(typed(sendCommand)).toEqual([
+        "keyDown:a",
+        "keyUp:a",
+        "keyDown:b",
+        "keyDown:a",
+        "keyUp:a",
+        "keyDown:b",
+        "keyUp:b",
+        "keyDown:c",
+        "keyUp:c",
+      ]);
+      // Select-all ran twice: once before typing, once before starting over.
+      const selectAlls = sendCommand.mock.calls.filter(
+        (c) => c[1] === "Input.dispatchKeyEvent" && (c[2] as { commands?: unknown }).commands,
+      );
+      expect(selectAlls).toHaveLength(2);
+    });
+
+    it("any other send failure is still the act's error", async () => {
+      const { sendCommand } = stubChrome();
+      sendCommand.mockImplementation(
+        async (t: unknown, method: string, params?: Record<string, unknown>) => {
+          if (method === "Input.dispatchKeyEvent" && !params?.commands) throw new Error("No node");
+          return pageAnswers({})(t, method, params as { expression?: string; type?: string });
+        },
+      );
+      await expect(jevAct({ tabId: 3, op: "type", node: 1, text: "ab" })).rejects.toThrow(
+        "No node",
+      );
+    });
+  });
+
+  it("inserts a long value whole instead of typing it key by key", async () => {
+    const { sendCommand } = stubChrome();
+    sendCommand.mockImplementation(pageAnswers({}));
+    const text = "x".repeat(PER_KEY_MAX_CHARS + 1);
+    await expect(jevAct({ tabId: 3, op: "type", node: 1, text })).resolves.toEqual({ ok: true });
+    const sent = sendCommand.mock.calls.map((c) => c[1]);
+    expect(sent).toContain("Input.insertText");
+    // Only the select-all pair touched the key path.
+    expect(sent.filter((m) => m === "Input.dispatchKeyEvent")).toHaveLength(2);
   });
 });

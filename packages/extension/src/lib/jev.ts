@@ -16,6 +16,7 @@ import {
 } from "./cdp.js";
 import {
   jevCheck,
+  jevFieldValue,
   jevSelect,
   jevSettle,
   jevSnapshot,
@@ -270,6 +271,117 @@ interface ActState {
   abandoned: boolean;
 }
 
+/** Values up to this length are typed key by key; longer ones are inserted whole. */
+export const PER_KEY_MAX_CHARS = 200;
+
+/** The key events one character produces; letters and digits get a code and key code. */
+function keyFor(ch: string): Record<string, string | number> {
+  if (ch === "\n" || ch === "\r") {
+    return { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" };
+  }
+  const base: Record<string, string | number> = { key: ch, text: ch, unmodifiedText: ch };
+  if (/^[a-zA-Z]$/.test(ch)) {
+    const upper = ch.toUpperCase();
+    return { ...base, code: `Key${upper}`, windowsVirtualKeyCode: upper.charCodeAt(0) };
+  }
+  if (/^[0-9]$/.test(ch))
+    return { ...base, code: `Digit${ch}`, windowsVirtualKeyCode: 48 + Number(ch) };
+  if (ch === " ") return { ...base, code: "Space", windowsVirtualKeyCode: 32 };
+  return base;
+}
+
+/**
+ * Put `text` into the focused field the way a person would: one keyDown (with
+ * its text, so Chromium generates the keypress and the input) and keyUp per
+ * character. `Input.insertText` fires `input` alone; a field whose script
+ * re-derives its value on keydown/keyup (formatting, a model it writes back on
+ * blur) never sees per-key typing and drops the value. Long values are
+ * inserted whole: they are pasted text, not typing, and the per-key round
+ * trips would add up.
+ */
+async function typeText(tabId: number, node: number, text: string, state: ActState): Promise<void> {
+  if (text.length > PER_KEY_MAX_CHARS) {
+    await send(tabId, "Input.insertText", { text });
+    return;
+  }
+  const chars = [...text];
+  let i = 0;
+  let drops = 0;
+  while (i < chars.length) {
+    if (state.abandoned) return;
+    const key = keyFor(chars[i] as string);
+    try {
+      await send(tabId, "Input.dispatchKeyEvent", { type: "keyDown", ...key });
+      const { text: _t, unmodifiedText: _u, ...up } = key;
+      await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...up });
+      i += 1;
+    } catch (err) {
+      // Typing into a field brings up a password manager's frame, and Chrome
+      // drops the debugger session under us. One command (insertText) fell
+      // between commands; per-key typing is still sending. Drive the tab
+      // again (a new session; the guard clears the frame) and carry on from
+      // whatever the field holds, at most twice per act.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!SESSION_DROPPED.test(msg) || drops >= TYPE_DROPS_MAX) throw err;
+      drops += 1;
+      const value = await fieldValueAfterDrop(tabId, node);
+      if (state.abandoned) return;
+      if (value === chars.slice(0, i + 1).join(""))
+        i += 1; // the failed key landed
+      else if (value !== chars.slice(0, i).join("")) {
+        // The field holds something else (its own script reworked it): start over.
+        await selectAll(tabId);
+        i = 0;
+      }
+    }
+  }
+}
+
+/** A send failure that means the debugger session was dropped under us. */
+const SESSION_DROPPED = /detached|not attached/i;
+/** Re-attaches one typed value may take. */
+const TYPE_DROPS_MAX = 2;
+/** How long to keep trying to drive the tab again after a drop. */
+const REATTACH_MS = 2000;
+
+/** After a drop: drive the tab again and read what the field holds. The
+ *  drop's detach event may not have been dispatched yet, so the first tries
+ *  can still hit the dead session; poll until the bound. */
+async function fieldValueAfterDrop(tabId: number, node: number): Promise<string> {
+  const until = Date.now() + REATTACH_MS;
+  let last: unknown;
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      const value = await drivePage(tabId, () =>
+        evaluate<string | null>(tabId, `(${jevFieldValue})(${node})`),
+      );
+      if (value === null) throw new Error("the field is gone");
+      return value;
+    } catch (err) {
+      last = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!SESSION_DROPPED.test(msg) && !TRANSIENT_DRIVE.test(msg)) throw err;
+      if (Date.now() >= until) throw last;
+    }
+  }
+}
+
+/** Drive failures right after a drop that clear once the guard has removed the frame. */
+const TRANSIENT_DRIVE = /different extension|cannot access|cannot attach|already attached/i;
+
+async function selectAll(tabId: number): Promise<void> {
+  const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
+  await send(tabId, "Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "a",
+    code: "KeyA",
+    modifiers,
+    commands: ["selectAll"],
+  });
+  await send(tabId, "Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers });
+}
+
 /** The mutation itself, on a tab that is already driven. */
 async function act(tabId: number, params: JevActParams, state: ActState): Promise<JevActResult> {
   await ensureVisible(tabId);
@@ -373,22 +485,9 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
     }
     if (params.op === "type") {
       if (state.abandoned) return { ok: true };
-      const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
-      await send(tabId, "Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: "a",
-        code: "KeyA",
-        modifiers,
-        commands: ["selectAll"],
-      });
-      await send(tabId, "Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: "a",
-        code: "KeyA",
-        modifiers,
-      });
+      await selectAll(tabId);
       if (state.abandoned) return { ok: true };
-      await send(tabId, "Input.insertText", { text: params.text ?? "" });
+      await typeText(tabId, node, params.text ?? "", state);
     }
     if (state.abandoned) return { ok: true };
     // Settling is read-only; a navigation mid-settle is fine.

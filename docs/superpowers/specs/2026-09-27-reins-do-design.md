@@ -367,7 +367,21 @@ like a foreground tab.
   that as an error, since nothing re-observes behind it.
 - **type**: click to focus (same path), select-all
   (`Input.dispatchKeyEvent` with the `selectAll` command, Meta on macOS,
-  Ctrl elsewhere), then `Input.insertText`.
+  Ctrl elsewhere), then the value key by key — one `keyDown` carrying the
+  character as `text` (so Chromium generates keypress and input) and one
+  `keyUp` per character; letters, digits and space carry a `code` and key
+  code, a newline is Enter. `Input.insertText` fires `input` alone, and a
+  field whose script re-derives its value from keydown/keyup (formatting, a
+  model written back on blur) never sees it and drops the value. Values over
+  200 characters are inserted whole (pasted text, not typing). A dialog that
+  wins the race stops the typing between keys. Typing into a field can bring
+  up a password manager's frame, and Chrome drops the debugger session under
+  the act (a "detached" / "not attached" send failure): the act drives the
+  tab again (a new session, the guard clears the frame; polled ≤ 2 s), reads
+  the field (`jevFieldValue`), and resumes after the characters that landed —
+  or, if the field holds something else, selects all and types the value
+  again. At most two such drops per act; any other send failure is the act's
+  error, as before.
 - **select**: native `<select>` only. Set `value`, dispatch `input` and
   `change`. If the option vanished, return an error (not `stale`), so the loop
   never retries an uncertain mutation.

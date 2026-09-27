@@ -326,6 +326,18 @@ export function jevSnapshot(): {
 }
 
 /** Is `node` still the element Jev saw at the last snapshot? */
+/** What a field holds now (null when the node is gone): typing that was cut
+ *  short by a dropped debugger session resumes from here. */
+export function jevFieldValue(node: number): string | null {
+  const cache = (window as unknown as Record<symbol, JevCache | undefined>)[
+    Symbol.for("reins.jev")
+  ];
+  const el = cache?.nodes.get(node);
+  if (!el?.isConnected) return null;
+  const v = (el as HTMLInputElement).value;
+  return typeof v === "string" ? v : (el.textContent ?? "");
+}
+
 export function jevCheck(node: number): string {
   const cache = (window as unknown as Record<symbol, JevCache | undefined>)[
     Symbol.for("reins.jev")
