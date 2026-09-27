@@ -10,6 +10,7 @@ import {
   helpText,
   logsInfo,
   RESTART_WAIT_MS,
+  rpcFailure,
   runRestart,
   tabsText,
 } from "./cli-commands.js";
@@ -347,5 +348,19 @@ describe("logsInfo", () => {
     const info = logsInfo(dir, 2);
     expect(info.latest).toContain("daemon-2026-01-02.log");
     expect(info.tail).toEqual(["two", "three"]);
+  });
+});
+
+describe("rpcFailure", () => {
+  it("turns a fetch timeout into one readable line", () => {
+    const err = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    expect(rpcFailure(err, 100_000).message).toBe(
+      "the daemon did not answer within 100s — the run may still be finishing; check `reins logs`",
+    );
+  });
+
+  it("leaves other errors alone", () => {
+    const err = new Error("ECONNREFUSED");
+    expect(rpcFailure(err, 30_000)).toBe(err);
   });
 });

@@ -13,6 +13,17 @@ export interface DaemonHealth {
 }
 
 /** Usage text for `reins help` / unknown commands. */
+/** A `fetch` to the daemon that hit its own deadline: say so in one line
+ *  instead of undici's stack. Every other failure passes through. */
+export function rpcFailure(err: unknown, timeoutMs: number): Error {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return new Error(
+      `the daemon did not answer within ${Math.round(timeoutMs / 1000)}s — the run may still be finishing; check \`reins logs\``,
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 export function helpText(version: string, tools: Record<string, ToolCommand>): string {
   // Floor: the longest management entry, so its summary never runs into the name.
   const width =

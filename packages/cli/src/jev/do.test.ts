@@ -385,6 +385,56 @@ describe("handleDo", () => {
     expect(runs.tryBegin("b1:5")).toBe(true);
   });
 
+  it("wires --timeout into the loop's signal: a hung Jev call ends as budget", async () => {
+    vi.useFakeTimers();
+    try {
+      writeKey(dir, "ts_live_abcd1234");
+      const runs = new RunStore();
+      // Jev never answers; only the signal can end the call.
+      const ask = (_body: unknown, signal?: AbortSignal) =>
+        new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      const promise = handleDo(
+        bridge(),
+        { ...params, timeoutSec: 5 },
+        {
+          runs,
+          credentialsDir: dir,
+          signal: new AbortController().signal,
+          createAsk: () => ask as never,
+        },
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      const r = await promise;
+      expect(r).toMatchObject({
+        status: "budget",
+        reason: "timed out after 5s",
+        next: "reins do --continue",
+      });
+      expect(runs.get("b1:5")?.goal).toBe("find it");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a hang-up still reads as interrupted with the timeout wired in", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const ctrl = new AbortController();
+    const ask = (_body: unknown, signal?: AbortSignal) =>
+      new Promise<never>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        ctrl.abort(new Error("client hung up"));
+      });
+    const r = await handleDo(bridge(), params, {
+      runs: new RunStore(),
+      credentialsDir: dir,
+      signal: ctrl.signal,
+      createAsk: () => ask as never,
+    });
+    expect(r).toMatchObject({ status: "interrupted", reason: "client hung up" });
+  });
+
   it("reports interrupted with the abort reason and keeps the run for --continue", async () => {
     writeKey(dir, "ts_live_abcd1234");
     const ctrl = new AbortController();

@@ -357,8 +357,8 @@ describe("reins do", () => {
     expect(() => buildDo(argv)).toThrow(message);
   });
 
-  it("waits longer than the run's own timeout", () => {
-    expect(c.timeoutMs?.({ timeoutSec: 60 })).toBe(70_000);
+  it("waits one bridge call (30 s) plus slack beyond the run's own timeout", () => {
+    expect(c.timeoutMs?.({ timeoutSec: 60 })).toBe(100_000);
   });
 
   it("exits 0 done, 2 handoff, 1 error", () => {

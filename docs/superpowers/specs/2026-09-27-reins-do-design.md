@@ -112,7 +112,9 @@ reins do "<goal>" [--fill name=value]... [--confirm "<label>"]... [--continue]
 - `--max-steps` counts executed actions (default 30). Jev calls are capped at
   `2 × max-steps` to bound stale re-observations.
 - `--timeout` is wall-clock seconds for the whole run (default 60). The CLI's
-  HTTP wait for `do` is `timeout + 10 s` (today it is a fixed 30 s,
+  HTTP wait for `do` is `timeout + 40 s`: the loop cuts itself off at
+  `--timeout`, but the `jev_act` in flight at that moment can still take one
+  full bridge call (30 s) to come back (today the wait is a fixed 30 s,
   `cli.ts:24`; `rpc()` gains a `timeoutMs` option).
 
 ### Result

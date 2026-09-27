@@ -10,6 +10,7 @@ import {
   helpText,
   logsInfo,
   RESTART_WAIT_MS,
+  rpcFailure,
   runRestart,
 } from "./cli-commands.js";
 import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
@@ -38,6 +39,8 @@ async function rpc(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ method, params }),
     signal: AbortSignal.timeout(timeoutMs),
+  }).catch((err: unknown) => {
+    throw rpcFailure(err, timeoutMs);
   });
   const body = (await res.json().catch(() => ({}))) as { result?: unknown; error?: string };
   if (!res.ok) throw new Error(body.error ?? `daemon replied ${res.status}`);

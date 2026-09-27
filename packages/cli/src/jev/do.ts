@@ -172,23 +172,41 @@ export async function handleDo(
       run = newRun(p.goal, hostOf(first.url), p.fills, p.confirms, now());
     }
     const ask = (ctx.createAsk ?? ((k: string) => createJevAsk({ key: k })))(key);
-    const { result, run: after } = await runLoop(
-      {
-        observe: async () => JevObservation.parse(await call("jev_observe", {})),
-        act: async (a: Omit<JevActParams, "browserId" | "tabId">) =>
-          JevActResult.parse(await call("jev_act", a)),
-        ask,
-        now,
-      },
-      {
-        run,
-        maxSteps: p.maxSteps,
-        timeoutMs: p.timeoutSec * 1000,
-        signal: ctx.signal,
-        continued: p.continue,
-        first,
-      },
+    // One signal for the loop: the hang-up/shutdown signal, plus --timeout.
+    // A Jev call or jev_act in flight when the budget runs out is cut short,
+    // so the run always answers inside the CLI's HTTP wait.
+    const timeoutMs = p.timeoutSec * 1000;
+    const loopCtrl = new AbortController();
+    const onAbort = () => loopCtrl.abort(ctx.signal.reason);
+    ctx.signal.addEventListener("abort", onAbort, { once: true });
+    const timer = setTimeout(
+      () => loopCtrl.abort(new DOMException(`timed out after ${p.timeoutSec}s`, "TimeoutError")),
+      timeoutMs,
     );
+    let after: RunState;
+    let result: DoResult;
+    try {
+      ({ result, run: after } = await runLoop(
+        {
+          observe: async () => JevObservation.parse(await call("jev_observe", {})),
+          act: async (a: Omit<JevActParams, "browserId" | "tabId">) =>
+            JevActResult.parse(await call("jev_act", a)),
+          ask,
+          now,
+        },
+        {
+          run,
+          maxSteps: p.maxSteps,
+          timeoutMs,
+          signal: loopCtrl.signal,
+          continued: p.continue,
+          first,
+        },
+      ));
+    } finally {
+      clearTimeout(timer);
+      ctx.signal.removeEventListener("abort", onAbort);
+    }
     ctx.runs.set(runKey, after);
     // The next command routes the way the user did: only an explicit
     // --tab/--browser is echoed back, so a default-tab run stays short.

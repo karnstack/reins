@@ -279,7 +279,9 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
         timeoutSec,
       };
     },
-    timeoutMs: (p) => (Number(p.timeoutSec ?? 60) + 10) * 1000,
+    // The loop cuts itself off at --timeout, but the jev_act in flight at that
+    // moment can still take one full bridge call (30 s) to come back.
+    timeoutMs: (p) => (Number(p.timeoutSec ?? 60) + 40) * 1000,
     exitCode: (r) => doExitCode(r as DoResult),
     format: (r) => formatDoResult(r as DoResult),
   },

@@ -48,6 +48,13 @@ function abortReason(signal: AbortSignal): string {
   return r instanceof Error ? r.message : typeof r === "string" ? r : "stopped";
 }
 
+/** handleDo aborts the signal with a TimeoutError when --timeout elapses:
+ *  that is the run's own budget, not someone hanging up on it. */
+function timedOut(signal: AbortSignal): boolean {
+  const r = signal.reason as unknown;
+  return r instanceof Error && r.name === "TimeoutError";
+}
+
 /** The `reins do` state machine: observe → ask Jev → gate → act → record,
  *  until a stop rule fires. Never throws; failures come back as `error`. */
 export async function runLoop(
@@ -107,14 +114,18 @@ export async function runLoop(
     };
   };
 
+  const timeoutReason = `timed out after ${Math.round(input.timeoutMs / 1000)}s`;
+  const aborted = (): { result: DoResult; run: RunState } =>
+    timedOut(input.signal)
+      ? stop("budget", { reason: timeoutReason })
+      : stop("interrupted", { reason: abortReason(input.signal) });
+
   let obs = input.first;
   let first = true;
   try {
     for (;;) {
-      if (input.signal.aborted) return stop("interrupted", { reason: abortReason(input.signal) });
-      if (deps.now() - started >= input.timeoutMs) {
-        return stop("budget", { reason: `timed out after ${Math.round(input.timeoutMs / 1000)}s` });
-      }
+      if (input.signal.aborted) return aborted();
+      if (deps.now() - started >= input.timeoutMs) return stop("budget", { reason: timeoutReason });
       obs ??= await deps.observe();
       url = obs.url;
       title = obs.title;
@@ -206,7 +217,7 @@ export async function runLoop(
       }
       if (run.step >= stepLimit)
         return stop("budget", { reason: `reached ${input.maxSteps} steps` });
-      if (input.signal.aborted) return stop("interrupted", { reason: abortReason(input.signal) });
+      if (input.signal.aborted) return aborted();
 
       const op = OP_OF[decision.operation];
       const fill = decision.fill ?? undefined;
@@ -240,7 +251,7 @@ export async function runLoop(
       });
     }
   } catch (err) {
-    if (input.signal.aborted) return stop("interrupted", { reason: abortReason(input.signal) });
+    if (input.signal.aborted) return aborted();
     return stop("error", { reason: err instanceof Error ? err.message : String(err) });
   }
 }

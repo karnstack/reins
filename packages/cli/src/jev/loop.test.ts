@@ -266,6 +266,35 @@ describe("runLoop", () => {
     expect(result.reason).toContain("timed out");
   });
 
+  it("a --timeout that fires during an action is budget, not interrupted", async () => {
+    // handleDo aborts the loop's signal with a TimeoutError when --timeout
+    // elapses; an act (or Jev call) that outlives it must report `budget`.
+    const ctrl = new AbortController();
+    let t = 0;
+    const d = deps([page([button(1, "Next")])], [{ op: "CLICK", target: "1" }], {
+      now: () => t,
+    });
+    d.act.mockImplementationOnce(async () => {
+      t = 1500;
+      ctrl.abort(new DOMException("timed out", "TimeoutError"));
+      return { ok: true };
+    });
+    const { result } = await runLoop(d, input({ signal: ctrl.signal, timeoutMs: 1000 }));
+    expect(result).toMatchObject({ status: "budget", reason: "timed out after 1s", step: 1 });
+    expect(d.observe).toHaveBeenCalledTimes(1); // the first read only: no re-read after the cut
+  });
+
+  it("a Jev call cut short by --timeout is budget too", async () => {
+    const ctrl = new AbortController();
+    const d = deps([page([button(1, "Next")])], []);
+    d.ask.mockImplementationOnce(async () => {
+      ctrl.abort(new DOMException("timed out", "TimeoutError"));
+      throw ctrl.signal.reason;
+    });
+    const { result } = await runLoop(d, input({ signal: ctrl.signal, timeoutMs: 5000 }));
+    expect(result).toMatchObject({ status: "budget", reason: "timed out after 5s" });
+  });
+
   it("stops before acting once aborted", async () => {
     const ctrl = new AbortController();
     const d = deps([page([button(1, "Next")])], [{ op: "CLICK", target: "1" }]);
