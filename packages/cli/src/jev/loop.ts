@@ -90,8 +90,9 @@ export async function runLoop(
     // Loop breaker: a --continue that acted but moved nothing is stuck, and
     // the next --continue refuses until the page itself changes. Only fires
     // when the last action's outcome was actually observed: an abort or
-    // timeout before the next read says nothing about the page.
-    const last = run.history.at(-1);
+    // timeout before the next read says nothing about the page, and a stale
+    // act (never happened) says nothing either — look past it.
+    const last = run.history.findLast((h) => h.stale === undefined);
     if (
       input.continued &&
       executed > 0 &&
@@ -147,7 +148,7 @@ export async function runLoop(
         if (obs.url) url = obs.url;
         if (obs.title) title = obs.title;
         const prev = run.history.at(-1);
-        if (prev && prev.pageChanged === null) {
+        if (prev && prev.pageChanged === null && prev.stale === undefined) {
           prev.pageChanged = true;
           run.pageChanges += 1;
           changed += 1;
