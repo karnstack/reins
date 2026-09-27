@@ -6,6 +6,9 @@ export interface HistoryEntry {
   fill?: string;
   /** null until the next observation says whether the page changed. */
   pageChanged: boolean | null;
+  /** Set when the act never happened (the target was gone, covered, moving):
+   *  the reason, so Jev can choose differently. Not a step; never resolved. */
+  stale?: string;
 }
 
 export type DoStatus =

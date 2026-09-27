@@ -237,6 +237,60 @@ describe("runLoop", () => {
     expect(d.observe).toHaveBeenCalledTimes(2);
   });
 
+  it("three stale results in a row are stuck, without using a step", async () => {
+    const d = deps(
+      [page([button(1, "Next")])],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "DONE" },
+      ],
+    );
+    d.act.mockResolvedValue({ stale: true, reason: "covered by div.overlay" });
+    const { result, run } = await runLoop(d, input());
+    expect(result).toMatchObject({
+      status: "stuck",
+      reason: 'couldn\'t act on "Next": covered by div.overlay',
+      step: 0,
+      steps: [],
+    });
+    expect(d.ask).toHaveBeenCalledTimes(3);
+    expect(run.step).toBe(0);
+    // The failures are remembered for Jev, but never count as no-progress actions.
+    expect(run.history.map((h) => h.stale)).toEqual([
+      "covered by div.overlay",
+      "covered by div.overlay",
+      "covered by div.overlay",
+    ]);
+    expect(run.history.every((h) => h.pageChanged === null)).toBe(true);
+  });
+
+  it("a stale result is told to Jev on the next ask, and a good act resets the count", async () => {
+    const d = deps(
+      [page([button(1, "Next"), button(2, "Go")])],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "2" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "DONE" },
+      ],
+    );
+    d.act
+      .mockResolvedValueOnce({ stale: true, reason: "the element is gone" })
+      .mockResolvedValueOnce({ stale: true, reason: "the element is gone" })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ stale: true, reason: "covered" })
+      .mockResolvedValueOnce({ stale: true, reason: "covered" });
+    const { result } = await runLoop(d, input());
+    expect(result.status).toBe("done");
+    expect(result.step).toBe(1);
+    const second = JSON.stringify(d.ask.mock.calls[1]?.[0]);
+    expect(second).toContain('could not click \\"Next\\": the element is gone');
+  });
+
   it("calls it stuck after 3 actions that change nothing", async () => {
     const d = deps(
       [page([button(1, "Next")])],

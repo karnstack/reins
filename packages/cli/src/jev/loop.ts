@@ -70,6 +70,10 @@ export async function runLoop(
   let calls = 0;
   let executed = 0;
   let changed = 0;
+  // Consecutive acts that never happened (stale target). Each is re-read
+  // without a step, but Jev tends to pick the same element again; three in
+  // a row is stuck rather than a budget burnt on re-reads.
+  let staleRun = 0;
   let url = "";
   let title = "";
 
@@ -155,7 +159,7 @@ export async function runLoop(
       // result records it.
       const fp = fingerprint(obs);
       const prev = run.history.at(-1);
-      if (prev && prev.pageChanged === null) {
+      if (prev && prev.pageChanged === null && prev.stale === undefined) {
         prev.pageChanged = fp !== run.lastFingerprint;
         if (prev.pageChanged) {
           run.pageChanges += 1;
@@ -254,7 +258,18 @@ export async function runLoop(
         ...(op === "scroll" && action.delta !== undefined ? { delta: action.delta } : {}),
       });
       obs = undefined;
-      if ("stale" in res) continue; // nothing happened: read again, no step used
+      if ("stale" in res) {
+        // Nothing happened: read again, no step used — but remember why, and
+        // give up after three in a row.
+        run.history.push({ op, label: action.label, pageChanged: null, stale: res.reason });
+        if (++staleRun >= 3) {
+          return stop("stuck", {
+            reason: `couldn't act on ${JSON.stringify(action.label)}: ${res.reason}`,
+          });
+        }
+        continue;
+      }
+      staleRun = 0;
 
       if (op === "click" || op === "submit") {
         const i = run.confirms.findIndex((c) => normalizeLabel(c) === normalizeLabel(action.label));

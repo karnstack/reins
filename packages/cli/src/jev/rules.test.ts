@@ -105,6 +105,12 @@ describe("noProgress", () => {
     expect(noProgress([h(false), h(false, "wait"), h(false)])).toBe(false);
     expect(noProgress([h(false), h(false)])).toBe(false);
   });
+  it("skips stale entries: they never acted", () => {
+    const stale = { ...h(null), stale: "covered" };
+    expect(noProgress([h(false), stale, h(false), h(false)])).toBe(true);
+    expect(noProgress([stale, stale, stale])).toBe(false);
+    expect(noProgress([h(false), h(false), stale])).toBe(false);
+  });
 });
 
 describe("fingerprint", () => {

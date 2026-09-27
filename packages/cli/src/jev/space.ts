@@ -149,6 +149,10 @@ function stateOf(
       kind: h.op,
       fill: h.fill ?? null,
       page_changed: h.pageChanged,
+      // An act that never happened: say why, so Jev picks something else.
+      ...(h.stale !== undefined
+        ? { failed: `could not ${h.op} ${JSON.stringify(h.label)}: ${h.stale}` }
+        : {}),
     })),
     supplied_values: fills,
   });
