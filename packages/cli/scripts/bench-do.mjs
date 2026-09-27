@@ -6,11 +6,13 @@
 //   node packages/cli/scripts/bench-do.mjs [--runs 5] [--arm do|manual|both]
 //        [--tasks wikipedia,github] [--out bench-do.json] [--claude-budget-usd 2]
 //   node packages/cli/scripts/bench-do.mjs --check-only wikipedia --tab <id>
+//   node packages/cli/scripts/bench-do.mjs --dry --runs 1   # self-test: fake tabs, `sleep 5` children
 //
 // Cheap first pass:  --arm do --runs 1
 // The full ship-bar run:  --runs 5  (both arms, all tasks)
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
 const TASKS = [
@@ -63,6 +65,7 @@ const { values: opts } = parseArgs({
     "check-only": { type: "string" },
     tab: { type: "string" },
     "claude-budget-usd": { type: "string", default: "2" },
+    dry: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
 });
@@ -73,6 +76,7 @@ if (opts.help) {
       "usage: node packages/cli/scripts/bench-do.mjs [--runs 5] [--arm do|manual|both]",
       "         [--tasks id1,id2] [--out bench-do.json] [--claude-budget-usd 2]",
       "       node packages/cli/scripts/bench-do.mjs --check-only <taskId> --tab <id>",
+      "       node packages/cli/scripts/bench-do.mjs --dry [--runs 1]   (self-test, no browser, no spend)",
       `tasks: ${TASKS.map((t) => t.id).join(", ")}`,
     ].join("\n"),
   );
@@ -100,18 +104,23 @@ function die(msg) {
 
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: "utf8" }).trim();
 
+const DRY = opts.dry === true;
+let dryTab = 0;
+
 /** `reins open` prints `opened tab <id>`; with --json it prints `{ "tabId": <id> }`. */
 function openTab(url) {
+  if (DRY) return ++dryTab;
   const out = JSON.parse(sh("reins", ["open", url, "--json"]));
   if (typeof out.tabId !== "number")
     throw new Error(`reins open: no tabId in ${JSON.stringify(out)}`);
   return out.tabId;
 }
 
-const closeTab = (tab) => sh("reins", ["close", "--tab", String(tab)]);
+const closeTab = (tab) => (DRY ? "ok (dry)" : sh("reins", ["close", "--tab", String(tab)]));
 
 /** Independent checker: `reins eval --json` prints `{ "value": <result> }`. */
 function verify(tab, check) {
+  if (DRY) return false;
   try {
     const out = JSON.parse(sh("reins", ["eval", check, "--tab", String(tab), "--json"]));
     return out.value === true;
@@ -132,13 +141,60 @@ if (opts["check-only"]) {
   process.exit(ok ? 0 : 1);
 }
 
-function timed(fn) {
-  const t0 = performance.now();
-  const out = fn();
-  return { ms: Math.round(performance.now() - t0), out };
+/**
+ * Spawn a child and resolve when it exits, never reject. A timeout sends
+ * SIGTERM (then SIGKILL) and marks the result `timedOut`; a user interrupt
+ * kills it the same way via `killCurrent`. Only the interrupt stops the
+ * benchmark; a timeout is just a failed row.
+ */
+let current;
+function run(cmd, args, timeoutMs) {
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let spawnError;
+    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    current = child;
+    child.stdout.setEncoding("utf8").on("data", (d) => {
+      stdout += d;
+    });
+    child.stderr.setEncoding("utf8").on("data", (d) => {
+      stderr += d;
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      kill(child);
+    }, timeoutMs);
+    child.on("error", (err) => {
+      spawnError = err;
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timer);
+      if (current === child) current = undefined;
+      resolve({
+        ms: Math.round(performance.now() - t0),
+        status,
+        signal,
+        stdout,
+        stderr,
+        timedOut,
+        error: spawnError,
+      });
+    });
+  });
+}
+
+function kill(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill("SIGTERM");
+  const hard = setTimeout(() => child.kill("SIGKILL"), 5_000);
+  child.once("close", () => clearTimeout(hard));
 }
 
 function runDo(task, tab) {
+  if (DRY) return run("sleep", ["5"], 120_000);
   const args = [
     "do",
     task.goal,
@@ -147,7 +203,7 @@ function runDo(task, tab) {
     String(tab),
     "--json",
   ];
-  return spawnSync("reins", args, { encoding: "utf8", timeout: 120_000 });
+  return run("reins", args, 120_000);
 }
 
 function manualPrompt(task, tab) {
@@ -162,39 +218,40 @@ function manualPrompt(task, tab) {
     "Rules:",
     `- Every reins command must pass --tab ${tab}. Do not touch other tabs and do not open, close or focus tabs.`,
     "- One plain reins command per Bash call: no pipes, no &&, no shell wrappers, no other programs.",
-    "- Never navigate by URL (no reins nav, no reins eval): reach the result through the page's own UI.",
-    "- Use only the step-by-step commands: reins snapshot, reins click, reins type, reins fill, reins press, reins select, reins text, reins wait, reins screenshot.",
+    "- Never navigate by URL: reach the result through the page's own UI (search box, buttons, filters).",
+    `- The only commands available: ${MANUAL_STEP_COMMANDS.map((c) => `reins ${c}`).join(", ")}. Anything else is denied.`,
     "- Do NOT use `reins do`.",
-    "- Do not navigate away from the site the tab is on; work through its own UI (search box, buttons, filters).",
     "- Stop as soon as the task's end state is visible on the page. Reply with one line saying what is on screen.",
   ].join("\n");
 }
+
+/** The step commands the manual arm may run (names from `reins help`). */
+const MANUAL_STEP_COMMANDS = [
+  "snapshot",
+  "click",
+  "type",
+  "fill",
+  "select",
+  "press",
+  "hover",
+  "scroll",
+  "wait",
+  "text",
+  "screenshot",
+];
 
 /**
  * Least-permissive combination on claude 2.1.283:
  *   --restricted   ignores user/project settings (the user's allow all Bash) and strips code tools
  *   --tools Bash   adds Bash back, and nothing else
- *   --allowedTools "Bash(reins:*)"  auto-approves reins commands only
- *   --disallowedTools  denies `reins do` (keeps the arm manual) and the commands that
- *                      could touch other tabs or skip the UI (open/close/focus/nav/cdp/eval/group)
- *   --permission-prompts none  denies anything else instead of hanging on a prompt
+ *   --allowedTools  an explicit allowlist of the step commands; everything else
+ *                   (reins do/open/close/focus/nav/eval/cdp/tabs/policy/…, any other program) prompts…
+ *   --permission-prompts none  …and a prompt in -p mode is a denial, not a hang
+ *   --disallowedTools "Bash(reins do:*)"  belt and braces: the deny wins even if an allow matched
  *   --disable-slash-commands  keeps the user's reins skill (which documents `reins do`) out
  */
-const MANUAL_DENY = [
-  "Bash(reins do:*)",
-  "Bash(reins open:*)",
-  "Bash(reins close:*)",
-  "Bash(reins focus:*)",
-  "Bash(reins nav:*)",
-  "Bash(reins cdp:*)",
-  "Bash(reins group:*)",
-  "Bash(reins ungroup:*)",
-  "Bash(reins eval:*)",
-  "Bash(reins key:*)",
-  "Bash(reins kill:*)",
-  "Bash(reins restart:*)",
-];
 function runManual(task, tab) {
+  if (DRY) return run("sleep", ["5"], 600_000);
   const args = [
     "-p",
     manualPrompt(task, tab),
@@ -202,9 +259,9 @@ function runManual(task, tab) {
     "--tools",
     "Bash",
     "--allowedTools",
-    "Bash(reins:*)",
+    ...MANUAL_STEP_COMMANDS.map((c) => `Bash(reins ${c}:*)`),
     "--disallowedTools",
-    ...MANUAL_DENY,
+    "Bash(reins do:*)",
     "--permission-prompts",
     "none",
     "--disable-slash-commands",
@@ -214,7 +271,7 @@ function runManual(task, tab) {
     "--max-budget-usd",
     String(opts["claude-budget-usd"]),
   ];
-  return spawnSync("claude", args, { encoding: "utf8", timeout: 600_000 });
+  return run("claude", args, 600_000);
 }
 
 function parseJson(text) {
@@ -226,55 +283,51 @@ function parseJson(text) {
 }
 
 const results = [];
-// Ctrl-C: spawnSync blocks the event loop, so the handler runs once the
-// current child (which got the same SIGINT) returns; the run loop then stops,
-// the tab is closed by the finally, and partial results are still written.
+// Ctrl-C: the loop is async, so the handler runs right away. It marks the
+// benchmark as stopping and kills the running child; the run's `finally`
+// closes the tab (a second Ctrl-C during that close is ignored so the tab
+// never leaks), then partial results are written and we exit 130.
 let stopping = false;
+let closing = false;
 process.on("SIGINT", () => {
+  if (closing) return;
   if (stopping) process.exit(130);
   stopping = true;
-  console.error("\nbench-do: interrupted — finishing this run's cleanup, writing partial results");
+  console.error(
+    "\nbench-do: interrupted — stopping after this run's cleanup, writing partial results",
+  );
+  if (current) kill(current);
 });
 
 function safeClose(tab) {
+  closing = true;
   try {
     closeTab(tab);
   } catch (err) {
     console.error(`  close tab ${tab} failed: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    closing = false;
   }
 }
 
-console.log(`bench-do: ${tasks.length} task(s) × ${ARMS.join("+")} × ${RUNS} run(s)`);
-outer: for (const task of tasks) {
-  for (let i = 0; i < RUNS; i++) {
-    for (const arm of ARMS) {
-      if (stopping) break outer;
-      const tab = openTab(task.url);
-      try {
-        runOne(task, arm, i, tab);
-      } finally {
-        safeClose(tab);
-      }
-    }
-  }
-}
-
-function runOne(task, arm, i, tab) {
-  spawnSync("sleep", ["2"]); // initial load is outside the clock in both arms
-  const run = timed(() => (arm === "do" ? runDo(task, tab) : runManual(task, tab)));
-  if (run.out.signal) stopping = true;
-  const ok = verify(tab, task.check);
+async function runOne(task, arm, i, tab) {
+  await sleep(2_000); // initial load is outside the clock in both arms
+  if (stopping) return;
+  const out = await (arm === "do" ? runDo(task, tab) : runManual(task, tab));
+  const ok = stopping ? false : verify(tab, task.check);
   const row = {
     task: task.id,
     arm,
     run: i + 1,
-    ms: run.ms,
+    ms: out.ms,
     verified: ok,
-    exit: run.out.status,
+    exit: out.status,
+    timedOut: out.timedOut,
+    interrupted: stopping,
   };
-  const body = parseJson(run.out.stdout ?? "");
+  const body = parseJson(out.stdout);
   if (arm === "do") {
-    row.status = body?.status ?? (run.out.error ? "spawn_error" : "unparsed");
+    row.status = body?.status ?? (out.error ? "spawn_error" : "unparsed");
     row.reason = body?.reason;
     row.jevCalls = body?.jevCalls;
     row.elapsedMs = body?.elapsedMs;
@@ -285,14 +338,42 @@ function runOne(task, arm, i, tab) {
     row.subtype = body?.subtype;
     row.reply = typeof body?.result === "string" ? body.result.slice(0, 200) : undefined;
   }
-  if (run.out.error) row.error = run.out.error.message;
-  else if (run.out.status !== 0 && !body) row.error = (run.out.stderr ?? "").trim().slice(0, 300);
+  if (out.error) row.error = out.error.message;
+  else if (out.status !== 0 && !body) row.error = out.stderr.trim().slice(0, 300);
   results.push(row);
   const extra =
     arm === "do"
       ? `${row.status} step=${row.step ?? "?"} jev=${row.jevCalls ?? "?"}`
       : `turns=${row.turns ?? "?"} $${row.costUsd?.toFixed?.(3) ?? "?"}`;
-  console.log(`${task.id} ${arm} #${i + 1}: ${run.ms} ms ${ok ? "✓" : "✗"} (${extra})`);
+  const mark = out.timedOut ? "timeout" : stopping ? "interrupted" : ok ? "✓" : "✗";
+  console.log(`${task.id} ${arm} #${i + 1}: ${out.ms} ms ${mark} (${extra})`);
+}
+
+async function runAll() {
+  console.log(
+    `bench-do${DRY ? " (dry)" : ""}: ${tasks.length} task(s) × ${ARMS.join("+")} × ${RUNS} run(s)`,
+  );
+  for (const task of tasks) {
+    for (let i = 0; i < RUNS; i++) {
+      for (const arm of ARMS) {
+        if (stopping) return;
+        const tab = openTab(task.url);
+        try {
+          await runOne(task, arm, i, tab);
+        } finally {
+          safeClose(tab);
+        }
+      }
+    }
+  }
+}
+
+let crashed;
+try {
+  await runAll();
+} catch (err) {
+  crashed = err instanceof Error ? err.message : String(err);
+  console.error(`bench-do: aborted — ${crashed}`);
 }
 
 /** Lower-middle median: for an even count the smaller of the two middle values. */
@@ -315,15 +396,6 @@ const rows = tasks.map((t) => {
   };
 });
 
-const env = {
-  at: new Date().toISOString(),
-  node: process.version,
-  reins: safeVersion("reins", ["--version"]),
-  claude: ARMS.includes("manual") ? safeVersion("claude", ["--version"]) : undefined,
-  runs: RUNS,
-  arms: ARMS,
-  partial: stopping,
-};
 function safeVersion(cmd, args) {
   try {
     return sh(cmd, args);
@@ -331,6 +403,18 @@ function safeVersion(cmd, args) {
     return undefined;
   }
 }
+const env = {
+  at: new Date().toISOString(),
+  node: process.version,
+  reins: DRY ? undefined : safeVersion("reins", ["--version"]),
+  claude: !DRY && ARMS.includes("manual") ? safeVersion("claude", ["--version"]) : undefined,
+  runs: RUNS,
+  arms: ARMS,
+  dry: DRY,
+  partial: stopping || crashed !== undefined,
+  interrupted: stopping,
+  crashed,
+};
 writeFileSync(opts.out, JSON.stringify({ env, results, rows }, null, 2));
 
 const fmt = (v) => (v === undefined ? "—" : String(v));
@@ -344,5 +428,8 @@ for (const r of rows) {
     `| ${r.task} | ${r.doVerified} | ${r.manualVerified} | ${fmt(r.doMedianMs)} | ${fmt(r.manualMedianMs)} | ${r.speedup ? `${r.speedup}×` : "—"} |`,
   );
 }
-console.log(`\nwrote ${opts.out}${stopping ? " (partial: interrupted)" : ""}`);
+console.log(
+  `\nwrote ${opts.out}${stopping ? " (partial: interrupted)" : crashed ? " (partial: aborted)" : ""}`,
+);
 if (stopping) process.exit(130);
+if (crashed) process.exit(1);
