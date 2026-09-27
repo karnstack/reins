@@ -59,10 +59,31 @@ export function jevSnapshot(): {
   };
   for (const [id, e] of c.nodes) if (!e.isConnected) c.nodes.delete(id);
 
+  // Shadow DOM: what an open shadow root renders is part of the page a
+  // person sees (a site's search box or dialog built as a web component), so
+  // controls and text are collected through open roots, recursively, and
+  // ancestor walks cross the boundary through the host. A closed root cannot
+  // be reached from the page and stays invisible.
+  const parentOf = (n: Node): Element | null => {
+    const p = n.parentNode;
+    if (!p) return null;
+    if (p instanceof ShadowRoot) return p.host;
+    return p.nodeType === 1 ? (p as Element) : null;
+  };
+  /** `closest`, crossing shadow boundaries. */
+  const ancestor = (e: Element, sel: string): Element | null => {
+    for (let p: Element | null = e; p; p = parentOf(p)) if (p.matches(sel)) return p;
+    return null;
+  };
+  /** The element with `id` in the tree `e` belongs to (a shadow root has its own ids). */
+  const byId = (e: Element, id: string): Element | null => {
+    const root = e.getRootNode();
+    return root instanceof Document || root instanceof ShadowRoot ? root.getElementById(id) : null;
+  };
   const safe = (e: Element) =>
     !["password", "file", "hidden"].includes((e as HTMLInputElement).type);
   const visible = (e: Element) =>
-    !e.closest('[aria-hidden="true"],[inert]') &&
+    !ancestor(e, '[aria-hidden="true"],[inert]') &&
     e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
   const name = (e: Element | null, seen = new Set<Element>()): string => {
     if (!e || seen.has(e)) return "";
@@ -70,7 +91,7 @@ export function jevSnapshot(): {
     const input = e as HTMLInputElement;
     const referenced = (e.getAttribute("aria-labelledby") ?? "")
       .split(/\s+/)
-      .map((id) => name(document.getElementById(id), seen))
+      .map((id) => name(byId(e, id), seen))
       .filter(Boolean)
       .join(" ");
     const raw =
@@ -131,7 +152,7 @@ export function jevSnapshot(): {
     return out.replace(/\s+/g, " ").trim();
   };
   const context = (e: Element): string => {
-    for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+    for (let p = parentOf(e); p && p !== document.body; p = parentOf(p)) {
       if (p.tagName === "TR") {
         for (const cell of p.children) {
           if (cell.contains(e)) continue;
@@ -189,7 +210,7 @@ export function jevSnapshot(): {
     if (!e?.isConnected || !visible(e)) return null;
     const f = e as HTMLInputElement;
     const scope =
-      e.closest('form,dialog,[role="dialog"],article,li,tr,[role="row"]') ?? e.parentElement;
+      ancestor(e, 'form,dialog,[role="dialog"],article,li,tr,[role="row"]') ?? parentOf(e);
     return JSON.stringify([
       identity(e),
       role(e),
@@ -243,7 +264,7 @@ export function jevSnapshot(): {
   const CONSENT_LABEL = /\b(accept|agree)\b/i;
   const CONTAINER_ROLES = ["dialog", "alertdialog", "region", "banner", "complementary"];
   const inConsent = (e: Element): boolean => {
-    for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+    for (let p = parentOf(e); p && p !== document.body; p = parentOf(p)) {
       const hint = [
         p.id,
         p.getAttribute("class"),
@@ -264,9 +285,21 @@ export function jevSnapshot(): {
     return false;
   };
 
+  // Every control in document order, descending into open shadow roots where
+  // their hosts sit (so ids stay positional across light and shadow trees).
+  const controls: Element[] = [];
+  const collect = (root: Node): void => {
+    const tw = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const e = n as Element;
+      if (e.matches(selector)) controls.push(e);
+      if (e.shadowRoot) collect(e.shadowRoot);
+    }
+  };
+  collect(document.documentElement);
   const actions: Action[] = [];
-  for (const e of document.querySelectorAll(selector)) {
-    if (!safe(e) || !visible(e) || e.matches(":disabled") || e.closest('[aria-disabled="true"]'))
+  for (const e of controls) {
+    if (!safe(e) || !visible(e) || e.matches(":disabled") || ancestor(e, '[aria-disabled="true"]'))
       continue;
     const r = e.getBoundingClientRect();
     const x = r.x + r.width / 2;
@@ -326,28 +359,43 @@ export function jevSnapshot(): {
   }
 
   const words: string[] = [];
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const range = document.createRange();
   let length = 0;
-  for (let n = walker.nextNode(); n && length < 6000; n = walker.nextNode()) {
-    const value = (n.textContent ?? "").trim();
-    const parent = n.parentElement;
-    if (!value || !parent || parent.closest("script,style,noscript,template") || !visible(parent))
-      continue;
-    range.selectNodeContents(n);
-    const r = range.getBoundingClientRect();
-    if (
-      r.width > 0 &&
-      r.height > 0 &&
-      r.bottom > 0 &&
-      r.top < innerHeight &&
-      r.right > 0 &&
-      r.left < innerWidth
-    ) {
-      words.push(value);
-      length += value.length;
+  // Text nodes in document order; an open shadow root's text is read where
+  // its host sits, before the host's own (slotted) children.
+  const walkText = (root: Node): void => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n && length < 6000; n = walker.nextNode()) {
+      if (n.nodeType === 1) {
+        const shadow = (n as Element).shadowRoot;
+        if (shadow) walkText(shadow);
+        continue;
+      }
+      const value = (n.textContent ?? "").trim();
+      const parent = parentOf(n);
+      if (
+        !value ||
+        !parent ||
+        ancestor(parent, "script,style,noscript,template") ||
+        !visible(parent)
+      )
+        continue;
+      range.selectNodeContents(n);
+      const r = range.getBoundingClientRect();
+      if (
+        r.width > 0 &&
+        r.height > 0 &&
+        r.bottom > 0 &&
+        r.top < innerHeight &&
+        r.right > 0 &&
+        r.left < innerWidth
+      ) {
+        words.push(value);
+        length += value.length;
+      }
     }
-  }
+  };
+  walkText(document.body);
 
   c.guards = {};
   for (const a of actions) {
@@ -407,7 +455,10 @@ export function jevSubmitFocus(node: number): string {
   if (!cache || !el?.isConnected) return "the field is gone";
   if (!cache.submittable(el)) return "the field is not a search field";
   (el as HTMLElement).focus();
-  return document.activeElement === el ? "ok" : "the field would not take focus";
+  // A field in a shadow root is the active element of its own root; the
+  // document only knows the host.
+  const root = el.getRootNode() as Document | ShadowRoot;
+  return root.activeElement === el ? "ok" : "the field would not take focus";
 }
 
 /** Choose `value` on a native <select> the way a user's pick would. */
@@ -486,8 +537,11 @@ export function jevSettle(node: number | null, typed: boolean): Promise<void> {
       const ids = (field?.getAttribute("aria-controls") || field?.getAttribute("aria-owns") || "")
         .split(/\s+/)
         .filter(Boolean);
+      // The ids resolve in the field's own tree (a shadow root has its own).
+      const tree = field?.getRootNode();
+      const scope = tree instanceof Document || tree instanceof ShadowRoot ? tree : document;
       const roots: ParentNode[] = ids.length
-        ? ids.map((id) => document.getElementById(id)).filter((e): e is HTMLElement => e !== null)
+        ? ids.map((id) => scope.getElementById(id)).filter((e): e is HTMLElement => e !== null)
         : [document];
       const options = roots.flatMap((root) => [...root.querySelectorAll('[role="option"]')]);
       frames += 1;

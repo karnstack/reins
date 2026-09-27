@@ -369,6 +369,18 @@ like a foreground tab.
   prefixed to the weak name ("Start Date: Year") or used alone ("Start
   Date" for an unlabelled select). So two "Year" inputs in different rows
   read apart, and an unlabelled select is not just its role.
+- **Shadow DOM.** Controls and text are collected through *open* shadow
+  roots, recursively, in document order (a root's content is read where its
+  host sits, before the host's own slotted children), so a search box or
+  dialog built as a web component is in the observation; ids stay positional
+  across light and shadow trees. Ancestor walks (visibility, `aria-disabled`,
+  the row/group name, consent banners, the guard's scope) cross the boundary
+  through the host; `aria-labelledby` and `aria-controls` resolve in the
+  control's own tree. The node cache, `jevCheck`, typing, select and submit
+  work on shadow nodes (`jevSubmitFocus` reads the root's `activeElement`,
+  since the document only knows the host); `actionPoint` already hit-tests
+  through `shadowRoot.elementFromPoint`. A *closed* root cannot be reached
+  from the page and stays invisible.
 - Returns `{ url, title, text, visible, elements, fingerprint, pageKey,
   guards, dialog? }`. Nothing tracks dialogs today. Add a per-tab dialog
   flag fed by `chrome.debugger.onEvent` (`Page.javascriptDialogOpening` sets

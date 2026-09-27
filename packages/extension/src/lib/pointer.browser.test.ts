@@ -110,8 +110,16 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <div id="ce" contenteditable="true" aria-label="Search drafts">x</div>
 <input id="msg" aria-label="Message">
 <input id="yr" aria-label="Year" value="2000">
+<site-search id="ss" style="position:fixed;top:0;right:0;background:#fff"></site-search>
+<div id="sealed-host" style="position:fixed;top:40px;right:0"></div>
 <script>
   window.__log = [];
+  // A site's search box built as a web component: its form lives in an open
+  // shadow root. A closed root next to it is out of the page's reach.
+  { const root = document.getElementById("ss").attachShadow({ mode: "open" });
+    root.innerHTML = '<form role="search"><input id="sq" aria-label="Search docs"><button id="sgo" type="submit">Go</button></form><p>Docs search</p>';
+    root.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); __log.push("submit:shadow:" + root.getElementById("sq").value); });
+    document.getElementById("sealed-host").attachShadow({ mode: "closed" }).innerHTML = '<button id="sealed">Sealed</button>'; }
   // A field that keeps its own model: keyup writes the value into it, blur
   // writes the model back (a date widget re-deriving its state).
   { let model = "2000"; const yr = document.getElementById("yr");
@@ -688,6 +696,32 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(labels).toContain("fill:End Date: Year");
     expect(labels).toContain("fill:Shipping"); // the fieldset's legend
     expect(labels.join()).not.toMatch(/Jan Feb/); // options are not a name
+  });
+
+  it("jev: controls and text in an open shadow root are listed, typed into, submitted and clicked; a closed root stays invisible", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const labels = s.actions.map((a) => `${a.kind}:${a.label}`);
+    expect(labels).toContain("fill:Search docs");
+    expect(labels).toContain("click:Go");
+    expect(labels.join()).not.toContain("Sealed");
+    expect(s.text).toContain("Docs search");
+    const field = s.actions.find((a) => a.kind === "fill" && a.label === "Search docs");
+    expect(field?.submit).toBe(true); // form[role=search] in the shadow tree
+    const node = field?.node as number;
+    expect(await jevAct({ tabId: 1, op: "type", node, text: "shadow" })).toEqual({ ok: true });
+    expect(
+      await evaluate<string>('document.getElementById("ss").shadowRoot.getElementById("sq").value'),
+    ).toBe("shadow");
+    // The loop reads the page again after typing; the typed value is part of the guard.
+    const typed = nodeOf(await snap(), "Search docs") as number;
+    expect(await jevAct({ tabId: 1, op: "submit", node: typed, label: "Search docs" })).toEqual({
+      ok: true,
+    });
+    expect(await log()).toContain("submit:shadow:shadow");
+    const go = nodeOf(await snap(), "Go") as number;
+    expect(await jevAct({ tabId: 1, op: "click", node: go })).toEqual({ ok: true });
+    expect((await log()).filter((l) => l === "submit:shadow:shadow")).toHaveLength(2);
   });
 
   it("jev: a node keeps its id across snapshots", async () => {
