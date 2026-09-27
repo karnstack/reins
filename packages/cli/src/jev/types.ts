@@ -57,7 +57,9 @@ export interface DoResult {
   /** For `done`: the self-check's probability that the goal is satisfied on
    *  the final page (absent when the check could not run). Report only — the
    *  DONE stands either way; below `DONE_UNSURE_BELOW` the output says to
-   *  verify (or fall back to step-by-step). */
+   *  verify (or fall back to step-by-step). A run about to be `stuck` gets the
+   *  same check: at `STUCK_DONE_MIN` or above it is `done` with that value;
+   *  below, `stuck` carries it for diagnosis. */
   doneConfidence?: number;
 }
 

@@ -68,7 +68,10 @@ export function formatDoResult(r: DoResult): string {
   const lines: string[] = [
     r.status === "done"
       ? `done${doneUnsure(r) ? ` (unsure: self-check ${r.doneConfidence?.toFixed(2)})` : ""} in ${sec(r.elapsedMs)} · ${plural(r.steps.length, "step")} · ${plural(r.jevCalls, "jev call")} · ${tokens(r.inputTokens)}${r.doneConfidence !== undefined && !doneUnsure(r) ? ` · self-check ${r.doneConfidence.toFixed(2)}` : ""}`
-      : `${r.status}: ${r.reason ?? ""}`.trimEnd(),
+      : `${r.status}: ${r.reason ?? ""}`.trimEnd() +
+        (r.status === "stuck" && r.doneConfidence !== undefined
+          ? ` (self-check ${r.doneConfidence.toFixed(2)})`
+          : ""),
   ];
   for (const s of r.steps) {
     lines.push(

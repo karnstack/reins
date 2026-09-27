@@ -291,7 +291,15 @@ password, file, or hidden inputs (the snapshot skips them) and the key.
 - **stuck.** 3 consecutive non-WAIT actions whose next observation has the
   same fingerprint. The fingerprint is `url + text + elements` and **excludes
   scroll position**, because `actionPoint` scrolls targets into view
-  (`actionability.ts:92`).
+  (`actionability.ts:92`). Three stale acts in a row are stuck too. **Unless
+  the page is the goal:** before either stuck is returned, the DONE
+  self-check (below) is put to the observation the run is on (the current
+  read for no-progress; the last read Jev acted on for the stale case) — a
+  run can reach its goal and keep acting on that page (e.g. re-clicking the
+  link to the page it is already on). At `STUCK_DONE_MIN` (0.8) or above the
+  result is `done` with that `doneConfidence` and no reason; below, `stuck`
+  as before, with the probability in `doneConfidence` (and on the human
+  line) for diagnosis. One Jev call, skipped when the call budget is spent.
 - **budget.** `step == maxSteps`, `jevCalls == 2 × maxSteps`, or timeout.
 
 ### Runs (`runs.ts`)

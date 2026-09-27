@@ -95,6 +95,21 @@ describe("formatDoResult", () => {
     );
   });
 
+  it("shows the self-check on a stuck line when the run had one", () => {
+    const r: DoResult = {
+      ...base,
+      status: "stuck",
+      reason: "3 actions in a row changed nothing",
+      doneConfidence: 0.31,
+    };
+    expect(formatDoResult(r).split("\n")[0]).toBe(
+      "stuck: 3 actions in a row changed nothing (self-check 0.31)",
+    );
+    expect(formatDoResult({ ...r, doneConfidence: undefined }).split("\n")[0]).toBe(
+      "stuck: 3 actions in a row changed nothing",
+    );
+  });
+
   it("prints a stop with progress and the next command", () => {
     const r: DoResult = {
       ...base,

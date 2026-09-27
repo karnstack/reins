@@ -436,14 +436,23 @@ describe("runLoop", () => {
       ],
     );
     d.act.mockResolvedValue({ stale: true, reason: "covered by div.overlay" });
+    d.ask = scriptedJev(
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+      ],
+      [0.2],
+    );
     const { result, run } = await runLoop(d, input());
     expect(result).toMatchObject({
       status: "stuck",
       reason: 'couldn\'t act on "Next": covered by div.overlay',
       step: 0,
       steps: [],
+      doneConfidence: 0.2,
     });
-    expect(d.ask).toHaveBeenCalledTimes(3);
+    expect(d.ask).toHaveBeenCalledTimes(4); // three asks and the self-check
     expect(run.step).toBe(0);
     // The failures are remembered for Jev, but never count as no-progress actions.
     expect(run.history.map((h) => h.stale)).toEqual([
@@ -479,7 +488,7 @@ describe("runLoop", () => {
     expect(second).toContain('could not click \\"Next\\": the element is gone');
   });
 
-  it("calls it stuck after 3 actions that change nothing", async () => {
+  it("calls it stuck after 3 actions that change nothing, carrying the self-check", async () => {
     const d = deps(
       [page([button(1, "Next")])],
       [
@@ -487,10 +496,64 @@ describe("runLoop", () => {
         { op: "CLICK", target: "1" },
         { op: "CLICK", target: "1" },
       ],
+      { checks: [0.3] },
     );
     const { result } = await runLoop(d, input());
-    expect(result.status).toBe("stuck");
-    expect(result.step).toBe(3);
+    expect(result).toMatchObject({
+      status: "stuck",
+      reason: "3 actions in a row changed nothing",
+      step: 3,
+      doneConfidence: 0.3,
+      jevCalls: 4,
+    });
+  });
+
+  it("3 no-op actions on a page that satisfies the goal are done, not stuck", async () => {
+    const d = deps(
+      [page([button(1, "discuss")], { url: "https://x.com/item?id=1" })],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+      ],
+      { checks: [0.9] },
+    );
+    const { result } = await runLoop(d, input());
+    expect(result).toMatchObject({ status: "done", step: 3, doneConfidence: 0.9, jevCalls: 4 });
+    expect(result.reason).toBeUndefined();
+    // The check was put to the current page.
+    const check = d.ask.mock.calls[3]?.[0] as { questions: Record<string, unknown> };
+    expect(Object.keys(check.questions)).toEqual(["satisfied"]);
+  });
+
+  it("three stale acts on a page that satisfies the goal are done", async () => {
+    const d = deps(
+      [page([button(1, "Next")])],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+      ],
+      { checks: [0.85] },
+    );
+    d.act.mockResolvedValue({ stale: true, reason: "covered by div.overlay" });
+    const { result } = await runLoop(d, input());
+    expect(result).toMatchObject({ status: "done", step: 0, doneConfidence: 0.85 });
+    expect(result.reason).toBeUndefined();
+  });
+
+  it("a stuck run below the bar stays stuck with the value, and a --continue breaker is untouched", async () => {
+    const d = deps(
+      [page([button(1, "Next")])],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+      ],
+      { checks: [0.79] },
+    );
+    const { result } = await runLoop(d, input());
+    expect(result).toMatchObject({ status: "stuck", doneConfidence: 0.79 });
   });
 
   it("stops when the page moves to another site", async () => {

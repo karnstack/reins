@@ -56,6 +56,11 @@ const OP_OF: Record<Exclude<Operation, "DONE" | "BLOCKED">, StepOp> = {
  *  happened, and the page did move in a way the fingerprint can't see. */
 const BREAKABLE: DoStatus[] = ["risky_action", "needs_text", "blocked", "budget", "stuck"];
 
+/** A run that is about to be `stuck` on a page the self-check finds satisfied
+ *  at this probability or above is `done` instead: the goal was reached and
+ *  Jev kept acting on it (e.g. re-clicking the link to the page it is on). */
+export const STUCK_DONE_MIN = 0.8;
+
 function abortReason(signal: AbortSignal): string {
   const r = signal.reason as unknown;
   return r instanceof Error ? r.message : typeof r === "string" ? r : "stopped";
@@ -149,7 +154,9 @@ export async function runLoop(
         step: run.step,
         maxSteps: stepLimit,
         pageChanges: run.pageChanges,
-        ...(final === "done" && doneConfidence !== undefined ? { doneConfidence } : {}),
+        ...((final === "done" || final === "stuck") && doneConfidence !== undefined
+          ? { doneConfidence }
+          : {}),
       },
       run,
     };
@@ -160,6 +167,28 @@ export async function runLoop(
     timedOut(input.signal)
       ? stop("budget", { reason: timeoutReason })
       : stop("interrupted", { reason: abortReason(input.signal) });
+
+  // The observation Jev was last asked about: what a stale act was judged on.
+  let seen: JevObservation | undefined;
+  // Stuck, unless the page already satisfies the goal. A run can reach its
+  // goal and keep acting on the page it is on (re-clicking the link that led
+  // there), and the no-progress rule would call that stuck. Put the DONE
+  // self-check to the last observation: at STUCK_DONE_MIN or above the run
+  // is done, with that probability; below it, stuck, with the probability
+  // reported for diagnosis. Costs one Jev call, skipped when none is left.
+  const stuckOrDone = async (
+    reason: string,
+    on: JevObservation | undefined,
+  ): Promise<{ result: DoResult; run: RunState }> => {
+    if (on !== undefined && calls < callLimit) {
+      calls += 1;
+      doneConfidence = interpretDoneCheck(
+        await deps.ask(doneCheckRequest(on, run.goal, run.history, run.fills), input.signal),
+      );
+      if (doneConfidence >= STUCK_DONE_MIN) return stop("done");
+    }
+    return stop("stuck", { reason });
+  };
 
   let obs = input.first;
   let first = true;
@@ -228,10 +257,11 @@ export async function runLoop(
         return stop("left_site", { reason: `the page moved to ${host}, outside ${run.startHost}` });
       }
       if (noProgress(run.history))
-        return stop("stuck", { reason: "3 actions in a row changed nothing" });
+        return await stuckOrDone("3 actions in a row changed nothing", obs);
       if (calls >= callLimit) return stop("budget", { reason: `reached ${callLimit} Jev calls` });
       first = false;
 
+      seen = obs;
       const plan = buildRequest(obs, run.goal, run.history, run.fills);
       calls += 1;
       let decision = interpret(await deps.ask(plan.body, input.signal), plan);
@@ -332,9 +362,10 @@ export async function runLoop(
         // give up after three in a row.
         run.history.push({ op, label: action.label, pageChanged: null, stale: res.reason });
         if (++staleRun >= 3) {
-          return stop("stuck", {
-            reason: `couldn't act on ${JSON.stringify(action.label)}: ${res.reason}`,
-          });
+          return await stuckOrDone(
+            `couldn't act on ${JSON.stringify(action.label)}: ${res.reason}`,
+            seen,
+          );
         }
         continue;
       }
