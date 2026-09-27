@@ -237,9 +237,9 @@ export const TASKS = [
     set: "holdout",
     url: "https://dictionary.cambridge.org/",
     // The site greets a first visit with a consent dialog whose only dismissal
-    // is "I Accept" (a risky word): the goal says the label, so the click is
-    // allowed, as a user who wrote this goal intends.
-    goal: "If a privacy dialog appears, choose 'I Accept'. Then look up the word 'serendipity' in the Cambridge English dictionary and open its entry.",
+    // is "I Accept"; since ffdb1b9 an "accept" inside a consent banner is not a
+    // risky click, so the goal no longer has to name it.
+    goal: "Look up the word 'serendipity' in the Cambridge English dictionary and open its entry.",
     fills: { word: "serendipity" },
     check: `location.pathname === '${CAMBRIDGE}' || location.pathname === '${CAMBRIDGE}/'`,
     checkNote: `pathname is ${CAMBRIDGE}`,
