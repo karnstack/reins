@@ -13,6 +13,7 @@ import {
   Moon,
   Shield,
   Terminal,
+  Timer,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { GitHubIcon, NpmIcon, XIcon } from "@/components/icons";
@@ -91,6 +92,13 @@ const PAGES: Array<{ id: string; label: string; to: string; keywords?: string; i
       to: "/docs/comparison",
       keywords: "vs alternatives cdp mcp",
       icon: <GitCompare />,
+    },
+    {
+      id: "benchmarks",
+      label: "Benchmarks",
+      to: "/docs/benchmarks",
+      keywords: "reins do jev speed cost",
+      icon: <Timer />,
     },
     { id: "faq", label: "FAQ", to: "/docs/faq", keywords: "questions", icon: <HelpCircle /> },
     {

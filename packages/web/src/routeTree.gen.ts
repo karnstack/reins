@@ -21,6 +21,7 @@ import { Route as DocsPermissionsRouteImport } from './routes/docs/permissions'
 import { Route as DocsFaqRouteImport } from './routes/docs/faq'
 import { Route as DocsComparisonRouteImport } from './routes/docs/comparison'
 import { Route as DocsCommandsRouteImport } from './routes/docs/commands'
+import { Route as DocsBenchmarksRouteImport } from './routes/docs/benchmarks'
 import { Route as DocsArchitectureRouteImport } from './routes/docs/architecture'
 import { Route as ChangelogExtensionRouteImport } from './routes/changelog/extension'
 
@@ -84,6 +85,11 @@ const DocsCommandsRoute = DocsCommandsRouteImport.update({
   path: '/commands',
   getParentRoute: () => DocsRouteRoute,
 } as any)
+const DocsBenchmarksRoute = DocsBenchmarksRouteImport.update({
+  id: '/benchmarks',
+  path: '/benchmarks',
+  getParentRoute: () => DocsRouteRoute,
+} as any)
 const DocsArchitectureRoute = DocsArchitectureRouteImport.update({
   id: '/architecture',
   path: '/architecture',
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/changelog/extension': typeof ChangelogExtensionRoute
   '/docs/architecture': typeof DocsArchitectureRoute
+  '/docs/benchmarks': typeof DocsBenchmarksRoute
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/changelog/extension': typeof ChangelogExtensionRoute
   '/docs/architecture': typeof DocsArchitectureRoute
+  '/docs/benchmarks': typeof DocsBenchmarksRoute
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/changelog/extension': typeof ChangelogExtensionRoute
   '/docs/architecture': typeof DocsArchitectureRoute
+  '/docs/benchmarks': typeof DocsBenchmarksRoute
   '/docs/commands': typeof DocsCommandsRoute
   '/docs/comparison': typeof DocsComparisonRoute
   '/docs/faq': typeof DocsFaqRoute
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/changelog/extension'
     | '/docs/architecture'
+    | '/docs/benchmarks'
     | '/docs/commands'
     | '/docs/comparison'
     | '/docs/faq'
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/changelog/extension'
     | '/docs/architecture'
+    | '/docs/benchmarks'
     | '/docs/commands'
     | '/docs/comparison'
     | '/docs/faq'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/changelog/extension'
     | '/docs/architecture'
+    | '/docs/benchmarks'
     | '/docs/commands'
     | '/docs/comparison'
     | '/docs/faq'
@@ -284,6 +296,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsCommandsRouteImport
       parentRoute: typeof DocsRouteRoute
     }
+    '/docs/benchmarks': {
+      id: '/docs/benchmarks'
+      path: '/benchmarks'
+      fullPath: '/docs/benchmarks'
+      preLoaderRoute: typeof DocsBenchmarksRouteImport
+      parentRoute: typeof DocsRouteRoute
+    }
     '/docs/architecture': {
       id: '/docs/architecture'
       path: '/architecture'
@@ -317,6 +336,7 @@ const ChangelogRouteRouteWithChildren = ChangelogRouteRoute._addFileChildren(
 
 interface DocsRouteRouteChildren {
   DocsArchitectureRoute: typeof DocsArchitectureRoute
+  DocsBenchmarksRoute: typeof DocsBenchmarksRoute
   DocsCommandsRoute: typeof DocsCommandsRoute
   DocsComparisonRoute: typeof DocsComparisonRoute
   DocsFaqRoute: typeof DocsFaqRoute
@@ -328,6 +348,7 @@ interface DocsRouteRouteChildren {
 
 const DocsRouteRouteChildren: DocsRouteRouteChildren = {
   DocsArchitectureRoute: DocsArchitectureRoute,
+  DocsBenchmarksRoute: DocsBenchmarksRoute,
   DocsCommandsRoute: DocsCommandsRoute,
   DocsComparisonRoute: DocsComparisonRoute,
   DocsFaqRoute: DocsFaqRoute,

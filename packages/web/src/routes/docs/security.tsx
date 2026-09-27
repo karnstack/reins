@@ -159,6 +159,10 @@ function SecurityPage() {
           by any command, never logged, and never sent to a page.
         </li>
       </Ul>
+      <P>
+        What a run costs in time and tokens, measured against an agent driving the step commands
+        itself, is on the <A href="/docs/benchmarks">Benchmarks</A> page.
+      </P>
 
       <H2 id="data">Data handling</H2>
       <Ul>
