@@ -314,7 +314,9 @@ async function runOne(task, arm, i, tab) {
   await sleep(2_000); // initial load is outside the clock in both arms
   if (stopping) return;
   const out = await (arm === "do" ? runDo(task, tab) : runManual(task, tab));
-  const ok = stopping ? false : verify(tab, task.check);
+  // A killed child may still have left the page in the wanted state; it does
+  // not count. A verified row must have finished on its own, inside the clock.
+  const ok = stopping || out.timedOut ? false : verify(tab, task.check);
   const row = {
     task: task.id,
     arm,
