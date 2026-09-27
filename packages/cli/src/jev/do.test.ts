@@ -259,15 +259,17 @@ describe("handleDo", () => {
     });
   });
 
-  it("requires a goal for a fresh run", async () => {
+  it("requires a goal for a fresh run, without touching the tab", async () => {
     writeKey(dir, "ts_live_abcd1234");
+    const b = bridge();
     const r = await handleDo(
-      bridge(),
+      b,
       { ...params, goal: undefined },
       { runs: new RunStore(), credentialsDir: dir, signal: new AbortController().signal },
     );
     expect(r.status).toBe("error");
     expect(r.reason).toContain("a goal is required");
+    expect(b.requestFull).not.toHaveBeenCalled();
   });
 
   it("refuses a second run on a busy tab", async () => {
@@ -279,7 +281,9 @@ describe("handleDo", () => {
       credentialsDir: dir,
       signal: new AbortController().signal,
     });
-    expect(r.reason).toBe("a reins do run is already active on this tab");
+    expect(r.reason).toBe(
+      "a reins do run is already active on this tab (if you just stopped one, it is finishing its last action; retry in a moment)",
+    );
     // The refusal must not release the other run's lock.
     expect(runs.tryBegin("b1:5")).toBe(false);
   });
@@ -357,6 +361,65 @@ describe("handleDo", () => {
     expect(records.filter((r) => r.method === "jev_observe")).toHaveLength(0);
     expect(JSON.stringify(records)).not.toContain("Zurich");
     expect(JSON.stringify(records)).not.toContain("abcd1234");
+  });
+
+  it("audits a select by its field label only, not the chosen option", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const records: AuditRecord[] = [];
+    const b = bridge({
+      ...OBS,
+      actions: [
+        {
+          id: "s1",
+          kind: "select",
+          node: 3,
+          role: "combobox",
+          label: "Country → Switzerland",
+          value: "CH",
+          current_value: "",
+        },
+        { id: "wait", kind: "wait", label: "Wait for the page to update" },
+      ],
+    });
+    let n = 0;
+    const ask = async (body: AskBody) => {
+      const op = n++ === 0 ? "SELECT" : "DONE";
+      const ids = Object.keys(body.questions.operation?.criteria ?? {});
+      const targets = Object.keys(body.questions.select_target?.criteria ?? {});
+      return {
+        operation: {
+          choice: op,
+          confidence: 0.9,
+          probabilities: Object.fromEntries(ids.map((id) => [id, id === op ? 1 : 0])),
+        },
+        ...(targets.length > 0
+          ? {
+              select_target: {
+                choice: targets[0],
+                confidence: 0.9,
+                probabilities: Object.fromEntries(targets.map((id, i) => [id, i === 0 ? 1 : 0])),
+              },
+            }
+          : {}),
+      };
+    };
+    await handleDo(b, params, {
+      runs: new RunStore(),
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+      audit: (r) => records.push(r),
+      createAsk: () => ask as never,
+    });
+    const act = records.find((r) => r.method === "jev_act");
+    expect(act?.params).toMatchObject({ op: "select", node: 3, label: "Country" });
+    expect(JSON.stringify(records)).not.toContain("Switzerland");
+    expect(JSON.stringify(records)).not.toContain("CH");
+    // The wire still carries the full label (the extension ignores it).
+    expect(b.requestFull).toHaveBeenCalledWith(
+      "jev_act",
+      expect.objectContaining({ label: "Country → Switzerland", value: "CH" }),
+      expect.anything(),
+    );
   });
 
   it("audits a failed action as ok: false and returns error without throwing", async () => {

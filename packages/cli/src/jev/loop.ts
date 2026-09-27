@@ -127,10 +127,21 @@ export async function runLoop(
       if (input.signal.aborted) return aborted();
       if (deps.now() - started >= input.timeoutMs) return stop("budget", { reason: timeoutReason });
       obs ??= await deps.observe();
+      // A blocked page can't be read: the observation under a dialog carries
+      // no text or actions, so it says nothing about the last action's
+      // outcome and must not become the run's fingerprint. Keep the previous
+      // url/title when the observation has none (older extensions).
+      if (obs.dialog) {
+        if (obs.url) url = obs.url;
+        if (obs.title) title = obs.title;
+        return stop("dialog", {
+          reason: `a JavaScript ${obs.dialog.type} is open: ${JSON.stringify(obs.dialog.message)}`,
+        });
+      }
       url = obs.url;
       title = obs.title;
       // Resolve the last action's outcome before any stop below, so every
-      // result records it (the fingerprint already ignores the dialog).
+      // result records it.
       const fp = fingerprint(obs);
       const prev = run.history.at(-1);
       if (prev && prev.pageChanged === null) {
@@ -143,11 +154,6 @@ export async function runLoop(
         if (s && s.n === run.step) s.pageChanged = prev.pageChanged;
       }
       run.lastFingerprint = fp;
-      if (obs.dialog) {
-        return stop("dialog", {
-          reason: `a JavaScript ${obs.dialog.type} is open: ${JSON.stringify(obs.dialog.message)}`,
-        });
-      }
       if (first && input.continued && run.lockedFingerprint === fp) {
         return stop("stuck", {
           reason: "the last --continue changed nothing, and the page hasn't changed since",
@@ -160,6 +166,9 @@ export async function runLoop(
         return stop("interrupted", { reason: "the tab was hidden (did you switch tabs?)" });
       }
       const host = hostOf(obs.url);
+      // A run that began on about:blank / file:// / an error page has no
+      // start host yet: the first http(s) page it reaches becomes the site.
+      if (run.startHost === undefined && host !== undefined) run.startHost = host;
       if (!sameSite(run.startHost, host)) {
         return stop("left_site", { reason: `the page moved to ${host}, outside ${run.startHost}` });
       }

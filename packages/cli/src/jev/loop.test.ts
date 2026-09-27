@@ -2,6 +2,7 @@ import type { JevAction, JevActParams, JevActResult, JevObservation } from "@rei
 import { describe, expect, it, vi } from "vitest";
 import type { JevBody } from "./client.js";
 import { type LoopDeps, runLoop } from "./loop.js";
+import { fingerprint } from "./rules.js";
 import { newRun } from "./runs.js";
 
 const WAIT: JevAction = { id: "wait", kind: "wait", label: "Wait for the page to update" };
@@ -233,6 +234,57 @@ describe("runLoop", () => {
     expect((await runLoop(d, input())).result).toMatchObject({ status: "dialog" });
   });
 
+  it("a dialog observation leaves the run's page state alone", async () => {
+    // The blocked page can't be read: the observation under a dialog has no
+    // text or actions (and, from an older extension, no url/title). Treating
+    // that as "the page" would fake a page change and poison the fingerprint.
+    const before = page([button(1, "Go")]);
+    const d = deps(
+      [
+        before,
+        {
+          url: "",
+          title: "",
+          text: "",
+          visible: true,
+          actions: [],
+          dialog: { type: "confirm", message: "Sure?" },
+        },
+      ],
+      [{ op: "CLICK", target: "1" }],
+    );
+    const { result, run: after } = await runLoop(d, input());
+    expect(result).toMatchObject({ status: "dialog", url: "https://x.com/a", title: "X", step: 1 });
+    expect(result.steps[0]?.pageChanged).toBeNull();
+    expect(after.history[0]?.pageChanged).toBeNull();
+    expect(after.pageChanges).toBe(0);
+    expect(after.lastFingerprint).toBe(fingerprint(before));
+  });
+
+  it("pins the start host on the first http page when the run began off-site", async () => {
+    // about:blank / file:// / chrome-error:// have no host: without pinning,
+    // left_site could never fire for such a run.
+    const run = newRun("find flights", undefined, {}, [], 0);
+    const d = deps(
+      [
+        page([button(1, "Go")], { url: "about:blank" }),
+        page([button(1, "Go")], { url: "https://x.com/a", text: "landed" }),
+        page([], { url: "https://evil.com/", text: "elsewhere" }),
+      ],
+      [
+        { op: "CLICK", target: "1" },
+        { op: "CLICK", target: "1" },
+      ],
+    );
+    const { result, run: after } = await runLoop(d, input({ run }));
+    expect(after.startHost).toBe("x.com");
+    expect(result).toMatchObject({
+      status: "left_site",
+      reason: "the page moved to evil.com, outside x.com",
+      step: 2,
+    });
+  });
+
   it("stops when the tab gets hidden mid-run", async () => {
     const d = deps(
       [page([button(1, "Go")]), page([], { visible: false, text: "2" })],
@@ -330,7 +382,8 @@ describe("runLoop", () => {
     );
     const { result, run: after } = await runLoop(d, input({ run, continued: true }));
     expect(result).toMatchObject({ status: "dialog", title: "Y", step: 6 });
-    expect(result.steps[0]?.pageChanged).toBe(false);
+    // The page under the dialog wasn't read: the click's outcome is still open.
+    expect(result.steps[0]?.pageChanged).toBeNull();
     expect(after.lockedFingerprint).toBeUndefined();
   });
 

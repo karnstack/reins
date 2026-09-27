@@ -91,6 +91,8 @@ export async function handleDo(
       "no TypeSafe key — run `reins key set typesafe`, or add one in the extension popup",
     );
   }
+  // A missing goal needs no tab: fail before the first observation.
+  if (!p.continue && !p.goal) return fail('a goal is required: reins do "<goal>"');
   // A shutdown or hang-up that lands before the first observation: no action
   // was taken, so say so without touching the browser.
   if (ctx.signal.aborted) return stop("interrupted", abortReason(ctx.signal));
@@ -151,7 +153,12 @@ export async function handleDo(
   if (browserId === undefined || tabId === undefined)
     return fail("couldn't tell which tab to drive");
   const runKey = RunStore.key(browserId, tabId);
-  if (!ctx.runs.tryBegin(runKey)) return fail("a reins do run is already active on this tab");
+  if (!ctx.runs.tryBegin(runKey)) {
+    // After Ctrl-C the lock stays held until the in-flight jev_act returns.
+    return fail(
+      "a reins do run is already active on this tab (if you just stopped one, it is finishing its last action; retry in a moment)",
+    );
+  }
   try {
     let run: RunState;
     if (p.continue) {
@@ -168,8 +175,7 @@ export async function handleDo(
         confirms: [...prev.confirms, ...p.confirms],
       };
     } else {
-      if (!p.goal) return fail('a goal is required: reins do "<goal>"');
-      run = newRun(p.goal, hostOf(first.url), p.fills, p.confirms, now());
+      run = newRun(p.goal as string, hostOf(first.url), p.fills, p.confirms, now());
     }
     const ask = (ctx.createAsk ?? ((k: string) => createJevAsk({ key: k })))(key);
     // One signal for the loop: the hang-up/shutdown signal, plus --timeout.
@@ -236,7 +242,10 @@ function audit(
 ): void {
   if (!ctx.audit) return;
   try {
-    const { tabId, ...rest } = o.params;
+    const { tabId, label, ...rest } = o.params;
+    // A select's label is "Field → chosen option"; the option is a value the
+    // page typed for the user, so the audit keeps only the field.
+    const shown = typeof label === "string" ? { label: label.split(" → ")[0] ?? label } : {};
     ctx.audit({
       ts: new Date(Date.now() - o.ms).toISOString(),
       method: o.method,
@@ -248,7 +257,7 @@ function audit(
           : {}),
       ...(o.meta?.host !== undefined ? { host: o.meta.host } : {}),
       ...(o.meta?.tier !== undefined ? { tier: o.meta.tier } : {}),
-      params: redactParams(o.method, rest),
+      params: { ...redactParams(o.method, rest), ...shown },
       ok: o.ok,
       ...(o.error?.code === "policy_denied" ? { denied: true } : {}),
       ...(o.error ? { error: o.error.message } : {}),
