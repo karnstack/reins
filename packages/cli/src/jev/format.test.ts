@@ -40,6 +40,13 @@ describe("formatDoResult", () => {
     );
   });
 
+  it("notes a step that opened a new tab", () => {
+    const step = { ...(base.steps[0] as DoResult["steps"][number]), openedTabId: 9 };
+    expect(formatDoResult({ ...base, steps: [step] })).toContain(
+      '  1 click  "Where from?" → new tab 9',
+    );
+  });
+
   it("prints a stop with progress and the next command", () => {
     const r: DoResult = {
       ...base,

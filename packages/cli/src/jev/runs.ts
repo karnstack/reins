@@ -52,6 +52,11 @@ export class RunStore {
     this.#runs.set(key, { ...state, updatedAt: this.#now() });
   }
 
+  /** The run moved to another tab: forget it under the old key. */
+  delete(key: string): void {
+    this.#runs.delete(key);
+  }
+
   tryBegin(key: string): boolean {
     if (this.#active.has(key)) return false;
     this.#active.add(key);

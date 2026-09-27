@@ -237,6 +237,25 @@ describe("runLoop", () => {
     expect(d.observe).toHaveBeenCalledTimes(2);
   });
 
+  it("follows a click that opened a new tab", async () => {
+    const d = {
+      ...deps(
+        [page([button(1, "Docs")]), page([], { url: "https://docs.x.com/", title: "Docs" })],
+        [{ op: "CLICK", target: "1" }, { op: "DONE" }],
+      ),
+      retarget: vi.fn(),
+    };
+    d.act.mockResolvedValueOnce({ ok: true, openedTabId: 9 });
+    const { result } = await runLoop(d, input());
+    expect(result).toMatchObject({ status: "done", url: "https://docs.x.com/" });
+    expect(d.retarget).toHaveBeenCalledWith(9);
+    // Retargeted before the next read, so that read is of the new tab.
+    expect(d.retarget.mock.invocationCallOrder[0]).toBeLessThan(
+      d.observe.mock.invocationCallOrder[1] as number,
+    );
+    expect(result.steps[0]).toMatchObject({ op: "click", label: "Docs", openedTabId: 9 });
+  });
+
   it("three stale results in a row are stuck, without using a step", async () => {
     const d = deps(
       [page([button(1, "Next")])],

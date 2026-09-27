@@ -35,6 +35,7 @@ describe("jev schemas", () => {
 
   it("act result is ok or stale", () => {
     expect(JevActResult.parse({ ok: true })).toEqual({ ok: true });
+    expect(JevActResult.parse({ ok: true, openedTabId: 9 })).toEqual({ ok: true, openedTabId: 9 });
     expect(JevActResult.parse({ stale: true, reason: "gone" })).toEqual({
       stale: true,
       reason: "gone",

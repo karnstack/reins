@@ -32,6 +32,8 @@ export interface DoStep {
   confidence: number;
   ms: number;
   pageChanged: boolean | null;
+  /** The click opened this tab; the run moved to it. */
+  openedTabId?: number;
 }
 
 export interface DoResult {
@@ -41,6 +43,8 @@ export interface DoResult {
   next?: string;
   pending?: { op: "click" | "type" | "submit"; label: string };
   steps: DoStep[];
+  /** The tab the run is on now (set by handleDo; a link may have opened a new one). */
+  tabId?: number;
   url: string;
   title: string;
   elapsedMs: number;

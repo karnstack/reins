@@ -60,7 +60,8 @@ export const JevActParams = z.object({
 export type JevActParams = z.infer<typeof JevActParams>;
 
 export const JevActResult = z.union([
-  z.object({ ok: z.literal(true) }),
+  /** `openedTabId`: the click opened a new tab (target=_blank); the run follows it. */
+  z.object({ ok: z.literal(true), openedTabId: z.number().optional() }),
   z.object({ stale: z.literal(true), reason: z.string() }),
 ]);
 export type JevActResult = z.infer<typeof JevActResult>;

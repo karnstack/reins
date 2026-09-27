@@ -214,6 +214,14 @@ the loop issues `jev_observe` / `jev_act` through the existing
 6. **Record** the step before observing the result; `pageChanged` is filled
    in by the next observation.
 
+A `stale` act (target gone, covered, moving) uses no step but is remembered:
+the history Jev sees carries `could not <op> "<label>": <reason>`, and three
+stale acts in a row stop the run as `stuck`. A click that opens a new tab
+(`target=_blank`) comes back with `openedTabId`; the extension brings that
+tab forward and the run follows it — every later observe/act, the stored run
+(`browserId:<newTab>`), the result's `tabId` and every `next:` line use the
+new tab. The site rule applies to the new tab's host as to any observation.
+
 State sent to Jev per request: goal; url, title; visible viewport text
 (capped at 6,000 chars); elements (index, role, label, value,
 checked/selected/expanded, options for native selects); last 10 actions

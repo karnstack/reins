@@ -166,7 +166,8 @@ export async function handleDo(
   }
   if (browserId === undefined || tabId === undefined)
     return fail("couldn't tell which tab to drive");
-  const runKey = RunStore.key(browserId, tabId);
+  const firstTab = tabId;
+  let runKey = RunStore.key(browserId, tabId);
   if (!ctx.runs.tryBegin(runKey)) {
     // After Ctrl-C the lock stays held until the in-flight jev_act returns.
     return fail(
@@ -216,6 +217,16 @@ export async function handleDo(
             JevActResult.parse(await call("jev_act", a)),
           ask,
           now,
+          // A link opened a new tab: the run follows it (the extension has
+          // brought it forward), and its memory moves with it.
+          retarget: (id: number) => {
+            tabId = id;
+            const moved = RunStore.key(browserId as string, id);
+            ctx.runs.delete(runKey);
+            ctx.runs.end(runKey);
+            ctx.runs.tryBegin(moved);
+            runKey = moved;
+          },
         },
         {
           run,
@@ -232,13 +243,15 @@ export async function handleDo(
     }
     ctx.runs.set(runKey, after);
     // The next command routes the way the user did: only an explicit
-    // --tab/--browser is echoed back, so a default-tab run stays short.
+    // --tab/--browser is echoed back, so a default-tab run stays short —
+    // unless the run moved to a new tab, which every next line must name.
+    const moved = tabId !== firstTab;
     const next = nextCommand(result, {
       goal: after.goal,
-      ...(p.tabId !== undefined ? { tabId: p.tabId } : {}),
+      ...(p.tabId !== undefined || moved ? { tabId } : {}),
       ...(p.browserId !== undefined ? { browserId: p.browserId } : {}),
     });
-    return { ...result, ...(next !== undefined ? { next } : {}) };
+    return { ...result, tabId, ...(next !== undefined ? { next } : {}) };
   } finally {
     ctx.runs.end(runKey);
   }

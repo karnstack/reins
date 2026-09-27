@@ -56,7 +56,7 @@ export function formatDoResult(r: DoResult): string {
   ];
   for (const s of r.steps) {
     lines.push(
-      `${String(s.n).padStart(3)} ${s.op.padEnd(6)} ${JSON.stringify(s.label)}${s.fill ? ` ← ${s.fill}` : ""}`,
+      `${String(s.n).padStart(3)} ${s.op.padEnd(6)} ${JSON.stringify(s.label)}${s.fill ? ` ← ${s.fill}` : ""}${s.openedTabId !== undefined ? ` → new tab ${s.openedTabId}` : ""}`,
     );
   }
   if (r.status === "done") lines.push(`now: ${r.url} — ${JSON.stringify(r.title)}`);

@@ -154,6 +154,18 @@ export async function jevAct(params: JevActParams): Promise<JevActResult> {
 
 const DIALOG_WON = Symbol("dialog");
 
+/** Watch for a tab this tab opens (a target=_blank link) while a click runs. */
+function watchOpenedTab(tabId: number): { get: () => number | undefined; stop: () => void } {
+  let opened: number | undefined;
+  const onCreated = (tab: chrome.tabs.Tab) => {
+    if (tab.openerTabId === tabId && tab.id !== undefined && opened === undefined) opened = tab.id;
+  };
+  // The unit and browser harnesses stub only what they need.
+  const events = chrome.tabs.onCreated as typeof chrome.tabs.onCreated | undefined;
+  events?.addListener(onCreated);
+  return { get: () => opened, stop: () => events?.removeListener(onCreated) };
+}
+
 interface ActState {
   /** Set right before the first command that changes the page. */
   pressed: boolean;
@@ -239,29 +251,39 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
     if (!ACTIONABILITY_REFUSAL.test(reason)) throw err;
     return { stale: true, reason };
   }
+  // A click may open a new tab (target=_blank): the run follows it, so the
+  // tab is reported — and brought forward, since Chrome may open it behind.
+  const opened = params.op === "click" ? watchOpenedTab(tabId) : undefined;
   state.pressed = true;
-  await pressAt(tabId, point.x, point.y, `node ${node}`);
-  if (params.op === "type") {
+  try {
+    await pressAt(tabId, point.x, point.y, `node ${node}`);
+    if (params.op === "type") {
+      if (state.abandoned) return { ok: true };
+      const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
+      await send(tabId, "Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "a",
+        code: "KeyA",
+        modifiers,
+        commands: ["selectAll"],
+      });
+      await send(tabId, "Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "a",
+        code: "KeyA",
+        modifiers,
+      });
+      if (state.abandoned) return { ok: true };
+      await send(tabId, "Input.insertText", { text: params.text ?? "" });
+    }
     if (state.abandoned) return { ok: true };
-    const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere
-    await send(tabId, "Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "a",
-      code: "KeyA",
-      modifiers,
-      commands: ["selectAll"],
-    });
-    await send(tabId, "Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "a",
-      code: "KeyA",
-      modifiers,
-    });
-    if (state.abandoned) return { ok: true };
-    await send(tabId, "Input.insertText", { text: params.text ?? "" });
+    // Settling is read-only; a navigation mid-settle is fine.
+    await evaluate(tabId, `(${jevSettle})(${node}, ${params.op === "type"})`, true).catch(() => {});
+  } finally {
+    opened?.stop();
   }
-  if (state.abandoned) return { ok: true };
-  // Settling is read-only; a navigation mid-settle is fine.
-  await evaluate(tabId, `(${jevSettle})(${node}, ${params.op === "type"})`, true).catch(() => {});
-  return { ok: true };
+  const openedTabId = opened?.get();
+  if (openedTabId === undefined) return { ok: true };
+  await chrome.tabs.update(openedTabId, { active: true }).catch(() => {});
+  return { ok: true, openedTabId };
 }

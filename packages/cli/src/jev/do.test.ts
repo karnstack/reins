@@ -187,6 +187,43 @@ describe("handleDo", () => {
     for (const [, payload] of calls.slice(1)) expect(payload).toMatchObject({ tabId: 5 });
   });
 
+  it("moves the run to a tab the click opened, and routes next there", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const b = bridge();
+    let acts = 0;
+    (b.requestFull as ReturnType<typeof vi.fn>).mockImplementation(
+      async (method: string, payload: { tabId?: number }) => ({
+        result:
+          method === "jev_observe"
+            ? { ...OBS, url: payload.tabId === 9 ? "https://docs.x.com/" : OBS.url }
+            : { ok: true, ...(acts++ === 0 ? { openedTabId: 9 } : {}) },
+        meta: { tabId: payload.tabId ?? 5, host: "x.com", tier: "full" },
+        browserId: "b1",
+      }),
+    );
+    const runs = new RunStore();
+    const r = await handleDo(b, params, {
+      runs,
+      credentialsDir: dir,
+      signal: new AbortController().signal,
+      createAsk: () => clickThenDone() as never,
+    });
+    expect(r).toMatchObject({
+      status: "done",
+      tabId: 9,
+      url: "https://docs.x.com/",
+      next: "reins snapshot --tab 9   # verify before trusting DONE",
+    });
+    expect(r.steps[0]).toMatchObject({ openedTabId: 9 });
+    const calls = (b.requestFull as ReturnType<typeof vi.fn>).mock.calls;
+    // Everything after the click goes to the new tab.
+    for (const [, payload] of calls.slice(2)) expect(payload).toMatchObject({ tabId: 9 });
+    expect(runs.get("b1:9")?.goal).toBe("find it");
+    expect(runs.get("b1:5")).toBeUndefined();
+    expect(runs.tryBegin("b1:5")).toBe(true);
+    expect(runs.tryBegin("b1:9")).toBe(true);
+  });
+
   it("refuses without a key, pointing at both ways to add one", async () => {
     const r = await handleDo(bridge(), params, {
       runs: new RunStore(),

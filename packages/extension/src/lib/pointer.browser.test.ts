@@ -92,6 +92,7 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 <div style="position:relative"><button id="covered">Covered</button><div style="position:absolute;inset:0"></div></div>
 <button id="swap">Swap me</button>
 <button id="ask" onclick="confirm('Leave?')">Ask</button>
+<a id="docs" href="/jev" target="_blank">Docs</a>
 <div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
 <form id="sf" role="search"><input id="q" name="q" aria-label="Search GitHub" value="cats"></form>
 <input id="s2" type="search" placeholder="Search…" value="x">
@@ -108,6 +109,11 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
 
 let chromeProc: ChildProcess | undefined;
 const injected: string[] = [];
+/** Page targets opened by the fixture (target=_blank), closed after each test. */
+const openedTargets: string[] = [];
+let pageTargetId = "";
+const tabCreatedListeners: Array<(tab: chrome.tabs.Tab) => void> = [];
+const activated: Array<[number, unknown]> = [];
 let server: http.Server | undefined;
 let profile: string | undefined;
 let ws: WebSocket | undefined;
@@ -184,15 +190,31 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     });
     const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as Array<{
       type: string;
+      id: string;
       webSocketDebuggerUrl: string;
     }>;
     const target = targets.find((t) => t.type === "page");
     if (!target) throw new Error("no page target");
+    pageTargetId = target.id;
     const sock = new WebSocket(target.webSocketDebuggerUrl);
     ws = sock;
     sock.on("message", (data) => {
       const msg = JSON.parse(String(data));
       if (msg.id === undefined && msg.method) {
+        // A tab our page opened: what chrome.tabs.onCreated would report.
+        if (msg.method === "Target.targetCreated") {
+          const info = msg.params.targetInfo as {
+            targetId: string;
+            type: string;
+            openerId?: string;
+          };
+          if (info.type === "page" && info.openerId === pageTargetId) {
+            openedTargets.push(info.targetId);
+            const tab = { id: 100 + openedTargets.length, openerTabId: 1, active: false };
+            for (const fn of tabCreatedListeners) fn(tab as chrome.tabs.Tab);
+          }
+          return;
+        }
         // A CDP event: deliver it the way chrome.debugger.onEvent would.
         for (const listener of eventListeners) listener({ tabId: 1 }, msg.method, msg.params);
         return;
@@ -201,6 +223,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       pending.delete(msg.id);
     });
     await new Promise((r) => sock.once("open", r));
+    await cdp("Target.setDiscoverTargets", { discover: true });
 
     // The extension's view of the world, forwarded to the headless browser.
     vi.stubGlobal("chrome", {
@@ -225,9 +248,19 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
         },
       },
       tabs: {
-        update: async () => ({}),
+        update: async (id: number, props: unknown) => {
+          activated.push([id, props]);
+          return {};
+        },
         // What the extension would read while a dialog blocks CDP.
         get: async () => ({ url: new URL("/jev", url).href, title: "jev fixture" }),
+        onCreated: {
+          addListener: (fn: (tab: chrome.tabs.Tab) => void) => tabCreatedListeners.push(fn),
+          removeListener: (fn: (tab: chrome.tabs.Tab) => void) => {
+            const i = tabCreatedListeners.indexOf(fn);
+            if (i >= 0) tabCreatedListeners.splice(i, 1);
+          },
+        },
       },
     });
     // jev.ts registered at import against no `chrome`; register on the stub.
@@ -236,6 +269,10 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
 
   afterEach(async () => {
     __resetDebugSessions();
+    activated.length = 0;
+    for (const targetId of openedTargets.splice(0)) {
+      await cdp("Target.closeTarget", { targetId }).catch(() => {});
+    }
     for (const identifier of injected.splice(0)) {
       await cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier });
     }
@@ -548,6 +585,19 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       stale: true,
       reason: "the element is gone",
     });
+  });
+
+  it("jev: a click that opens a new tab reports it, brought to the front", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.kind === "click" && a.label === "Docs")?.node as number;
+    expect(await jevAct({ tabId: 1, op: "click", node, label: "Docs" })).toEqual({
+      ok: true,
+      openedTabId: 101,
+    });
+    expect(activated).toEqual([[101, { active: true }]]);
+    expect(tabCreatedListeners).toEqual([]); // the watcher is gone after the act
+    expect(openedTargets).toHaveLength(1);
   });
 
   it("jev: a node replaced after the read comes back stale, not clicked", async () => {

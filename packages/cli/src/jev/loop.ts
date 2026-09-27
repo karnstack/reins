@@ -15,6 +15,8 @@ export interface LoopDeps {
   act(params: Omit<JevActParams, "browserId" | "tabId">): Promise<JevActResult>;
   ask: JevAsk;
   now(): number;
+  /** A click opened a new tab: every later observe/act goes there. */
+  retarget?(tabId: number): void;
 }
 
 export interface LoopInput {
@@ -270,6 +272,8 @@ export async function runLoop(
         continue;
       }
       staleRun = 0;
+      const openedTabId = "openedTabId" in res ? res.openedTabId : undefined;
+      if (openedTabId !== undefined) deps.retarget?.(openedTabId);
 
       if (op === "click" || op === "submit") {
         const i = run.confirms.findIndex((c) => normalizeLabel(c) === normalizeLabel(action.label));
@@ -286,6 +290,7 @@ export async function runLoop(
         confidence: decision.confidence,
         ms: deps.now() - t0,
         pageChanged: null,
+        ...(openedTabId !== undefined ? { openedTabId } : {}),
       });
     }
   } catch (err) {
