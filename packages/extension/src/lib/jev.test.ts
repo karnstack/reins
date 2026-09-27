@@ -69,7 +69,8 @@ function pageAnswers(opts: { onPoint?: () => Promise<unknown>; onPress?: () => P
   return async (_t: unknown, method: string, params?: { expression?: string; type?: string }) => {
     if (method === "Runtime.evaluate") {
       const expr = params?.expression ?? "";
-      if (expr.includes("visibilityState")) return { result: { value: "visible" } };
+      // ensureVisible's probe, exactly: actionPoint reads visibilityState too.
+      if (expr === "document.visibilityState") return { result: { value: "visible" } };
       if (expr.includes("function jevCheck")) return { result: { value: "ok" } };
       if (expr.includes("function actionPoint")) {
         return opts.onPoint ? opts.onPoint() : { result: { value: { x: 5, y: 5 } } };

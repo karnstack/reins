@@ -55,7 +55,11 @@ export async function actionPoint(
   };
   const deadline = performance.now() + timeoutMs;
   // The element's rect, read in the next animation frame. rAF never fires in
-  // a hidden tab, so a timeout stands in for it there.
+  // a hidden tab, so a timer stands in for it there — and only there. In a
+  // visible tab the animation clock is frozen between frames: a timer-task
+  // read repeats the last frame's rect while the compositor keeps moving the
+  // element, and that false "still" would send the press to where the
+  // element was. So a visible tab waits for the frame, until the deadline.
   const nextFrame = (el: Element) =>
     new Promise<{ t: number; r: DOMRect }>((resolve) => {
       let done = false;
@@ -65,7 +69,15 @@ export async function actionPoint(
         resolve({ t, r: el.getBoundingClientRect() });
       };
       requestAnimationFrame(read);
-      setTimeout(() => read(performance.now()), 100);
+      const fallback = () => {
+        if (done) return;
+        if (document.visibilityState !== "visible" || performance.now() >= deadline) {
+          read(performance.now());
+        } else {
+          setTimeout(fallback, 100);
+        }
+      };
+      setTimeout(fallback, 100);
     });
   // A just-started CSS animation or transition is "pending": held at its first
   // keyframe until its start time resolves, it reads identical across frames

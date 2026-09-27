@@ -68,7 +68,7 @@ function page(opts: { visible?: boolean[]; point?: unknown; probe?: unknown } = 
   return (method: string, params?: Record<string, unknown>) => {
     if (method !== "Runtime.evaluate") return {};
     const expr = String(params?.expression);
-    if (expr.includes("visibilityState")) {
+    if (expr === "document.visibilityState") {
       const v = visible.length > 1 ? visible.shift() : visible[0];
       return evalOk(v ? "visible" : "hidden");
     }

@@ -287,6 +287,24 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(await log()).toEqual(["click:anim"]);
   });
 
+  it("settles on real frames, never on a timer that fires between them", async () => {
+    // Between main-thread frames the animation clock is frozen: a timer-task
+    // read repeats the last frame's rect while the compositor keeps moving
+    // the element. On a busy page the rAF fallback timer fires before the
+    // next frame now and then; here every short timer does, so the stale
+    // "still" read happens on every attempt.
+    await load();
+    await evaluate(`(() => {
+      const st = window.setTimeout.bind(window);
+      window.setTimeout = (fn, ms, ...args) => st(fn, ms <= 100 ? 0 : ms, ...args);
+      const el = document.getElementById("anim");
+      el.scrollIntoView({ block: "center", behavior: "instant" });
+      el.classList.add("slide");
+    })()`);
+    await click("#anim");
+    expect(await log()).toEqual(["click:anim"]);
+  }, 10_000);
+
   it("clicks through into a shadow root", async () => {
     await load();
     await click("#host");

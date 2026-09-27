@@ -197,7 +197,7 @@ describe("cdpClick", () => {
           if (method === "Input.dispatchMouseEvent") events.push(params);
           if (method !== "Runtime.evaluate") return {};
           const expr = String(params.expression);
-          if (expr.includes("visibilityState")) {
+          if (expr === "document.visibilityState") {
             const v = visible.length > 1 ? visible.shift() : visible[0];
             return { result: { value: v ? "visible" : "hidden" } };
           }
@@ -418,7 +418,7 @@ describe("cdpType", () => {
         sendCommand: vi.fn(async (_t: unknown, method: string, params: { expression?: string }) => {
           methods.push(method);
           if (method !== "Runtime.evaluate") return {};
-          if (String(params.expression).includes("visibilityState")) {
+          if (params.expression === "document.visibilityState") {
             return {
               result: {
                 value: (visible.length > 1 ? visible.shift() : visible[0]) ? "visible" : "hidden",
