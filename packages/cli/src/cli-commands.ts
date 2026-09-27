@@ -85,7 +85,6 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
 /** packageVersion() falls back to "0.0.0" when package.json is unreadable — not a real version. */
 const knownVersion = (v: string) => v !== "0.0.0";
 
-/** A live daemon: its port and last /health reply. */
 /** A `fetch` to the daemon that hit its own deadline: say so in one line
  *  instead of undici's stack, with the command's own hint (a `reins do` run
  *  may still be finishing) when it has one. Every other failure passes through. */
@@ -98,6 +97,7 @@ export function rpcFailure(err: unknown, timeoutMs: number, hint?: string): Erro
   return err instanceof Error ? err : new Error(String(err));
 }
 
+/** A live daemon: its port and last /health reply. */
 export interface Daemon {
   port: number;
   health: DaemonHealth;
