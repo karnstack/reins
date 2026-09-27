@@ -4,7 +4,7 @@
 // spend for the `manual` arm.
 //
 //   node packages/cli/scripts/bench-do.mjs [--runs 5] [--arm do|manual|both]
-//        [--set dev|holdout|all] [--tier fixture|live|all] [--tasks a,b]
+//        [--set dev|holdout2|all] [--tier fixture|live|all] [--tasks a,b]
 //        [--out-dir bench-out] [--out <summary.json>] [--claude-budget-usd 2]
 //        [--trace <jev-trace.jsonl>]
 //   node packages/cli/scripts/bench-do.mjs --check-only wikipedia --tab <id>
@@ -62,7 +62,7 @@ if (opts.help) {
   console.log(
     [
       "usage: node packages/cli/scripts/bench-do.mjs [--runs 5] [--arm do|manual|both]",
-      "         [--set dev|holdout|all] [--tier fixture|live|all] [--tasks id1,id2]",
+      "         [--set dev|holdout2|all] [--tier fixture|live|all] [--tasks id1,id2]",
       "         [--out-dir bench-out] [--out <summary.json>] [--claude-budget-usd 2] [--trace <file>]",
       "       node packages/cli/scripts/bench-do.mjs --check-only <taskId> --tab <id>",
       "       node packages/cli/scripts/bench-do.mjs --dry [--runs 1]   (self-test, no browser, no spend)",
@@ -80,7 +80,7 @@ function die(msg) {
 const RUNS = Number(opts.runs);
 if (!Number.isInteger(RUNS) || RUNS < 1) die(`--runs must be a positive integer, got ${opts.runs}`);
 if (!["do", "manual", "both"].includes(opts.arm)) die("--arm must be do, manual or both");
-if (!["dev", "holdout", "all"].includes(opts.set)) die("--set must be dev, holdout or all");
+if (!["dev", "holdout2", "all"].includes(opts.set)) die("--set must be dev, holdout2 or all");
 if (!["fixture", "live", "all"].includes(opts.tier)) die("--tier must be fixture, live or all");
 const ARMS = opts.arm === "both" ? ["do", "manual"] : [opts.arm];
 const taskFilter = opts.tasks
@@ -601,7 +601,7 @@ const rows = tasks.map((t) => {
     doStatuses: arm("do").map((r) => r.status),
   };
 });
-const setRows = ["dev", "holdout"]
+const setRows = ["dev", "holdout2"]
   .flatMap((set) => ["fixture", "live", "all"].map((tier) => ({ set, tier })))
   .map(({ set, tier }) => {
     const pick = (a) =>

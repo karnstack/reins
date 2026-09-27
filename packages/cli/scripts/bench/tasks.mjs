@@ -3,7 +3,7 @@
 // Each task:
 //   id         short name (used in --tasks and in trace dir names)
 //   tier       "fixture" (served by the runner from ./fixtures) | "live" (the public web)
-//   set        "dev" | "holdout"
+//   set        "dev" | "holdout2"
 //   url        start page; fixture tasks use `fixture:<file>` and the runner
 //              rewrites it to http://127.0.0.1:<port>/<file>
 //   goal       what `reins do` is told
@@ -15,11 +15,21 @@
 //   timeoutSec optional `reins do --timeout` (default 60)
 //
 // Dev/holdout split (decided before any run, never re-balanced afterwards):
-// walking each tier's list in the order written below, every third task is
-// holdout so both tiers sit in both sets and holdout is ~30% of the whole.
+// walking each tier's list in the order written below, every third task was
+// holdout so both tiers sat in both sets and holdout was ~30% of the whole.
 // Fixture: datepicker, newtab (2 of 7). Live: mdn, cambridge, hackernews,
-// pypi, wolframalpha (5 of 15). Holdout = 7 of 22 (32%). Fix reins against
-// the dev set only; run holdout to judge a fix, never to shape it.
+// pypi, wolframalpha (5 of 15). Holdout = 7 of 22 (32%).
+//
+// holdout v1 folded into dev on 2026-09-27 after its first run: those 7 tasks
+// have been seen (and their failures discussed), so they no longer measure
+// generalisation. They are `set: "dev"` now.
+//
+// holdout2 (8 tasks, the last section below) was frozen on 2026-09-27 before
+// round 3 of fixing began. Its checkers were validated WITHOUT `reins do`
+// (false at start and on near-miss states, true on a goal state reached by
+// URL or by driving the page with `reins eval`) — `reins do` has never been
+// run on them. Fix reins against dev only; run holdout2 to judge a fix, never
+// to shape it. Evidence: .superpowers/sdd/2026-09-27-reins-do/holdout2-report.md.
 //
 // The fixture pages are excluded from biome on purpose: they copy real sites'
 // markup (ul[role=listbox] > li[role=option], li[role=menuitemradio] menus,
@@ -81,7 +91,7 @@ export const TASKS = [
   {
     id: "fx-datepicker",
     tier: "fixture",
-    set: "holdout",
+    set: "dev",
     url: "fixture:datepicker.html",
     goal: "Set the check-in date to November 18, 2026 and confirm it with Done.",
     fills: {},
@@ -117,7 +127,7 @@ export const TASKS = [
   {
     id: "fx-newtab",
     tier: "fixture",
-    set: "holdout",
+    set: "dev",
     url: "fixture:newtab.html",
     goal: "Open the Docs (they open in a new tab). In the docs, filter the article list with 'policy' and open the 'Site policy' article.",
     fills: { query: "policy" },
@@ -224,7 +234,7 @@ export const TASKS = [
   {
     id: "mdn",
     tier: "live",
-    set: "holdout",
+    set: "dev",
     url: "https://developer.mozilla.org/en-US/",
     goal: "Search MDN for 'Array.prototype.flat' and open its reference page.",
     fills: { query: "Array.prototype.flat" },
@@ -234,7 +244,7 @@ export const TASKS = [
   {
     id: "cambridge",
     tier: "live",
-    set: "holdout",
+    set: "dev",
     url: "https://dictionary.cambridge.org/",
     // The site greets a first visit with a consent dialog whose only dismissal
     // is "I Accept"; since ffdb1b9 an "accept" inside a consent banner is not a
@@ -271,7 +281,7 @@ export const TASKS = [
   {
     id: "hackernews",
     tier: "live",
-    set: "holdout",
+    set: "dev",
     url: "https://news.ycombinator.com/",
     goal: "Go to the 'Show HN' section and open the comments page of its first story.",
     fills: {},
@@ -286,7 +296,7 @@ export const TASKS = [
   {
     id: "wolframalpha",
     tier: "live",
-    set: "holdout",
+    set: "dev",
     url: "https://www.wolframalpha.com/",
     goal: "Compute the integral of x^2 sin x and stop when the result is shown.",
     fills: { query: "integrate x^2 sin x" },
@@ -312,7 +322,7 @@ export const TASKS = [
   {
     id: "pypi",
     tier: "live",
-    set: "holdout",
+    set: "dev",
     url: "https://pypi.org/",
     goal: "Search PyPI for 'requests' and order the results by date last updated.",
     fills: { query: "requests" },
@@ -335,6 +345,122 @@ export const TASKS = [
       "(() => { const p = new URLSearchParams(location.search); return /date-calculator\\.html$/.test(location.pathname) && p.get('today') === '01/01/2025' && p.get('ageat') === '03/01/2026' && /424 calendar days/.test(document.body.innerText); })()",
     checkNote:
       "the calculator's result URL has today=01/01/2025 and ageat=03/01/2026 (start and end dates) and the result shows '424 calendar days'",
+  },
+
+  // ── holdout2 (frozen 2026-09-27, before round 3; never run with `reins do`) ──
+  {
+    id: "fx-settings",
+    tier: "fixture",
+    set: "holdout2",
+    url: "fixture:settings.html",
+    goal: "In the account settings, open the Notifications tab, turn on 'Weekly digest emails' and save the changes.",
+    fills: {},
+    // Saved state is JSON in #saved-state; a toggled switch only changes the
+    // pending state until "Save changes" is clicked. Every other setting must
+    // keep its default, so flipping a neighbouring switch fails the check.
+    check:
+      "(() => { const s = JSON.parse(document.querySelector('#saved-state').value || '{}'); return s.weeklyDigest === true && s.productUpdates === true && s.mentionAlerts === false && s.securityAlerts === true && s.twoFactor === false && s.displayName === 'Sam Rivera' && document.querySelector('#save').disabled; })()",
+    checkNote:
+      "the saved settings (written only by 'Save changes') have weeklyDigest on and every other setting at its default, and Save is disabled again (nothing pending); toggling without saving, or toggling the wrong switch, stays false",
+  },
+  {
+    id: "fx-orders",
+    tier: "fixture",
+    set: "holdout2",
+    url: "fixture:orders.html",
+    goal: "In the orders table, find the order placed by Nadia Okafor and open its details.",
+    fills: {},
+    // 23 orders, 8 per page, no search box: Nadia's order (ORD-1017) is row 9,
+    // i.e. on page 2. Only the row's View button opens the detail view.
+    check:
+      "!document.querySelector('#detail').hidden && document.querySelector('#detail-id').textContent === 'ORD-1017' && document.querySelector('#detail-customer').textContent === 'Nadia Okafor'",
+    checkNote:
+      "the detail view is shown for ORD-1017 / Nadia Okafor (only reachable via page 2's View button); page 2 listed but not opened, or another order's details, stays false",
+  },
+  {
+    id: "lit",
+    tier: "live",
+    set: "holdout2",
+    url: "https://lit.dev/",
+    goal: "Search the Lit docs for 'reactive properties' and open the 'Reactive properties' documentation page.",
+    fills: { query: "reactive properties" },
+    // lit.dev is built with Lit: the header's "Search" button, the modal, its
+    // combobox input and the result listbox all live in nested shadow roots.
+    check: "location.pathname === '/docs/components/properties/'",
+    checkNote:
+      "pathname is /docs/components/properties/ (the first search result for the query); the homepage, /docs/ and the cheat-sheet article stay false",
+  },
+  {
+    id: "musicbrainz",
+    tier: "live",
+    set: "holdout2",
+    url: "https://musicbrainz.org/",
+    goal: "Search MusicBrainz for 'OK Computer' with the search type set to 'Release group'.",
+    fills: { query: "OK Computer" },
+    // The header search form is a text input + native <select name=type>
+    // (default 'Artist') + submit; GET /search?query=…&type=…&method=indexed.
+    check:
+      "(() => { const p = new URLSearchParams(location.search); return location.pathname === '/search' && (p.get('query') || '').trim().toLowerCase() === 'ok computer' && p.get('type') === 'release_group' && document.querySelectorAll('table.tbl tbody tr').length > 0; })()",
+    checkNote:
+      "/search with query=ok computer, type=release_group (the native select's 'Release group') and a results table; the default type=artist stays false",
+  },
+  {
+    id: "openlibrary",
+    tier: "live",
+    set: "holdout2",
+    url: "https://openlibrary.org/",
+    goal: "Search Open Library for 'the hobbit' and sort the results by 'Most Editions'.",
+    fills: { query: "the hobbit" },
+    // The results page's "Sort by" is an <ol-menu-popover> web component whose
+    // role=menu of menuitemradio buttons renders inside its shadow root;
+    // picking an item navigates to /search?q=…&sort=editions.
+    check:
+      "(() => { const p = new URLSearchParams(location.search); return location.pathname === '/search' && /hobbit/i.test(p.get('q') || '') && p.get('sort') === 'editions' && document.querySelectorAll('.searchResultItem').length > 0; })()",
+    checkNote:
+      "/search with q containing 'hobbit', sort=editions and result items; the relevance-sorted results page (no sort param) stays false",
+  },
+  {
+    id: "crates",
+    tier: "live",
+    set: "holdout2",
+    url: "https://crates.io/",
+    goal: "Search crates.io for 'serde', open the serde crate and show its Versions list.",
+    fills: { query: "serde" },
+    // A client-rendered SPA: search results, the crate page and its in-page
+    // Readme / Versions / Dependencies… navigation are all route changes.
+    check:
+      "location.pathname === '/crates/serde/versions' && [...document.querySelectorAll('a[href]')].some((a) => /^\\/crates\\/serde\\/\\d+\\.\\d+\\.\\d+$/.test(a.getAttribute('href')))",
+    checkNote:
+      "pathname is /crates/serde/versions and the page links to at least one /crates/serde/<version>; the search results and the crate's Readme page stay false",
+  },
+  {
+    id: "iana",
+    tier: "live",
+    set: "holdout2",
+    url: "https://www.iana.org/domains/root/db",
+    goal: "In the Root Zone Database, open the record for the .ch top-level domain.",
+    fills: {},
+    // One static table of ~1600 TLDs with no search box: the .ch row is far
+    // down the page (find/scroll), and each row's domain is a link.
+    check: "location.pathname === '/domains/root/db/ch.html'",
+    checkNote:
+      "pathname is /domains/root/db/ch.html; the database page and another TLD's record stay false",
+  },
+  {
+    id: "osm",
+    tier: "live",
+    set: "holdout2",
+    url: "https://www.openstreetmap.org/",
+    goal: "Search OpenStreetMap for 'Matterhorn' and open the result for the peak in Zermatt, Switzerland.",
+    fills: { query: "Matterhorn" },
+    // The search lists several peaks named Matterhorn (Switzerland, Antarctica,
+    // Czechia, New Zealand…); clicking one opens /node/<id> in the sidebar
+    // with its coordinates. Accept any node/way/relation whose title is
+    // Matterhorn and whose coordinates are the Zermatt peak (45.976, 7.658).
+    check:
+      "/^\\/(node|way|relation)\\/\\d+$/.test(location.pathname) && /Matterhorn/.test(document.title) && /45\\.97\\d*,\\s*7\\.65\\d*/.test(document.body.innerText)",
+    checkNote:
+      "a /node|way|relation/<id> page titled Matterhorn whose sidebar shows coordinates 45.97…, 7.65… (the Swiss peak, node 26863664 today); the search results page and the Czech/Antarctic Matterhorn nodes stay false",
   },
 ];
 

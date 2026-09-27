@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind — orders</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #3b3f8c; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 20px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eef0f3; }
+  th { font-size: 13px; color: #666; font-weight: 600; }
+  td button { font: inherit; padding: 4px 10px; border: 1px solid #3b3f8c; color: #3b3f8c; background: #fff; border-radius: 6px; cursor: pointer; }
+  nav { display: flex; align-items: center; gap: 6px; margin-top: 14px; justify-content: flex-end; }
+  nav button { font: inherit; min-width: 34px; padding: 6px 10px; border: 1px solid #b9c0c8; background: #fff; border-radius: 6px; cursor: pointer; }
+  nav button[aria-current=page] { background: #3b3f8c; color: #fff; border-color: #3b3f8c; }
+  nav button:disabled { opacity: .45; cursor: default; }
+  #range { color: #666; font-size: 13px; margin-right: auto; }
+  dl { display: grid; grid-template-columns: 140px 1fr; gap: 8px 16px; }
+  dt { color: #666; }
+  #back { font: inherit; margin-bottom: 14px; padding: 6px 12px; border: 1px solid #b9c0c8; background: #fff; border-radius: 6px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>Northwind</header>
+<main>
+  <section class="card" id="list">
+    <h1 style="margin-top:0">Orders</h1>
+    <table aria-label="Orders">
+      <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <nav aria-label="Pagination">
+      <span id="range"></span>
+      <button type="button" id="prev" aria-label="Previous page">‹</button>
+      <span id="pages"></span>
+      <button type="button" id="next" aria-label="Next page">›</button>
+    </nav>
+  </section>
+
+  <section class="card" id="detail" hidden>
+    <button type="button" id="back">← Back to orders</button>
+    <h1 style="margin-top:0">Order <span id="detail-id"></span></h1>
+    <dl>
+      <dt>Customer</dt><dd id="detail-customer"></dd>
+      <dt>Date</dt><dd id="detail-date"></dd>
+      <dt>Total</dt><dd id="detail-total"></dd>
+      <dt>Status</dt><dd id="detail-status"></dd>
+      <dt>Ship to</dt><dd id="detail-ship"></dd>
+    </dl>
+  </section>
+</main>
+<script>
+(() => {
+  const PAGE = 8;
+  const CUSTOMERS = [
+    "Lena Fischer", "Marco Bellini", "Priya Nair", "Tomás Herrera", "Yuki Tanaka", "Oliver Grant",
+    "Aisha Rahman", "Jonas Weber", "Nadia Okafor", "Felix Brand", "Sofia Rossi", "Daniel Kim",
+    "Emma Larsen", "Hugo Martin", "Chloé Dubois", "Mateo Silva", "Ingrid Holm", "Rafael Costa",
+    "Zoe Clarke", "Kenji Sato", "Laura Meyer", "Omar Haddad", "Nina Petrova",
+  ];
+  const STATUS = ["Shipped", "Processing", "Delivered", "Shipped", "Delivered"];
+  const CITIES = ["Zurich", "Milan", "Lyon", "Vienna", "Berlin", "Oslo", "Porto"];
+  const ORDERS = CUSTOMERS.map((customer, i) => {
+    const d = new Date(2026, 8, 25 - i);
+    return {
+      id: `ORD-${1009 + i}`,
+      customer,
+      date: d.toISOString().slice(0, 10),
+      total: `CHF ${(48 + ((i * 37) % 260)).toFixed(2)}`,
+      status: STATUS[i % STATUS.length],
+      ship: `${CITIES[i % CITIES.length]}`,
+    };
+  });
+  const rows = document.getElementById("rows");
+  const pagesEl = document.getElementById("pages");
+  const total = Math.ceil(ORDERS.length / PAGE);
+  let page = 1;
+
+  function render() {
+    rows.innerHTML = "";
+    const start = (page - 1) * PAGE;
+    for (const o of ORDERS.slice(start, start + PAGE)) {
+      const tr = document.createElement("tr");
+      tr.dataset.id = o.id;
+      tr.innerHTML = `<td>${o.id}</td><td>${o.customer}</td><td>${o.date}</td><td>${o.total}</td><td>${o.status}</td><td></td>`;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = "View";
+      b.setAttribute("aria-label", `View order ${o.id}`);
+      b.addEventListener("click", () => show(o));
+      tr.lastElementChild.appendChild(b);
+      rows.appendChild(tr);
+    }
+    document.getElementById("range").textContent = `${start + 1}–${Math.min(start + PAGE, ORDERS.length)} of ${ORDERS.length} orders`;
+    pagesEl.innerHTML = "";
+    for (let p = 1; p <= total; p++) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = String(p);
+      b.setAttribute("aria-label", `Page ${p}`);
+      if (p === page) b.setAttribute("aria-current", "page");
+      b.addEventListener("click", () => { page = p; render(); });
+      pagesEl.appendChild(b);
+    }
+    document.getElementById("prev").disabled = page === 1;
+    document.getElementById("next").disabled = page === total;
+  }
+  function show(o) {
+    document.getElementById("list").hidden = true;
+    const d = document.getElementById("detail");
+    d.hidden = false;
+    d.dataset.id = o.id;
+    document.getElementById("detail-id").textContent = o.id;
+    document.getElementById("detail-customer").textContent = o.customer;
+    document.getElementById("detail-date").textContent = o.date;
+    document.getElementById("detail-total").textContent = o.total;
+    document.getElementById("detail-status").textContent = o.status;
+    document.getElementById("detail-ship").textContent = o.ship;
+  }
+  document.getElementById("prev").addEventListener("click", () => { if (page > 1) { page--; render(); } });
+  document.getElementById("next").addEventListener("click", () => { if (page < total) { page++; render(); } });
+  document.getElementById("back").addEventListener("click", () => {
+    document.getElementById("detail").hidden = true;
+    document.getElementById("list").hidden = false;
+  });
+  render();
+})();
+</script>
+</body>
+</html>
