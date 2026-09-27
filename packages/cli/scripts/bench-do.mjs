@@ -341,6 +341,7 @@ async function runOne(task, arm, i, tab) {
     row.status = body?.status ?? (out.error ? "spawn_error" : "unparsed");
     row.reason = body?.reason;
     row.jevCalls = body?.jevCalls;
+    row.inputTokens = body?.inputTokens;
     row.elapsedMs = body?.elapsedMs;
     row.step = body?.step;
   } else {
