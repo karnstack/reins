@@ -138,6 +138,27 @@ describe("handleDo", () => {
     expect(b.requestFull).not.toHaveBeenCalled();
   });
 
+  it("a hang-up during the first observation ends the run without asking Jev", async () => {
+    writeKey(dir, "ts_live_abcd1234");
+    const b = bridge();
+    const ctrl = new AbortController();
+    (b.requestFull as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+      // The CLI hangs up while jev_observe is still in flight.
+      ctrl.abort(new Error("client hung up"));
+      return { result: OBS, meta: { tabId: 5, host: "x.com", tier: "full" }, browserId: "b1" };
+    });
+    const ask = vi.fn(doneAsk());
+    const r = await handleDo(b, params, {
+      runs: new RunStore(),
+      credentialsDir: dir,
+      signal: ctrl.signal,
+      createAsk: () => ask as never,
+    });
+    expect(r).toMatchObject({ status: "interrupted", reason: "client hung up", step: 0 });
+    expect(ask).not.toHaveBeenCalled();
+    expect(b.requestFull).toHaveBeenCalledTimes(1);
+  });
+
   it("pins the tab from the first observation and keeps it for every later call", async () => {
     writeKey(dir, "ts_live_abcd1234");
     const b = bridge();

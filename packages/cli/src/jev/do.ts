@@ -185,6 +185,9 @@ export async function handleDo(
     const loopCtrl = new AbortController();
     const onAbort = () => loopCtrl.abort(ctx.signal.reason);
     ctx.signal.addEventListener("abort", onAbort, { once: true });
+    // A hang-up that landed during the first observation fired before the
+    // listener existed: carry it over, or the loop would run to its timeout.
+    if (ctx.signal.aborted) loopCtrl.abort(ctx.signal.reason);
     const timer = setTimeout(
       () => loopCtrl.abort(new DOMException(`timed out after ${p.timeoutSec}s`, "TimeoutError")),
       timeoutMs,
