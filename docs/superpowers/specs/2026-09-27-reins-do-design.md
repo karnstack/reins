@@ -374,9 +374,14 @@ like a foreground tab.
 - **scroll**: `mouseWheel` at viewport centre, `deltaY ±560` (the
   snapshot's scroll pseudo-actions carry that delta).
 - **wait**: 250 ms.
-- **Settle**, after any input: at most 2 animation frames or 50 ms; for a
+- **Settle**, after any input: at least 2 animation frames (≤ 50 ms); for a
   typed combobox, up to 200 ms or until a visible `[role=option]` appears
-  (port of jev `observe`'s after-input wait).
+  (port of jev `observe`'s after-input wait). Then, if the page has started
+  changing (DOM mutations since the input), wait until it has been quiet
+  for 300 ms, so the next read sees the reaction — a sort applied, a
+  filter's results, a suggestion list — and not the page mid-change; a
+  page that has not reacted within 150 ms of the frames is read at once.
+  Capped at 1.5 s from the input, for pages that never stop changing.
 
 ## Audit
 

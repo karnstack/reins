@@ -367,9 +367,14 @@ export function jevSelect(node: number, value: string): string {
 }
 
 /**
- * After input: wait two animation frames (≤ 50 ms), or for a typed combobox
- * up to 200 ms until a visible option appears — so the next read sees the
- * suggestions instead of a half-open popup.
+ * After input: let the page react before the next read. At least two
+ * animation frames (≤ 50 ms); for a typed combobox, up to 200 ms until a
+ * visible option appears. Then, if the page has started changing (DOM
+ * mutations since the input), wait until it has been quiet for 300 ms, so
+ * the read sees the reaction (a sort applied, a filter's results, a
+ * suggestion list) and not the page mid-change; a page that does not react
+ * within 150 ms of the frames is read at once. Capped at 1.5 s from the
+ * input, for pages that never stop changing.
  */
 export function jevSettle(node: number | null, typed: boolean): Promise<void> {
   const cache = (window as unknown as Record<symbol, JevCache | undefined>)[
@@ -377,14 +382,44 @@ export function jevSettle(node: number | null, typed: boolean): Promise<void> {
   ];
   const field = node === null ? undefined : cache?.nodes.get(node);
   const combobox = typed && field?.getAttribute("role") === "combobox";
+  const QUIET_MS = 300;
+  const REACT_MS = 150;
+  const CAP_MS = 1500;
   return new Promise((resolve) => {
     let frames = 0;
     let stopped = false;
+    let mutated = false;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    let react: ReturnType<typeof setTimeout> | undefined;
+    const observer = new MutationObserver(() => {
+      if (stopped) return;
+      mutated = true;
+      if (react !== undefined) clearTimeout(react);
+      if (quiet !== undefined) clearTimeout(quiet);
+      quiet = setTimeout(finish, QUIET_MS);
+    });
     const finish = () => {
+      if (stopped) return;
       stopped = true;
+      observer.disconnect();
+      clearTimeout(cap);
+      if (quiet !== undefined) clearTimeout(quiet);
+      if (react !== undefined) clearTimeout(react);
       resolve();
     };
-    setTimeout(finish, combobox ? 200 : 50);
+    const cap = setTimeout(finish, CAP_MS);
+    observer.observe(document, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+    });
+    // The frames are done: a page that has not reacted gets a short grace
+    // period for a first change; one that has is read once it goes quiet.
+    const framed = () => {
+      if (mutated) return; // the quiet timer is already running
+      react = setTimeout(finish, REACT_MS);
+    };
     const ready = () => {
       if (stopped) return;
       const ids = (field?.getAttribute("aria-controls") || field?.getAttribute("aria-owns") || "")
@@ -405,9 +440,11 @@ export function jevSettle(node: number | null, typed: boolean): Promise<void> {
           e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
         );
       });
-      if (frames >= 2 && (!combobox || shown)) finish();
+      if (frames >= 2 && (!combobox || shown)) framed();
+      else if (combobox && performance.now() - t0 >= 200) framed();
       else requestAnimationFrame(ready);
     };
+    const t0 = performance.now();
     requestAnimationFrame(ready);
   });
 }
