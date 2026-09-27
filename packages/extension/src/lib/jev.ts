@@ -5,7 +5,15 @@ import type {
   JevObservation,
   JevObserveParams,
 } from "@reins/protocol";
-import { actionablePoint, drivePage, ensureVisible, pressAt, resolveTabId, send } from "./cdp.js";
+import {
+  actionablePoint,
+  drivePage,
+  ensureVisible,
+  PRESS_MISSED,
+  pressAt,
+  resolveTabId,
+  send,
+} from "./cdp.js";
 import {
   jevCheck,
   jevSelect,
@@ -294,7 +302,17 @@ async function act(tabId: number, params: JevActParams, state: ActState): Promis
   const opened = params.op === "click" ? watchOpenedTab(tabId) : undefined;
   state.pressed = true;
   try {
-    await pressAt(tabId, point.x, point.y, `node ${node}`);
+    try {
+      await pressAt(tabId, point.x, point.y, `node ${node}`);
+    } catch (err) {
+      // The press was seen landing on another element: the page moved under
+      // the pointer and nothing we intended happened — re-read, as for a
+      // covered or vanished target. (`reins click` keeps reporting it as an
+      // error: there is no loop behind it to re-observe.)
+      const reason = err instanceof Error ? err.message : String(err);
+      if (!PRESS_MISSED.test(reason)) throw err;
+      return { stale: true, reason };
+    }
     if (params.op === "type") {
       if (state.abandoned) return { ok: true };
       const modifiers = /Mac/i.test(navigator.platform) ? 4 : 2; // Meta on macOS, Ctrl elsewhere

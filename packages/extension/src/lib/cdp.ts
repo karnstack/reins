@@ -395,6 +395,9 @@ export async function actionablePoint(
  * explicit: CDP's own defaults (button "none", clickCount 0) move the pointer
  * but never press.
  */
+/** pressAt's refusal when the press was seen landing on another element. */
+export const PRESS_MISSED = /landed on .+ instead — the page changed under the pointer/;
+
 export async function pressAt(
   tabId: number,
   x: number,

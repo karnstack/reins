@@ -81,7 +81,12 @@ describe("dialog tracking", () => {
 });
 
 /** Answer the page-side scripts jevAct runs up to (and including) the press. */
-function pageAnswers(opts: { onPoint?: () => Promise<unknown>; onPress?: () => Promise<unknown> }) {
+function pageAnswers(opts: {
+  onPoint?: () => Promise<unknown>;
+  onPress?: () => Promise<unknown>;
+  /** The landed-check after the press (cdp.ts readProbe). */
+  onProbe?: () => Promise<unknown>;
+}) {
   return async (_t: unknown, method: string, params?: { expression?: string; type?: string }) => {
     if (method === "Runtime.evaluate") {
       const expr = params?.expression ?? "";
@@ -91,6 +96,7 @@ function pageAnswers(opts: { onPoint?: () => Promise<unknown>; onPress?: () => P
       if (expr.includes("function actionPoint")) {
         return opts.onPoint ? opts.onPoint() : { result: { value: { x: 5, y: 5 } } };
       }
+      if (expr.includes("function readProbe") && opts.onProbe) return opts.onProbe();
       return { result: { value: undefined } };
     }
     if (method === "Input.dispatchMouseEvent" && params?.type === "mousePressed" && opts.onPress) {
@@ -119,6 +125,19 @@ describe("jevAct", () => {
     await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toMatchObject({
       stale: true,
       reason: expect.stringMatching(/^cannot click .*covered by div#x/),
+    });
+  });
+
+  it("a press that landed elsewhere is stale: the page moved, nothing intended happened", async () => {
+    const { sendCommand } = stubChrome();
+    sendCommand.mockImplementation(
+      pageAnswers({
+        onProbe: async () => ({ result: { value: { state: "missed", by: "form#search_form" } } }),
+      }),
+    );
+    await expect(jevAct({ tabId: 3, op: "click", node: 1 })).resolves.toMatchObject({
+      stale: true,
+      reason: expect.stringMatching(/landed on form#search_form/),
     });
   });
 

@@ -352,7 +352,10 @@ like a foreground tab.
   element instead of re-querying a CSS selector each attempt. `jev_act` passes
   an actionability timeout of **500 ms** (today's `ACTION_TIMEOUT_MS` is 5 s)
   and maps "covered" or "still moving" to `stale`. The loop re-observes, and
-  the covering modal is then in the element list.
+  the covering modal is then in the element list. A press the probe saw
+  landing on another element ("the page changed under the pointer") is
+  `stale` too — nothing intended happened; `reins click` keeps reporting
+  that as an error, since nothing re-observes behind it.
 - **type**: click to focus (same path), select-all
   (`Input.dispatchKeyEvent` with the `selectAll` command, Meta on macOS,
   Ctrl elsewhere), then `Input.insertText`.
