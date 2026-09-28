@@ -12,21 +12,11 @@ which is summarised at the end under
 
 Read [Limitations](#limitations) before quoting any number from this page.
 
-Raw data, byte-identical to what the runner wrote, sits in
-[`2026-09-reins-do-v2/`](./2026-09-reins-do-v2/):
-
-- [`r5.json`](./2026-09-reins-do-v2/r5.json) and [`r5.log`](./2026-09-reins-do-v2/r5.log):
-  `reins do` on the 30 dev tasks, 5 runs each, final code (e9331fa).
-- [`h3.json`](./2026-09-reins-do-v2/h3.json) and [`h3.log`](./2026-09-reins-do-v2/h3.log):
-  `reins do` on the 8 unseen holdout3 tasks, 5 runs each, the set's first and
-  only run (code f1af855, before round 5).
-- [`h3-xe.json`](./2026-09-reins-do-v2/h3-xe.json): xe re-run after its task
-  was given the currency fills it had been missing (still 0/5).
-- [`manual-v2.json`](./2026-09-reins-do-v2/manual-v2.json) and
-  [`manual-v2.log`](./2026-09-reins-do-v2/manual-v2.log): Claude step by step on
-  all 38 tasks, 3 runs each.
-- [`history/`](./2026-09-reins-do-v2/history/): four earlier runs behind the
-  round table in [How it got here](#how-it-got-here).
+The runs behind these numbers: `reins do` on the 30 dev tasks, 5 runs each, on
+the final code (e9331fa); `reins do` on the 8 unseen holdout3 tasks, 5 runs
+each, the set's first and only run (f1af855, before round 5); Claude step by
+step on all 38 tasks, 3 runs each. Raw run files aren't kept in the repo; the
+commands under [Reproduce](#reproduce) regenerate them.
 
 The runner is [`packages/cli/scripts/bench-do.mjs`](../../packages/cli/scripts/bench-do.mjs);
 the tasks, their goals and their checks are in
@@ -240,8 +230,7 @@ Spend:
   (318.9 s, failed).
 
 For reference, on the same code as the holdout3 run (f1af855) the dev set
-scored 122/150 (81.3%,
-[`history/round4-dev-f1af855.json`](./2026-09-reins-do-v2/history/round4-dev-f1af855.json)).
+scored 122/150 (81.3%).
 
 ### The self-check
 
@@ -413,8 +402,7 @@ Tried and reverted (each with its A/B in the fix-loop log):
 - **xe, 0/5 (holdout3).** Stops `needs_text` at step 0: xe gives its amount
   input the label "Receiving amount", the same label as the converted
   output, so no field matches the `amount` fill. The xe task first lacked
-  the currency fills; with them added, a re-run was still 0/5
-  ([`h3-xe.json`](./2026-09-reins-do-v2/h3-xe.json)). Unsolved: overriding a
+  the currency fills; with them added, a re-run was still 0/5. Unsolved: overriding a
   site's explicit label with nearby text is not a rule we could make general.
 
 **`done` is Jev's opinion.** On this suite every wrong `done` was marked
@@ -500,7 +488,4 @@ github, cookies) 5 times per arm, on the builds of that day. On the build
 that shipped then (87ac8b8) `reins do` passed 14/20 and Claude step by step
 19/20; github was 1/5 for `reins do` (the advanced-search detour above), and
 on the tasks it passed `reins do` was 4.6x to 7.9x faster. It had no holdout
-set and no fixture tier, which is why v2 exists. Raw data:
-[run 1](./2026-09-reins-do-run1.json) (both arms),
-[run 2](./2026-09-reins-do-run2-do.json) and
-[run 3](./2026-09-reins-do-run3-do.json) (`reins do` only).
+set and no fixture tier, which is why v2 exists.

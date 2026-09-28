@@ -18,15 +18,14 @@ export const Route = createFileRoute("/docs/benchmarks")({
 
 const GH = "https://github.com/karnstack/reins/blob/main";
 const REPORT = `${GH}/docs/benchmarks/2026-09-reins-do.md`;
-const RAW = `${GH}/docs/benchmarks/2026-09-reins-do-v2`;
 const SCRIPT = `${GH}/packages/cli/scripts/bench-do.mjs`;
 const TASKS_FILE = `${GH}/packages/cli/scripts/bench/tasks.mjs`;
 const JEV_PRICING = "https://typesafe.ai/blog/introducing-system-one-models-and-jev";
 
 /**
- * One row per task, generated from the raw JSON in docs/benchmarks/2026-09-reins-do-v2
- * (r5.json for dev, h3.json for holdout3, manual-v2.json for Claude, with the
- * three Claude fx-risky runs scored by their page check). Medians are over
+ * One row per task, computed from the benchmark runs (dev on e9331fa, holdout3
+ * on f1af855, Claude on all 38 tasks, with the three Claude fx-risky runs
+ * scored by their page check); the raw run files aren't kept in the repo. Medians are over
  * passing runs, lower-middle for even counts. Jev cost is rounded up to the
  * next $0.00001 and Claude cost down to the $0.001; speed-up and cost ratio
  * come from unrounded medians and are truncated. `null` is "no passing run".
@@ -1279,10 +1278,8 @@ function BenchmarksPage() {
         and <Code>claude</Code> on PATH. It costs money: about $0.32 of Jev for the 190 runs here
         and $21.83 of Claude for 114. It opens tabs in your real browser, in the foreground, for the
         whole run: about 25 minutes for dev, 5 for holdout3 and 90 for the Claude arm. Holdout3 is
-        no longer unseen. The script is <A href={SCRIPT}>bench-do.mjs</A>; the raw data is{" "}
-        <A href={`${RAW}/r5.json`}>r5.json</A>, <A href={`${RAW}/h3.json`}>h3.json</A>,{" "}
-        <A href={`${RAW}/h3-xe.json`}>h3-xe.json</A> and{" "}
-        <A href={`${RAW}/manual-v2.json`}>manual-v2.json</A>, with logs beside them.
+        no longer unseen. The script is <A href={SCRIPT}>bench-do.mjs</A>. Raw run files aren't kept
+        in the repo; these commands regenerate them.
       </P>
 
       <H2 id="v1">Earlier version of this benchmark</H2>
@@ -1291,10 +1288,7 @@ function BenchmarksPage() {
         times per arm. On the build that shipped then, <Code>reins do</Code> passed 14/20 and Claude
         step by step 19/20; github was 1/5 for <Code>reins do</Code>, and on the tasks it passed{" "}
         <Code>reins do</Code> was 4.6x to 7.9x faster. It had no holdout and no fixture tier, which
-        is why this version exists. Raw data:{" "}
-        <A href={`${GH}/docs/benchmarks/2026-09-reins-do-run1.json`}>run 1</A>,{" "}
-        <A href={`${GH}/docs/benchmarks/2026-09-reins-do-run2-do.json`}>run 2</A>,{" "}
-        <A href={`${GH}/docs/benchmarks/2026-09-reins-do-run3-do.json`}>run 3</A>.
+        is why this version exists.
       </P>
     </>
   );

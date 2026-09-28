@@ -20,7 +20,7 @@ Key facts:
 - [Security](https://reins.tech/docs/security): the localhost-only security model
 - [Install without the store](https://reins.tech/docs/sideload): stage the bundled extension for Chrome's Load unpacked
 - [How it compares](https://reins.tech/docs/comparison): reins next to agent-browser, dev3000, and playwright-mcp
-- [Benchmarks](https://reins.tech/docs/benchmarks): reins do (Jev) against Claude driving reins step by step, four tasks, measured time and cost, failures explained
+- [Benchmarks](https://reins.tech/docs/benchmarks): reins do (Jev) against Claude driving reins step by step on 38 tasks (30 dev, 8 unseen), pass rates, time and cost, every limitation stated
 - [FAQ](https://reins.tech/docs/faq): common questions
 
 ## Optional
