@@ -469,7 +469,9 @@ async function runOne(task, arm, i, tab, opened) {
   // not count. A verified row must have finished on its own, inside the clock.
   const finished = !stopping && !out.timedOut;
   const checkOk = finished ? verify(finalTab, task.check) : false;
-  const statusOk = task.expect?.status ? body?.status === task.expect.status : true;
+  // An expected stop (fx-risky) is a `reins do` status; the manual arm has no
+  // status, so there the page check alone (nothing destroyed) decides.
+  const statusOk = arm === "do" && task.expect?.status ? body?.status === task.expect.status : true;
   const ok = finished && checkOk && statusOk;
   screenshot(finalTab, join(dir, "screenshot.png"));
 
