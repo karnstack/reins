@@ -84,7 +84,7 @@ describe("effectiveTier", () => {
 });
 
 describe("METHOD_TIERS", () => {
-  it("classifies exactly the 27 bridge methods", () => {
+  it("classifies exactly the 29 bridge methods", () => {
     const read = [
       "list_tabs",
       "list_groups",
@@ -115,6 +115,8 @@ describe("METHOD_TIERS", () => {
       "handle_dialog",
       "eval_js",
       "cdp",
+      "jev_observe",
+      "jev_act",
     ];
     for (const m of read) expect(METHOD_TIERS[m as keyof typeof METHOD_TIERS]).toBe("read");
     for (const m of full) expect(METHOD_TIERS[m as keyof typeof METHOD_TIERS]).toBe("full");

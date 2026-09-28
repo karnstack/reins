@@ -20,6 +20,8 @@ vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
 import { __resetDebugSessions, cdpClick, cdpType } from "./cdp.js";
+import { initDialogTracking, jevAct, jevObserve, openDialog } from "./jev.js";
+import { jevSnapshot } from "./jev-snapshot.js";
 import { handleDialog, hover, pressKey } from "./page-actions.js";
 
 const CHROME = [
@@ -71,6 +73,32 @@ const LOGIN_FIXTURE = `<!doctype html><html><body>
 <com-1password-menu></com-1password-menu><input id="user" autofocus>
 </body></html>`;
 
+const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 14px sans-serif }
+  #modal { position: fixed; bottom: 10px; right: 10px }
+  #hide { display: none }
+</style></head><body>
+<h1>Flights</h1>
+<form id="f">
+  <label for="from">Where from?</label><input id="from" value="San Francisco">
+  <input id="to" aria-label="Where to?">
+  <input id="pw" type="password" aria-label="Password" value="hunter2">
+  <input id="h" type="hidden" value="secret">
+  <select id="cabin" aria-label="Cabin"><option value="eco" selected>Economy</option><option value="biz">Business</option></select>
+  <button id="search" type="submit">Search</button>
+</form>
+<button id="off" disabled>Disabled</button>
+<button id="hide">Hidden</button>
+<div style="position:relative"><button id="covered">Covered</button><div style="position:absolute;inset:0"></div></div>
+<button id="swap">Swap me</button>
+<button id="ask" onclick="confirm('Leave?')">Ask</button>
+<div id="modal" role="dialog"><button id="cookies">Accept cookies</button></div>
+<script>
+  window.__log = [];
+  document.getElementById("cabin").addEventListener("change", (e) => __log.push("change:" + e.target.value));
+  document.getElementById("f").addEventListener("submit", (e) => e.preventDefault());
+</script></body></html>`;
+
 let chromeProc: ChildProcess | undefined;
 const injected: string[] = [];
 let server: http.Server | undefined;
@@ -79,6 +107,8 @@ let ws: WebSocket | undefined;
 let url = "";
 let nextId = 0;
 const pending = new Map<number, (msg: { result?: unknown; error?: { message: string } }) => void>();
+type EventListener = (source: { tabId?: number }, method: string, params?: unknown) => void;
+const eventListeners: EventListener[] = [];
 
 function cdp<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -100,8 +130,8 @@ async function evaluate<T>(expression: string): Promise<T> {
 }
 
 /** Fresh fixture per test; resolves once the page has loaded. */
-async function load(): Promise<void> {
-  await cdp("Page.navigate", { url });
+async function load(path = "/"): Promise<void> {
+  await cdp("Page.navigate", { url: new URL(path, url).href });
   for (let i = 0; i < 100; i++) {
     if ((await evaluate<string>("document.readyState").catch(() => "")) === "complete") return;
     await new Promise((r) => setTimeout(r, 20));
@@ -116,7 +146,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     server = http.createServer((q, s) => {
       s.setHeader("content-type", "text/html");
       // A login-style page whose password-manager host exists from first parse.
-      s.end(q.url === "/login" ? LOGIN_FIXTURE : FIXTURE);
+      s.end(q.url === "/login" ? LOGIN_FIXTURE : q.url === "/jev" ? JEV_FIXTURE : FIXTURE);
     });
     await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
@@ -155,6 +185,11 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     ws = sock;
     sock.on("message", (data) => {
       const msg = JSON.parse(String(data));
+      if (msg.id === undefined && msg.method) {
+        // A CDP event: deliver it the way chrome.debugger.onEvent would.
+        for (const listener of eventListeners) listener({ tabId: 1 }, msg.method, msg.params);
+        return;
+      }
       pending.get(msg.id)?.(msg);
       pending.delete(msg.id);
     });
@@ -166,18 +201,26 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
         attach: async () => {},
         detach: async () => {},
         onDetach: { addListener: () => {} },
+        onEvent: { addListener: (fn: EventListener) => eventListeners.push(fn) },
         sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
           const result = await cdp(method, params);
           // One real page serves every test: remember injected scripts so
           // afterEach can drop them, as a fresh debugger session would.
           if (method === "Page.addScriptToEvaluateOnNewDocument") {
             injected.push((result as { identifier: string }).identifier);
+          } else if (method === "Page.removeScriptToEvaluateOnNewDocument") {
+            // A second drivePage in one case re-arms the guard and drops its
+            // own previous script; don't try to drop it again in afterEach.
+            const i = injected.indexOf(String(params?.identifier));
+            if (i >= 0) injected.splice(i, 1);
           }
           return result;
         },
       },
       tabs: { update: async () => ({}) },
     });
+    // jev.ts registered at import against no `chrome`; register on the stub.
+    initDialogTracking();
   }, 20_000);
 
   afterEach(async () => {
@@ -390,4 +433,90 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     await pressKey({ tabId: 1, key: "q" });
     expect(await evaluate("document.getElementById('field').value")).toBe("q");
   });
+
+  type Snap = NonNullable<ReturnType<typeof jevSnapshot>>;
+  const snap = () => evaluate<Snap>(`(${jevSnapshot})()`);
+  const nodeOf = (s: Snap, label: string) => s.actions.find((a) => a.label === label)?.node;
+
+  it("jev: lists visible controls, including a fixed-position dialog, and skips the rest", async () => {
+    await load("/jev");
+    const s = await snap();
+    const labels = s.actions.map((a) => `${a.kind}:${a.label}`);
+    expect(labels).toContain("fill:Where from?");
+    expect(labels).toContain("fill:Where to?");
+    expect(labels).toContain("click:Accept cookies");
+    expect(labels).toContain("select:Cabin → Business");
+    expect(labels.join()).not.toMatch(/Password|Disabled|Hidden|secret/);
+    expect(s.actions.find((a) => a.label === "Where from?")?.value).toBe("San Francisco");
+    expect(s.text).toContain("Flights");
+  });
+
+  it("jev: a node keeps its id across snapshots", async () => {
+    await load("/jev");
+    const a = nodeOf(await snap(), "Search");
+    const b = nodeOf(await snap(), "Search");
+    expect(a).toBeDefined();
+    expect(a).toBe(b);
+  });
+
+  it("jev: an observation never carries a password or hidden-field value", async () => {
+    await load("/jev");
+    const wire = JSON.stringify(await jevObserve({ tabId: 1 }));
+    expect(wire).not.toMatch(/hunter2/);
+    expect(wire).not.toMatch(/secret/);
+  });
+
+  it("jev: types over an existing value", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Where from?")?.node as number;
+    expect(await jevAct({ tabId: 1, op: "type", node, text: "Zurich" })).toEqual({ ok: true });
+    expect(await evaluate<string>('document.getElementById("from").value')).toBe("Zurich");
+  });
+
+  it("jev: picks a native select option and fires change", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const opt = s.actions.find((a) => a.label === "Cabin → Business");
+    expect(
+      await jevAct({ tabId: 1, op: "select", node: opt?.node as number, value: "biz" }),
+    ).toEqual({ ok: true });
+    expect(await log()).toContain("change:biz");
+  });
+
+  it("jev: a node replaced after the read comes back stale, not clicked", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Swap me")?.node as number;
+    await evaluate(
+      'document.getElementById("swap").replaceWith(Object.assign(document.createElement("button"), { textContent: "Swap me" }))',
+    );
+    const r = await jevAct({ tabId: 1, op: "click", node });
+    expect(r).toMatchObject({ stale: true, reason: "the element is gone" });
+  });
+
+  it("jev: a covered target comes back stale within about half a second", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    // The snapshot lists it (it is visible); only the act-time hit test sees the overlay.
+    const node = s.actions.find((a) => a.label === "Covered")?.node as number;
+    const t0 = Date.now();
+    expect(await jevAct({ tabId: 1, op: "click", node })).toMatchObject({ stale: true });
+    expect(Date.now() - t0).toBeLessThan(1500);
+  });
+
+  it("jev: a click that opens a dialog returns ok, and the next read reports the dialog", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Ask")?.node as number;
+    const t0 = Date.now();
+    expect(await jevAct({ tabId: 1, op: "click", node })).toEqual({ ok: true });
+    expect(Date.now() - t0).toBeLessThan(2000);
+    const after = await jevObserve({ tabId: 1 });
+    expect(after.dialog).toEqual({ type: "confirm", message: "Leave?" });
+    // Dismiss it so later cases aren't blocked; Page.javascriptDialogClosed clears the record.
+    await handleDialog({ tabId: 1, accept: false });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(openDialog(1)).toBeUndefined();
+  }, 10_000);
 });
