@@ -7,61 +7,60 @@ const FAQS = [
     id: "remote",
     question: "Is anything ever sent to a remote server?",
     answer:
-      "Not by default. The extension talks to exactly one thing: the reins daemon on 127.0.0.1 on your machine. There is no analytics, no telemetry, and no remote code. The one exception is opt-in: once you save a TypeSafe API key, reins do sends page state (the goal, the tab's URL and title, visible text, interactive element labels and values, recent actions) from the daemon to TypeSafe. The security page lists exactly what is sent. Your browser still reaches the internet the way it always did, because reins drives the browser you already use rather than replacing it.",
+      "Not by default. The extension talks only to the reins daemon on 127.0.0.1. No analytics, no telemetry, no remote code. The one opt-in exception is reins do: once you save a TypeSafe key, it sends page state to TypeSafe while a run is working. The security page lists exactly what.",
   },
   {
     id: "browsers",
     question: "Which browsers work?",
     answer:
-      "Any Chromium browser that supports Manifest V3 extensions. Chrome, Brave, Edge, Arc and Dia are all known to work. Install the extension in each browser you want agents to reach; one daemon serves them all.",
+      "Any Chromium browser with Manifest V3 extensions: Chrome, Brave, Edge, Arc, Dia. Install the extension in each one; one daemon serves them all.",
   },
   {
     id: "agents",
     question: "Which agents work?",
     answer:
-      "Anything with a shell: Claude Code, Cursor, Codex, GitHub Copilot, Gemini CLI, and plain scripts. Agents with skill support learn the commands via npx skills add karnstack/reins; everything else can read reins help.",
+      "Anything with a shell: Claude Code, Cursor, Codex, Copilot, Gemini CLI, plain scripts. Teach it with npx skills add karnstack/reins, or point it at reins help.",
   },
   {
     id: "banner",
     question: 'Why does Chrome show an "is being debugged" banner?',
     answer:
-      "reins executes commands through chrome.debugger, the same Chrome DevTools Protocol that powers DevTools. Chrome shows its native banner whenever a debugger is attached. That is deliberate transparency: you always know when an agent is acting on a tab.",
+      "reins drives tabs through chrome.debugger, the same protocol DevTools uses, and Chrome shows that banner whenever a debugger is attached. It is how you know an agent is acting.",
   },
   {
     id: "daemon",
     question: "Do I need to run or configure the daemon?",
     answer:
-      "No. Any reins command starts the daemon on demand, and the extension finds it on its own through localhost port discovery. reins kill stops it; reins status shows what is connected.",
+      "No. Any reins command starts it, and the extension finds it on its own. reins status shows what is connected; reins kill stops it.",
   },
   {
     id: "update",
     question: "How do I update reins?",
     answer:
-      "Run npm i -g @karnstack/reins@latest. The next tool command (reins tabs, say) notices the running daemon is older than the CLI and restarts it on the new version; reins restart does it right away. reins status and reins doctor only report the mismatch. The Chrome Web Store extension updates itself.",
+      "Run npm i -g @karnstack/reins@latest. The next command restarts the daemon on the new version, or run reins restart. The Web Store extension updates itself.",
   },
   {
     id: "mcp",
     question: "How is this different from an MCP browser server?",
     answer:
-      "There is nothing to register per agent. reins is a plain CLI, so any tool that can run shell commands can drive the browser. And it drives your real, logged-in profile rather than a separate automation browser.",
+      "Nothing to register per agent. reins is a plain CLI, so anything that runs shell commands can use it, and it drives your real logged-in browser rather than a separate one.",
   },
   {
     id: "stop",
     question: "How do I stop an agent while it is running?",
     answer:
-      "Click the reins toolbar icon and press Disconnect. The connection is cut at once. reins kill stops the daemon entirely.",
+      "Click the reins toolbar icon and press Disconnect. reins kill stops the daemon entirely.",
   },
   {
     id: "store",
     question: "Can I install the extension without the Chrome Web Store?",
     answer:
-      "Yes. reins extension stages the bundled extension for Chrome's Load unpacked, with no reins allow step. The npm package carries a full copy, so it works with no store access at all. The docs page Install without the store has the walkthrough.",
+      "Yes. reins extension stages the copy bundled in the npm package for Chrome's Load unpacked. See Install without the store.",
   },
   {
     id: "dev-builds",
     question: "Does reins work with unpacked dev builds of the extension?",
-    answer:
-      "Yes. Load the unpacked extension, then allow its ID once with reins allow <extension-id>. Store-installed extensions are allowlisted automatically.",
+    answer: "Yes. Load the unpacked build, then run reins allow <extension-id> once.",
   },
 ];
 
@@ -97,8 +96,7 @@ function FaqPage() {
     <>
       <H1>FAQ</H1>
       <P>
-        Quick answers about how reins works. Anything missing? Ask on{" "}
-        <A href="https://github.com/karnstack/reins/issues">GitHub</A>.
+        Missing something? Ask on <A href="https://github.com/karnstack/reins/issues">GitHub</A>.
       </P>
       {FAQS.map((faq) => (
         <div key={faq.id}>

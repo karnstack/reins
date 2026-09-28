@@ -131,36 +131,21 @@ function WhatItDoes() {
     <>
       <H2 id="what-it-does">What it does</H2>
       <Ul>
+        <li>Tabs in every connected browser: list, open, focus, close.</li>
+        <li>Click, type, fill, select, hover, scroll, press keys, upload files, answer dialogs.</li>
         <li>
-          Every tab, every browser. List, open, focus and close tabs across Chrome, Brave, Edge, Arc
-          and Dia. One daemon serves every browser that connects to it.
+          <Code>reins snapshot</Code> lists what you can click, with short refs to act on. CSS
+          selectors work too.
+        </li>
+        <li>Read the page as text or a screenshot.</li>
+        <li>Console messages and network requests, without opening DevTools.</li>
+        <li>
+          <Code>reins eval</Code> for JavaScript, <Code>reins cdp</Code> for any raw DevTools
+          Protocol call.
         </li>
         <li>
-          Act on the page. Click, type, fill, select, hover, scroll, press keys, upload files,
-          answer dialogs, resize the window.
-        </li>
-        <li>
-          Refs, not selectors. <Code>reins snapshot</Code> lists the interactive elements with
-          stable refs, and commands act by ref. A CSS <Code>--selector</Code> is there when you need
-          it.
-        </li>
-        <li>Read the page. Visible text, and screenshots your agent can open and reason about.</li>
-        <li>
-          Console and network, without opening DevTools. Recent messages and requests, filtered by
-          level, age or URL.
-        </li>
-        <li>
-          An escape hatch. <Code>reins eval</Code> runs JavaScript in the page.{" "}
-          <Code>reins cdp</Code> sends a raw Chrome DevTools Protocol command when the curated set
-          is not enough.
-        </li>
-        <li>
-          Site permissions. Every host resolves to deny, read or full, and the extension enforces it
-          before a command touches a tab.
-        </li>
-        <li>
-          An audit trail. Every command the daemon runs, and every one the policy blocks, appends
-          one line to <Code>~/.reins/logs</Code>, with the values redacted.
+          <Code>reins do</Code> hands a whole task to Jev, TypeSafe's action model, instead of going
+          click by click.
         </li>
       </Ul>
     </>
@@ -183,12 +168,7 @@ function Loop() {
   return (
     <>
       <H2 id="loop">The loop</H2>
-      <P>
-        Every page interaction is the same three beats: look, act, check. The commands that act on a
-        page or a tab share three flags: <Code>--tab &lt;id&gt;</Code> (the active tab by default),{" "}
-        <Code>--browser &lt;id&gt;</Code> (only when more than one browser is connected) and{" "}
-        <Code>--json</Code> for raw output.
-      </P>
+      <P>Look, act, check.</P>
       <Shell lines={LOOP_LINES} />
       <Arrow href="/docs/commands">Full command reference</Arrow>
     </>
@@ -213,17 +193,10 @@ function HowItWorks() {
     <>
       <H2 id="how-it-works">How it works</H2>
       <P>
-        Three pieces with one narrow contract between them, and all three run on your machine. The
-        daemon ships inside the CLI and starts on demand, so there is nothing to keep running and
-        nothing to register per agent.
+        Three pieces, all on your machine. The daemon ships inside the CLI and starts on its own.
+        Chrome shows its "is being debugged" banner while reins is attached to a tab.
       </P>
       <Pre label={PATH_LABEL}>{PATH}</Pre>
-      <P>
-        The extension finds the daemon by probing a small set of localhost ports, and authenticates
-        by its <Code>chrome-extension://&lt;id&gt;</Code> origin, a header the browser stamps itself
-        and a page cannot forge. Chrome shows its native debugging banner the whole time it is
-        attached.
-      </P>
       <Arrow href="/docs/architecture">How the three pieces fit together</Arrow>
     </>
   );
@@ -236,9 +209,8 @@ function Permissions() {
     <>
       <H2 id="permissions">Site permissions</H2>
       <P>
-        Every site your agent touches resolves to one of three tiers. The check lives in the
-        extension, the one place no process on your machine can reach around, so a misbehaving agent
-        cannot skip it.
+        Every site gets one of three tiers, checked inside the extension where an agent cannot skip
+        it.
       </P>
       <Table
         rows={[
@@ -251,9 +223,8 @@ function Permissions() {
         ]}
       />
       <P>
-        Granting more access takes a click in the extension popup. That is a user gesture, and an
-        agent in your shell cannot perform one. From the CLI, <Code>reins policy</Code> can inspect
-        the policy and tighten it. It can never loosen it.
+        Only a click in the extension popup grants more access. From the shell,{" "}
+        <Code>reins policy</Code> can tighten, never loosen.
       </P>
       <PopupMock className="mt-10 font-sans" />
       <Arrow href="/docs/permissions">How site permissions work</Arrow>
@@ -270,15 +241,14 @@ function Facts() {
       <Table
         rows={[
           ["License", "MIT"],
-          ["Install", <Code key="i">{INSTALL_COMMAND}</Code>],
-          ["Skill", <Code key="s">{SKILL_COMMAND}</Code>],
           ["Browsers", "Chrome, Brave, Edge, Arc, Dia. Any Chromium that takes MV3 extensions."],
           ["Agents", "Claude Code, Cursor, Codex, Copilot, Gemini CLI. Anything with a shell."],
-          ["Binds", <Code key="b">127.0.0.1</Code>],
-          ["Hosted service", "None"],
-          ["Account", "None"],
-          ["Telemetry", "None. No analytics, no tracking, no remote code."],
-          ["Version", "0.x. Commands and output can still change."],
+          [
+            "Network",
+            <>
+              Binds <Code>127.0.0.1</Code>. No account, no hosted service, no telemetry.
+            </>,
+          ],
         ]}
       />
     </>
@@ -295,17 +265,7 @@ function Limits() {
         rows={[
           ["Browsers", "Chromium only. No Firefox, no WebKit."],
           ["Headless", "Not supported. reins drives a browser you already have open."],
-          [
-            "CI",
-            "Not the target. Use Playwright or agent-browser for a machine with nobody at it.",
-          ],
-          [
-            "Two browsers",
-            <>
-              Supported, but commands then need <Code>--browser &lt;id&gt;</Code>. reins never
-              guesses which one you meant.
-            </>,
-          ],
+          ["CI", "Not the target. Use Playwright or agent-browser there."],
           ["Releases", "0.x. Commands, flags and output can still change."],
         ]}
       />
@@ -334,23 +294,20 @@ function Install() {
   return (
     <>
       <H2 id="install">Install</H2>
-      <P>
-        Three pieces, and the second is the one people skip. Without the skill, your agent has the
-        CLI installed and no idea the commands exist.
-      </P>
+      <P>Three steps. Do not skip the second: without it your agent never learns the commands.</P>
       <Ol>
         <li>
           The CLI. The daemon rides inside it and starts on demand.
           <CopyCommand command={INSTALL_COMMAND} className={cn(TEXT, "mt-3 max-w-[60ch]")} />
         </li>
         <li>
-          The skill, so your agent knows the command set. Agents without skill support can read{" "}
-          <Code>reins help</Code> instead, but do not skip this if yours supports it.
+          The skill, so your agent knows the commands. No skill support? It can read{" "}
+          <Code>reins help</Code>.
           <CopyCommand command={SKILL_COMMAND} className={cn(TEXT, "mt-3 max-w-[60ch]")} />
         </li>
         <li>
-          The extension, in every browser you want agents to reach. It finds the daemon on its own,
-          and the toolbar icon turns green once it connects.
+          The extension, in each browser you want agents to reach. Its icon turns green once
+          connected.
           <p className={cn(TEXT, "mt-3")}>
             <A href={CHROME_WEB_STORE_URL}>Add reins from the Chrome Web Store</A>
           </p>
