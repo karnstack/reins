@@ -7,7 +7,7 @@ import {
   Policy,
   type Tier,
 } from "@reins/protocol";
-import { jevReadyText, jevStateFrom, jevViewFlags } from "./lib/jev-view.js";
+import { jevMaskedKey, jevStateFrom, jevViewFlags } from "./lib/jev-view.js";
 import { POLICY_KEY, type PolicyChange } from "./lib/policy.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
@@ -422,6 +422,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 const jevPitch = document.getElementById("jev-pitch") as HTMLElement;
 const jevReady = document.getElementById("jev-ready") as HTMLElement;
+const jevLast4 = document.getElementById("jev-last4") as HTMLElement;
 const jevForm = document.getElementById("jev-form") as HTMLFormElement;
 const jevKey = document.getElementById("jev-key") as HTMLInputElement;
 const jevSave = document.getElementById("jev-save") as HTMLButtonElement;
@@ -496,7 +497,7 @@ async function renderJev(connected: boolean, stickyError?: string): Promise<void
   const flags = jevViewFlags(state, jevReplacing, jevSaving);
   jevPitch.hidden = flags.pitchHidden;
   jevReady.hidden = flags.readyHidden;
-  if (state.kind === "set") jevReady.textContent = jevReadyText(state.last4);
+  if (state.kind === "set") jevLast4.textContent = jevMaskedKey(state.last4);
   jevForm.hidden = flags.formHidden;
   jevActions.hidden = flags.actionsHidden;
   jevCancel.hidden = flags.cancelHidden;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jevReadyText, jevStateFrom, jevViewFlags } from "./jev-view.js";
+import { jevMaskedKey, jevStateFrom, jevViewFlags } from "./jev-view.js";
 
 describe("popup Jev state", () => {
   it("is offline when the daemon isn't connected", () => {
@@ -13,7 +13,7 @@ describe("popup Jev state", () => {
       kind: "set",
       last4: "a1b2",
     });
-    expect(jevReadyText("a1b2")).toBe("Jev ready · ••••a1b2");
+    expect(jevMaskedKey("a1b2")).toBe("••••a1b2");
   });
   it("reports an unreadable status", () => {
     expect(jevStateFrom(true, { nope: 1 }).kind).toBe("error");
