@@ -19,15 +19,12 @@ function PermissionsPage() {
     <>
       <H1>Site permissions</H1>
       <P>
-        Every site resolves to one of three tiers, in order of power: <Code>deny</Code> &lt;{" "}
-        <Code>read</Code> &lt; <Code>full</Code>. The extension checks the tier before it runs any
-        command against a tab. The check lives in the extension itself, the one place a process on
-        your machine cannot reach around, so even a misbehaving agent (or a compromised daemon)
-        cannot skip it.
+        Every site gets one of three tiers: <Code>deny</Code>, <Code>read</Code> or{" "}
+        <Code>full</Code>. The extension checks it before any command touches a tab, so neither the
+        agent nor the daemon can skip it.
       </P>
       <P>
-        The shipped default is <Code>full</Code> everywhere, so a fresh install behaves exactly as
-        before. The policy model is opt-in hardening: tighten the sites you care about, or flip the
+        The default is <Code>full</Code> everywhere. Tighten the sites you care about, or flip the
         default and grant sites back one by one.
       </P>
 
@@ -46,9 +43,8 @@ function PermissionsPage() {
         ]}
       />
       <P>
-        Navigation is checked on both ends: <Code>reins nav</Code> and <Code>reins open</Code> need{" "}
-        <Code>full</Code> on the destination host as well as the current one, so a read-only page
-        cannot be steered somewhere permissive.
+        <Code>reins nav</Code> and <Code>reins open</Code> need <Code>full</Code> on both the
+        current and the destination site.
       </P>
 
       <H2 id="rules">Rules and matching</H2>
@@ -77,10 +73,8 @@ function PermissionsPage() {
 
       <H2 id="granting">Granting and tightening</H2>
       <P>
-        Grants happen only in the extension popup: click the reins icon, and the Site permissions
-        section offers a tier control for the current tab, the rules list, and the default. That is
-        deliberate. The popup is a user gesture, and an agent in your shell cannot perform one. From
-        the CLI you can inspect the policy and tighten it, never loosen it:
+        Grant access in the extension popup, under Site permissions. An agent in your shell cannot
+        click it, which is the point. The CLI can only look and tighten:
       </P>
       <Shell
         lines={[
@@ -93,8 +87,7 @@ function PermissionsPage() {
 
       <H2 id="blocked">What a blocked agent sees</H2>
       <P>
-        A blocked command fails with a <Code>policy_denied</Code> error. It names the host, its
-        current tier, and what to do about it:
+        A blocked command fails with <Code>policy_denied</Code> and says what to do:
       </P>
       <Shell
         lines={[
@@ -102,10 +95,7 @@ function PermissionsPage() {
           "reins extension popup",
         ]}
       />
-      <P>
-        The CLI prints the message and exits nonzero, so agents relay the instruction instead of
-        retrying.
-      </P>
+      <P>It exits nonzero, so agents pass the message on instead of retrying.</P>
       <Arrow href="/docs/security">How this fits the broader trust model</Arrow>
     </>
   );

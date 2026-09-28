@@ -43,47 +43,38 @@ function ArchitecturePage() {
 
       <H2 id="cli">The CLI</H2>
       <P>
-        The CLI is the entire interface: <Code>reins tabs</Code>, <Code>reins click</Code>,{" "}
-        <Code>reins screenshot</Code> and the rest of the command set. Agents use it because they
-        already have a shell: no MCP server to register, no per-agent setup. A skill (
-        <Code>npx skills add karnstack/reins</Code>) teaches agents the loop.
+        The whole interface. Agents already have a shell, so there is no MCP server to register. A
+        skill (<Code>npx skills add karnstack/reins</Code>) teaches them the commands.
       </P>
 
       <H2 id="daemon">The daemon</H2>
       <P>
-        You never run the daemon yourself. Any CLI command spawns it on demand. It exposes an HTTP{" "}
-        <Code>/rpc</Code> endpoint for the CLI and holds the WebSocket that extensions dial into.
-        One daemon serves any number of browsers. <Code>reins kill</Code> stops it, and logs live in{" "}
-        <Code>~/.reins/logs/</Code>.
+        Started by any CLI command. It takes HTTP <Code>/rpc</Code> calls from the CLI and holds the
+        WebSocket each browser's extension connects to. Logs are in <Code>~/.reins/logs/</Code>.
       </P>
 
       <H2 id="extension">The extension</H2>
       <P>
-        A Manifest V3 extension. Its service worker executes commands against tabs through{" "}
-        <Code>chrome.debugger</Code> (the Chrome DevTools Protocol), and an offscreen document holds
-        the persistent WebSocket to the daemon, because MV3 service workers are suspended when idle
-        and cannot keep long-lived sockets.
+        Its service worker runs commands through <Code>chrome.debugger</Code>. An offscreen document
+        holds the WebSocket, because Chrome suspends idle MV3 service workers.
       </P>
       <P>
-        The extension discovers the daemon by probing a small set of candidate localhost ports, and
-        authenticates itself by its <Code>chrome-extension://&lt;id&gt;</Code> origin, a header the
-        browser stamps itself, which web pages and other extensions cannot forge.
+        It finds the daemon by trying a few localhost ports, and proves who it is by its{" "}
+        <Code>chrome-extension://&lt;id&gt;</Code> origin, which pages cannot fake.
       </P>
 
       <H2 id="multiple-browsers">Multiple browsers</H2>
       <P>
-        Install the extension in several Chromium browsers (Chrome, Brave, Edge, Arc, Dia) and each
-        connects to the same daemon. <Code>reins tabs</Code> lists every tab with a browser id. Pass{" "}
-        <Code>--browser &lt;id&gt;</Code> only when more than one browser is connected. reins never
-        guesses which browser you meant: it errors and names the ones it can see.
+        Each browser with the extension connects to the same daemon. With more than one connected,
+        pass <Code>--browser &lt;id&gt;</Code>. reins never guesses; it errors and lists the ones it
+        sees.
       </P>
 
       <H2 id="refs">Element refs</H2>
       <P>
-        <Code>reins snapshot</Code> assigns stable refs (<Code>e5: button "Submit"</Code>) to
-        interactive elements. Commands act by ref, which survives page repaints better than a
-        hand-written selector, and a CSS <Code>--selector</Code> fallback exists for everything
-        else.
+        <Code>reins snapshot</Code> gives each control a ref (<Code>e5: button "Submit"</Code>).
+        Refs survive repaints better than hand-written selectors. <Code>--selector</Code> takes CSS
+        when you need it.
       </P>
       <Arrow href="/docs/commands">Full command reference</Arrow>
     </>

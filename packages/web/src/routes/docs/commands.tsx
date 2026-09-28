@@ -23,11 +23,9 @@ const GROUPS: Array<{ id: string; title: string; intro?: ReactNode; rows: [strin
     title: "Delegate",
     intro: (
       <>
-        reins do hands a small task to TypeSafe's Jev model, which picks each click and field in
-        about 0.2 s. The agent supplies every typed value and verifies the result. Page labels are
-        single-quoted so a $ or a backtick in them never expands. Needs a TypeSafe key (reins key
-        set typesafe). Measured against an agent driving the step commands itself:{" "}
-        <A href="/docs/benchmarks">Benchmarks</A>.
+        reins do hands a small task to TypeSafe's Jev model, which picks each click. Your agent
+        supplies every typed value and checks the result. Needs a TypeSafe key (reins key set
+        typesafe). How it does: <A href="/docs/benchmarks">Benchmarks</A>.
       </>
     ),
     rows: [
@@ -152,7 +150,7 @@ const GROUPS: Array<{ id: string; title: string; intro?: ReactNode; rows: [strin
     id: "policy",
     title: "Site permissions",
     intro:
-      "The shell can inspect and tighten the per-site policy, never loosen it. Grants happen in the extension popup. See the Site permissions page for the full model.",
+      "The shell can tighten the per-site policy, never loosen it. Grants happen in the extension popup.",
     rows: [
       [
         "reins policy [--browser <id>]",
@@ -220,12 +218,9 @@ function CommandsPage() {
     <>
       <H1>Commands</H1>
       <P>
-        The CLI is the whole interface: agents shell out to it, and so can you. The commands that
-        act on a page or a tab share three flags: <Code>--tab &lt;id&gt;</Code> (the active tab by
-        default), <Code>--browser &lt;id&gt;</Code> (only needed when several browsers are
-        connected, and the ids come from <Code>reins tabs</Code>) and <Code>--json</Code> for raw
-        results. The management commands (<Code>status</Code>, <Code>doctor</Code>,{" "}
-        <Code>kill</Code>, <Code>help</Code>) take none of them.
+        Page and tab commands share three flags: <Code>--tab &lt;id&gt;</Code> (default: the active
+        tab), <Code>--browser &lt;id&gt;</Code> (only when several browsers are connected) and{" "}
+        <Code>--json</Code>. Ids come from <Code>reins tabs</Code>.
       </P>
       {GROUPS.map((group) => (
         <Fragment key={group.id}>
