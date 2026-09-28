@@ -580,7 +580,9 @@ export const TASKS = [
     id: "xe",
     tier: "live",
     set: "holdout3",
-    url: "https://www.xe.com/currencyconverter/",
+    // Pinned start state: xe remembers the last pair in site storage, so an
+    // unpinned start could already show CHF→JPY after an earlier run.
+    url: "https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=EUR",
     goal: "Convert 250 Swiss francs (CHF) to Japanese yen (JPY) with the Xe currency converter. Stop when the converted amount is shown.",
     fills: { amount: "250" },
     // Amount is a decimal text input; From/To are searchable comboboxes (a
