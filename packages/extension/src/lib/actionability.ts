@@ -183,6 +183,24 @@ export async function actionPoint(
         }
         let n: Node | null = hit;
         while (n && n !== el) n = n.parentNode ?? (n instanceof ShadowRoot ? n.host : null);
+        // Slotted content: when the top-most box at the point is light-DOM
+        // content a host slots into `el` (a web component's button whose
+        // caption arrives through <slot>), hit-testing retargets it to the
+        // host and the walk stops there. The press still reaches `el`: a
+        // slot's composed path runs through it. So a host of `el`'s tree
+        // standing where `el` should be counts as `el`.
+        if (n !== el && hit !== null) {
+          for (
+            let root = el.getRootNode();
+            root instanceof ShadowRoot;
+            root = root.host.getRootNode()
+          ) {
+            if (root.host === hit) {
+              n = el;
+              break;
+            }
+          }
+        }
         // A press into a frame lands in the frame's own document, out of this
         // window's sight — so frames get no probe.
         const frame = /^(iframe|frame|object|embed)$/.test(el.localName);

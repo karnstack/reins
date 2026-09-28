@@ -225,6 +225,61 @@ describe("runLoop", () => {
     });
   });
 
+  describe("the pseudo-click on the field just typed into is not offered", () => {
+    const search = (value: string): JevAction[] => [
+      { id: "f1", kind: "fill", node: 1, role: "searchbox", label: "Search", value, submit: true },
+      { id: "o1", kind: "click", node: 1, role: "searchbox", label: "Open Search", value },
+    ];
+    const fills = { query: "cats" };
+    const withFills = () => input({ run: newRun("find cats", "x.com", fills, [], 0) });
+    const clickTargets = (body: JevBody): string[] =>
+      Object.values(
+        (body.questions.click_target as { criteria?: Record<string, { element: string }> })
+          ?.criteria ?? {},
+      ).map((c) => c.element);
+
+    it("drops 'Open <field>' while the field holds the typed value", async () => {
+      const d = deps(
+        [page([...search(""), button(2, "Go")]), page([...search("cats"), button(2, "Go")])],
+        [{ op: "TYPE_TEXT", target: "1", fill: { "1": "query" } }, { op: "DONE" }],
+      );
+      await runLoop(d, withFills());
+      expect(clickTargets(d.ask.mock.calls[0]?.[0] as JevBody)).toEqual([
+        "[1] Open Search",
+        "[2] Go",
+      ]);
+      expect(clickTargets(d.ask.mock.calls[1]?.[0] as JevBody)).toEqual(["[2] Go"]);
+      // Enter in the field is still offered.
+      expect(Object.keys((d.ask.mock.calls[1]?.[0] as JevBody).questions)).toContain(
+        "submit_search_target",
+      );
+    });
+
+    it("keeps it once the field holds something else, or after another action", async () => {
+      const d = deps(
+        [
+          page([...search(""), button(2, "Go")]),
+          page([...search("dogs"), button(2, "Go")]),
+          page([...search("dogs"), button(2, "Go")], { text: "2" }),
+        ],
+        [
+          { op: "TYPE_TEXT", target: "1", fill: { "1": "query" } },
+          { op: "CLICK", target: "2" },
+          { op: "DONE" },
+        ],
+      );
+      await runLoop(d, withFills());
+      expect(clickTargets(d.ask.mock.calls[1]?.[0] as JevBody)).toEqual([
+        "[1] Open Search",
+        "[2] Go",
+      ]);
+      expect(clickTargets(d.ask.mock.calls[2]?.[0] as JevBody)).toEqual([
+        "[1] Open Search",
+        "[2] Go",
+      ]);
+    });
+  });
+
   it("stops before a risky click and names it", async () => {
     const d = deps([page([button(1, "Pay now")])], [{ op: "CLICK", target: "1" }]);
     const { result } = await runLoop(d, input());

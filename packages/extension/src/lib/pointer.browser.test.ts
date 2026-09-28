@@ -830,6 +830,14 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     expect(await log()).toContain("click:far"); // scrolled into view, then pressed
   });
 
+  it("jev: clicks a shadow button whose caption is slotted (hit-testing stops at the host)", async () => {
+    await load("/jev");
+    const s = await jevObserve({ tabId: 1 });
+    const node = s.actions.find((a) => a.label === "Sort by")?.node as number;
+    expect(await jevAct({ tabId: 1, op: "click", node })).toEqual({ ok: true });
+    expect(await log()).toContain("click:xbi");
+  });
+
   it("jev: a node keeps its id across snapshots", async () => {
     await load("/jev");
     const a = nodeOf(await snap(), "Search");

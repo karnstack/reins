@@ -280,6 +280,16 @@ checked/selected/expanded, options for native selects); last 10 actions
 (`op`, label, fill name, pageChanged); fill names and values. Never sent:
 password, file, or hidden inputs (the snapshot skips them) and the key.
 
+**The pseudo-click on the field just typed into.** Every editable field
+also offers a click ("Open <field>", for widgets a click opens). The one
+on the field the last action typed into, while it still holds the typed
+value, is not offered: it only focuses a field that is focused already —
+an act that cannot change the page — and under a name like "Open Search"
+it is taken for the way to run the query, three times over. Enter
+(SUBMIT_SEARCH), the page's own submit control and the suggestions stay
+on offer; a field never typed into keeps its click (a date field's
+calendar opens on it).
+
 ### Stop rules
 
 - **Risky click.** Case-insensitive **whole-word** match of the target's
@@ -403,8 +413,12 @@ like a foreground tab.
   control's own tree. The node cache, `jevCheck`, typing, select and submit
   work on shadow nodes (`jevSubmitFocus` reads the root's `activeElement`,
   since the document only knows the host); `actionPoint` already hit-tests
-  through `shadowRoot.elementFromPoint`. A *closed* root cannot be reached
-  from the page and stays invisible. Names are composed the way the
+  through `shadowRoot.elementFromPoint`; when the top-most box at the
+  point is light-DOM content the host slots into the target (a
+  web-component button's caption), hit-testing retargets it to the host
+  and a host of the target's tree standing at the point counts as the
+  target — the press's composed path runs through it. A *closed* root
+  cannot be reached from the page and stays invisible. Names are composed the way the
   accessibility tree reads them: an element's own text is what it renders
   — an open shadow root's children stand in for the host's light children
   (which only show through slots), and a `<slot>` stands for its assigned

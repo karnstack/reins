@@ -93,6 +93,28 @@ function unsubmittedQuery(
   return undefined;
 }
 
+/** The observation without the "Open <field>" pseudo-click of the field the
+ *  last action typed into, while it still holds the typed value: that click
+ *  only focuses a field that is focused already — an act that cannot change
+ *  the page — and, offered under a name like "Open Search", it is taken for
+ *  the way to run the query, again and again. Enter (SUBMIT_SEARCH), the
+ *  page's own submit control and the suggestions stay on offer. */
+function withoutRefocus(obs: JevObservation, run: RunState): JevObservation {
+  const last = run.history.findLast((h) => h.stale === undefined);
+  if (last?.op !== "type" || last.fill === undefined) return obs;
+  const typed = run.fills[last.fill];
+  const field = obs.actions.find(
+    (a) => a.kind === "fill" && a.label === last.label && (a.current_value ?? a.value) === typed,
+  );
+  if (field === undefined) return obs;
+  return {
+    ...obs,
+    actions: obs.actions.filter(
+      (a) => !(a.kind === "click" && a.node === field.node && a.label === `Open ${last.label}`),
+    ),
+  };
+}
+
 /** The `reins do` state machine: observe → ask Jev → gate → act → record,
  *  until a stop rule fires. Never throws; failures come back as `error`. */
 export async function runLoop(
@@ -262,7 +284,7 @@ export async function runLoop(
       first = false;
 
       seen = obs;
-      const plan = buildRequest(obs, run.goal, run.history, run.fills);
+      const plan = buildRequest(withoutRefocus(obs, run), run.goal, run.history, run.fills);
       calls += 1;
       let decision = interpret(await deps.ask(plan.body, input.signal), plan);
       if (
