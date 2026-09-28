@@ -63,11 +63,15 @@ export function riskyReason(
   return `its label says "${(m[1] as string).toLowerCase()}"`;
 }
 
-/** Same host, or one is a subdomain of the other. No public-suffix list:
- *  a login redirect to another host stops the run, which is fine. */
+/** Same host, or one is a subdomain of the other, a leading `www.` ignored
+ *  on both sides (www.x.org is x.org, and packages.x.org is under it). No
+ *  public-suffix list beyond that: a.github.io and b.github.io are two sites,
+ *  and a login redirect to another host stops the run, which is fine. */
 export function sameSite(start: string | undefined, host: string | undefined): boolean {
   if (start === undefined || host === undefined) return true;
-  return host === start || host.endsWith(`.${start}`) || start.endsWith(`.${host}`);
+  const a = start.replace(/^www\./, "");
+  const b = host.replace(/^www\./, "");
+  return a === b || b.endsWith(`.${a}`) || a.endsWith(`.${b}`);
 }
 
 /** 3 consecutive non-WAIT actions whose next read showed no change. A stale
