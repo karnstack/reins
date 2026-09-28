@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stayfinder — book a room</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #2d5a3d; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 20px; position: relative; }
+  .row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+  .field label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .datebtn { font: inherit; padding: 10px 12px; min-width: 180px; text-align: left; border: 1px solid #b9c0c8; border-radius: 6px; background: #fff; cursor: pointer; }
+  .popover { position: absolute; top: 90px; left: 20px; z-index: 10; background: #fff; border: 1px solid #b9c0c8; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 12px; width: 300px; }
+  .cal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cal-head button { font: inherit; border: 1px solid #ccc; background: #fff; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; }
+  th { font-weight: 500; color: #666; font-size: 12px; padding: 4px 0; }
+  td { padding: 1px; text-align: center; }
+  td button { font: inherit; width: 36px; height: 34px; border: 0; background: transparent; border-radius: 4px; cursor: pointer; }
+  td button:hover { background: #eef2ee; }
+  td button[aria-selected=true] { background: #2d5a3d; color: #fff; }
+  td button:disabled { color: #bbb; cursor: default; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+  .actions button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #2d5a3d; background: #fff; color: #2d5a3d; cursor: pointer; }
+  .actions button.primary { background: #2d5a3d; color: #fff; }
+  .summary { margin-top: 16px; color: #333; }
+</style>
+</head>
+<body>
+<header>Stayfinder</header>
+<main>
+  <section class="card">
+    <h1 style="margin-top:0">Book a room in Zurich</h1>
+    <div class="row">
+      <div class="field">
+        <label id="checkin-label">Check-in</label>
+        <button type="button" class="datebtn" id="checkin-btn" aria-labelledby="checkin-label checkin-btn" aria-haspopup="dialog" aria-expanded="false">Select date</button>
+        <input type="hidden" id="checkin" name="checkin" value="">
+      </div>
+      <div class="field">
+        <label for="guests">Guests</label>
+        <select id="guests"><option>1 guest</option><option selected>2 guests</option><option>3 guests</option></select>
+      </div>
+    </div>
+    <p class="summary" id="summary">No check-in date chosen yet.</p>
+
+    <div class="popover" id="popover" role="dialog" aria-modal="false" aria-label="Choose check-in date" hidden>
+      <div class="cal-head">
+        <button type="button" id="prev" aria-label="Previous month">‹</button>
+        <strong id="month-label" aria-live="polite"></strong>
+        <button type="button" id="next" aria-label="Next month">›</button>
+      </div>
+      <table role="grid" aria-labelledby="month-label">
+        <thead><tr><th>Mo</th><th>Tu</th><th>We</th><th>Th</th><th>Fr</th><th>Sa</th><th>Su</th></tr></thead>
+        <tbody id="grid"></tbody>
+      </table>
+      <div class="actions">
+        <button type="button" id="cancel">Cancel</button>
+        <button type="button" id="done" class="primary">Done</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  // The calendar always opens on September 2026 so the task is deterministic.
+  const START = new Date(2026, 8, 1);
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const pad = (n) => String(n).padStart(2, "0");
+  const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const btn = document.getElementById("checkin-btn");
+  const pop = document.getElementById("popover");
+  const grid = document.getElementById("grid");
+  const hidden = document.getElementById("checkin");
+  let view = new Date(START);
+  let pending = null; // selected in the popover, not committed until Done
+
+  function render() {
+    document.getElementById("month-label").textContent = `${MONTHS[view.getMonth()]} ${view.getFullYear()}`;
+    grid.innerHTML = "";
+    const first = new Date(view.getFullYear(), view.getMonth(), 1);
+    const lead = (first.getDay() + 6) % 7; // Monday first
+    const count = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+    let tr = document.createElement("tr");
+    for (let i = 0; i < lead; i++) tr.appendChild(document.createElement("td"));
+    for (let day = 1; day <= count; day++) {
+      const d = new Date(view.getFullYear(), view.getMonth(), day);
+      const td = document.createElement("td");
+      td.role = "gridcell";
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = String(day);
+      b.setAttribute("aria-label", `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${day}, ${d.getFullYear()}`);
+      b.setAttribute("aria-selected", String(pending !== null && iso(pending) === iso(d)));
+      if (d < START) b.disabled = true;
+      b.addEventListener("click", () => { pending = d; render(); });
+      td.appendChild(b);
+      tr.appendChild(td);
+      if (tr.children.length === 7) { grid.appendChild(tr); tr = document.createElement("tr"); }
+    }
+    if (tr.children.length) grid.appendChild(tr);
+  }
+  function open() { pop.hidden = false; btn.setAttribute("aria-expanded", "true"); render(); }
+  function close() { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  btn.addEventListener("click", () => (pop.hidden ? open() : close()));
+  document.getElementById("prev").addEventListener("click", () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); render(); });
+  document.getElementById("next").addEventListener("click", () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); render(); });
+  document.getElementById("cancel").addEventListener("click", () => { pending = null; close(); });
+  document.getElementById("done").addEventListener("click", () => {
+    if (!pending) return;
+    hidden.value = iso(pending);
+    btn.textContent = `${DAYS[pending.getDay()].slice(0, 3)}, ${MONTHS[pending.getMonth()].slice(0, 3)} ${pending.getDate()}, ${pending.getFullYear()}`;
+    document.getElementById("summary").textContent = `Check-in: ${MONTHS[pending.getMonth()]} ${pending.getDate()}, ${pending.getFullYear()}`;
+    close();
+  });
+})();
+</script>
+</body>
+</html>

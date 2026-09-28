@@ -95,6 +95,10 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ error: "not connected to the reins daemon" });
         return;
       }
+      if (typeof message.method !== "string" || message.method === "") {
+        sendResponse({ error: "reins:call needs a method name" });
+        return;
+      }
       // Callers may stretch the reply timeout (key_set awaits a TypeSafe
       // round trip); anything else keeps the default that spots an old daemon.
       const timeoutMs =
@@ -103,10 +107,16 @@ chrome.runtime.onMessage.addListener(
         message.timeoutMs > 0
           ? message.timeoutMs
           : undefined;
-      client.call(String(message.method), message.params, timeoutMs).then(
-        (result) => sendResponse({ result }),
-        (err: unknown) => sendResponse({ error: err instanceof Error ? err.message : String(err) }),
-      );
+      // .catch: sendResponse throws once the popup that asked has closed;
+      // there is no one left to tell, so don't make it an unhandled rejection.
+      client
+        .call(message.method, message.params, timeoutMs)
+        .then(
+          (result) => sendResponse({ result }),
+          (err: unknown) =>
+            sendResponse({ error: err instanceof Error ? err.message : String(err) }),
+        )
+        .catch(() => {});
       return true;
     }
 

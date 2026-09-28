@@ -43,16 +43,26 @@
         <code>chrome://extensions</code>.
       </p>
 
-      <button class="reins__btn reins__btn--ghost reins__btn--danger" id="toggle" type="button">
+      <button class="reins__btn reins__btn--ghost reins__btn--block reins__btn--danger" id="toggle" type="button">
         Disconnect
       </button>
 
-      <section class="reins__jev" id="jev" aria-labelledby="jev-title">
-        <h2 class="reins__policy-title" id="jev-title">Jev</h2>
+      <section class="reins__section reins__jev" id="jev" aria-labelledby="jev-title">
+        <h2 class="reins__section-title" id="jev-title">Jev</h2>
+        <div class="reins__jev-key">
+          <p class="reins__jev-ready" id="jev-ready" hidden>
+            <span class="reins__dot reins__dot--ok" aria-hidden="true"></span>
+            <span>Ready</span>
+            <span class="reins__jev-last4" id="jev-last4"></span>
+          </p>
+          <div class="reins__jev-actions" id="jev-actions" hidden>
+            <button class="reins__btn reins__btn--ghost" id="jev-replace" type="button">Replace</button>
+            <button class="reins__btn reins__btn--ghost reins__btn--danger" id="jev-remove" type="button">Remove</button>
+          </div>
+        </div>
         <p class="reins__jev-pitch" id="jev-pitch">
           Add a Jev key and <code>reins do</code> runs whole browser tasks in seconds, not minutes.
         </p>
-        <p class="reins__jev-ready" id="jev-ready" hidden></p>
         <form class="reins__jev-form" id="jev-form" novalidate>
           <input
             class="reins__input reins__input--mono"
@@ -67,25 +77,21 @@
           <button class="reins__btn reins__btn--primary" id="jev-save" type="submit">Save</button>
           <button class="reins__btn reins__btn--ghost" id="jev-cancel" type="button" hidden>Cancel</button>
         </form>
-        <div class="reins__jev-actions" id="jev-actions" hidden>
-          <button class="reins__btn reins__btn--ghost" id="jev-replace" type="button">Replace</button>
-          <button class="reins__btn reins__btn--ghost reins__btn--danger" id="jev-remove" type="button">Remove</button>
-        </div>
         <p class="reins__jev-note" id="jev-offline" hidden>
           Start reins to save a key. Only the reins daemon can write the key file.
         </p>
-        <p class="reins__jev-error" id="jev-error" role="alert" hidden></p>
-        <p class="reins__jev-note">
-          <a href="https://console.typesafe.ai/keys" target="_blank" rel="noreferrer">Get a key</a>
-          ·
-          <a href="https://reins.tech/docs/security#reins-do" target="_blank" rel="noreferrer">What's sent to TypeSafe</a>
+        <p class="reins__alert" id="jev-error" role="alert" hidden></p>
+        <p class="reins__jev-links">
+          <a class="reins__link" href="https://console.typesafe.ai/keys" target="_blank" rel="noreferrer">Get a key<span class="reins__link-arrow" aria-hidden="true">↗</span></a>
+          <span class="reins__jev-links-sep" aria-hidden="true">·</span>
+          <a class="reins__link" href="https://reins.tech/docs/security#reins-do" target="_blank" rel="noreferrer">What's sent to TypeSafe<span class="reins__link-arrow" aria-hidden="true">↗</span></a>
         </p>
       </section>
 
-      <section class="reins__policy">
-        <h2 class="reins__policy-title">Site permissions</h2>
+      <section class="reins__section reins__policy" aria-labelledby="policy-title">
+        <h2 class="reins__section-title" id="policy-title">Site permissions</h2>
 
-        <p class="reins__policy-error" id="policy-error" hidden>
+        <p class="reins__alert" id="policy-error" hidden>
           Stored site permissions are unreadable — all commands are refused
           until this is resolved. Re-set your policy after clearing it from
           the extension's storage.

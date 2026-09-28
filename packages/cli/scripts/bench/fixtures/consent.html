@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Devdocs — search the documentation</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #fff; color: #1a1a1a; }
+  header { background: #222; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 760px; margin: 32px auto; padding: 0 16px; }
+  input[type=search] { width: 100%; box-sizing: border-box; padding: 12px 14px; font-size: 16px; border: 1px solid #b9c0c8; border-radius: 6px; }
+  .hint { color: #666; font-size: 13px; margin: 6px 0 0; }
+  .result { padding: 12px 0; border-bottom: 1px solid #eee; }
+  .result a { color: #0b57d0; font-weight: 600; }
+  #consent-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 100; }
+  #consent { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 101; background: #fff; border-radius: 10px; padding: 24px; width: min(480px, 92vw); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  #consent h2 { margin-top: 0; }
+  #consent .buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  #consent button { font: inherit; padding: 10px 16px; border-radius: 6px; border: 1px solid #222; background: #fff; cursor: pointer; }
+  #consent button.primary { background: #222; color: #fff; }
+  #prefs { margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>Devdocs</header>
+<main>
+  <h1>Search the documentation</h1>
+  <form id="form" role="search">
+    <label for="q" style="display:block;font-weight:600;margin-bottom:6px">Search</label>
+    <input id="q" type="search" name="q" placeholder="Search docs…" autocomplete="off">
+    <p class="hint">Press Enter to search.</p>
+  </form>
+  <section id="results" hidden aria-live="polite">
+    <h2 id="results-title"></h2>
+    <div id="results-list"></div>
+  </section>
+  <section id="intro">
+    <h2>Popular topics</h2>
+    <ul><li>Getting started</li><li>Configuration</li><li>Networking</li><li>Security</li></ul>
+  </section>
+</main>
+
+<div id="consent-backdrop"></div>
+<div id="consent" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+  <h2 id="consent-title">We value your privacy</h2>
+  <p>We and our partners store cookies to personalise content and measure traffic. You can accept all, reject all, or manage your preferences.</p>
+  <div id="prefs" hidden>
+    <label><input type="checkbox" checked disabled> Necessary</label><br>
+    <label><input type="checkbox" id="pref-analytics"> Analytics</label><br>
+    <label><input type="checkbox" id="pref-ads"> Advertising</label>
+  </div>
+  <div class="buttons">
+    <button type="button" id="reject-all">Reject all</button>
+    <button type="button" id="manage">Manage preferences</button>
+    <button type="button" id="accept-all" class="primary">Accept all</button>
+    <button type="button" id="save" hidden>Save preferences</button>
+  </div>
+</div>
+<script>
+(() => {
+  const DOCS = [
+    ["WebSocket API", "Open a two-way interactive communication session between the browser and a server."],
+    ["WebSocket: close event", "Fired when a connection with a WebSocket is closed."],
+    ["WebSocket.send()", "Enqueues data to be transmitted to the server."],
+    ["Fetch API", "Provides an interface for fetching resources."],
+    ["Server-sent events", "Receive automatic updates from a server via HTTP connection."],
+    ["Streams API", "Programmatically access streams of data received over the network."],
+  ];
+  const consent = document.getElementById("consent");
+  const backdrop = document.getElementById("consent-backdrop");
+  function dismiss() { consent.hidden = true; backdrop.hidden = true; }
+  document.getElementById("reject-all").addEventListener("click", dismiss);
+  document.getElementById("accept-all").addEventListener("click", dismiss);
+  document.getElementById("save").addEventListener("click", dismiss);
+  document.getElementById("manage").addEventListener("click", () => {
+    document.getElementById("prefs").hidden = false;
+    document.getElementById("save").hidden = false;
+    document.getElementById("manage").hidden = true;
+  });
+  // The dialog is modal: while it is open, the page beneath ignores input.
+  document.getElementById("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!consent.hidden) return;
+    const q = document.getElementById("q").value.trim();
+    if (!q) return;
+    const hits = DOCS.filter(([t, d]) => (t + " " + d).toLowerCase().includes(q.toLowerCase()));
+    document.getElementById("results-title").textContent = `${hits.length} results for “${q}”`;
+    document.getElementById("results-list").innerHTML = hits.map(([t, d]) => `<div class="result"><a href="#${encodeURIComponent(t)}">${t}</a><div>${d}</div></div>`).join("") || "<p>No matches.</p>";
+    document.getElementById("results").hidden = false;
+    document.getElementById("intro").hidden = true;
+    document.title = `${q} — Devdocs search`;
+  });
+})();
+</script>
+</body>
+</html>

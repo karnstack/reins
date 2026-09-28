@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CdpParams,
   ClickParams,
+  ClickResult,
   CloseTabParams,
   ConsoleEntry,
   ConsoleParams,
@@ -69,6 +70,12 @@ describe("cdp schemas", () => {
 
   it("OkResult accepts { ok: true }", () => {
     expect(OkResult.parse({ ok: true }).ok).toBe(true);
+  });
+
+  it("ClickResult is ok with an optional openedTabId", () => {
+    expect(ClickResult.parse({ ok: true })).toEqual({ ok: true });
+    expect(ClickResult.parse({ ok: true, openedTabId: 12 })).toEqual({ ok: true, openedTabId: 12 });
+    expect(() => ClickResult.parse({ ok: true, openedTabId: "12" })).toThrow();
   });
 
   it("OpenTabParams requires a non-empty url and defaults activate to true", () => {

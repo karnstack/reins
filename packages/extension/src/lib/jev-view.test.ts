@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jevReadyText, jevStateFrom, jevViewFlags } from "./jev-view.js";
+import { jevMaskedKey, jevStateFrom, jevViewFlags } from "./jev-view.js";
 
 describe("popup Jev state", () => {
   it("is offline when the daemon isn't connected", () => {
@@ -13,7 +13,7 @@ describe("popup Jev state", () => {
       kind: "set",
       last4: "a1b2",
     });
-    expect(jevReadyText("a1b2")).toBe("Jev ready · ••••a1b2");
+    expect(jevMaskedKey("a1b2")).toBe("••••a1b2");
   });
   it("reports an unreadable status", () => {
     expect(jevStateFrom(true, { nope: 1 }).kind).toBe("error");
@@ -52,9 +52,17 @@ describe("popup Jev view flags", () => {
       cancelHidden: true,
     });
   });
-  it("set + replacing: form and Cancel shown, Replace/Remove hidden", () => {
+  it("saving disables the form, Cancel included, until the save settles", () => {
+    expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true, true)).toMatchObject({
+      cancelHidden: false,
+      disabled: true,
+    });
+    expect(jevViewFlags({ kind: "unset" }, false, true).disabled).toBe(true);
+    expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true, false).disabled).toBe(false);
+  });
+  it("set + replacing: form and Cancel shown, Replace/Remove hidden, no pitch", () => {
     expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true)).toMatchObject({
-      pitchHidden: false,
+      pitchHidden: true,
       readyHidden: false,
       formHidden: false,
       actionsHidden: true,

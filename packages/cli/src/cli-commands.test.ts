@@ -10,10 +10,12 @@ import {
   helpText,
   logsInfo,
   RESTART_WAIT_MS,
+  rpcFailure,
   runRestart,
   tabsText,
+  usageText,
 } from "./cli-commands.js";
-import { TOOL_COMMANDS } from "./commands.js";
+import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
 
 function cfg() {
@@ -58,6 +60,10 @@ describe("helpText", () => {
 
   it("help lists the audit command", () => {
     expect(helpText("1.2.3", TOOL_COMMANDS)).toContain("audit");
+  });
+
+  it("lists `do` under a Delegate section", () => {
+    expect(helpText("1.2.3", TOOL_COMMANDS)).toMatch(/Delegate:\n\s+do\s+hand a small task to Jev/);
   });
 
   it("describes restart as the thing to run after an upgrade or `reins allow`", () => {
@@ -343,5 +349,34 @@ describe("logsInfo", () => {
     const info = logsInfo(dir, 2);
     expect(info.latest).toContain("daemon-2026-01-02.log");
     expect(info.tail).toEqual(["two", "three"]);
+  });
+});
+
+describe("usageText", () => {
+  it("is the usage line and the summary", () => {
+    expect(usageText(TOOL_COMMANDS.do as ToolCommand)).toBe(
+      `${TOOL_COMMANDS.do?.usage}\n  ${TOOL_COMMANDS.do?.summary}`,
+    );
+  });
+});
+
+describe("rpcFailure", () => {
+  it("turns a fetch timeout into one readable line", () => {
+    const err = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    expect(rpcFailure(err, 30_000).message).toBe(
+      "the daemon did not answer within 30s — check `reins logs`",
+    );
+  });
+
+  it("adds the command's own hint", () => {
+    const err = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    expect(rpcFailure(err, 100_000, "the run may still be finishing").message).toBe(
+      "the daemon did not answer within 100s — the run may still be finishing; check `reins logs`",
+    );
+  });
+
+  it("leaves other errors alone", () => {
+    const err = new Error("ECONNREFUSED");
+    expect(rpcFailure(err, 30_000)).toBe(err);
   });
 });

@@ -35,6 +35,14 @@ describe("reins key", () => {
     await expect(runKey(["set"], deps({}, "   "))).rejects.toThrow("no key given");
   });
 
+  it("help prints the usage without touching the daemon", async () => {
+    const d = deps({});
+    expect(await runKey(["--help"], d)).toBe(KEY_USAGE);
+    expect(await runKey(["-h"], d)).toBe(KEY_USAGE);
+    expect(await runKey(["help"], d)).toBe(KEY_USAGE);
+    expect(d.rpc).not.toHaveBeenCalled();
+  });
+
   it("rejects unknown subcommands and providers", async () => {
     await expect(runKey([], deps({}))).rejects.toThrow(UsageError);
     await expect(runKey(["set", "openai"], deps({}))).rejects.toThrow(KEY_USAGE);

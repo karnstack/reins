@@ -22,16 +22,18 @@ type Call = { method: string; params?: Record<string, unknown> };
 /** Fake chrome with a scripted CDP: respond(method, params) → result. */
 function stubChrome(respond: (method: string, params?: Record<string, unknown>) => unknown) {
   const calls: Call[] = [];
-  // Commands that drive the page first set up the autofill guard (covered in
-  // cdp.test.ts): Page.enable + (re)register a new-document script + an
-  // evaluate. Keep those out of the per-action call log. A Page.enable is
-  // only the guard's if the new-document registration follows it.
+  // Every attach first emulates page focus, and commands that drive the page
+  // set up the autofill guard (both covered in cdp.test.ts): Page.enable +
+  // (re)register a new-document script + an evaluate. Keep those out of the
+  // per-action call log. A Page.enable is only the guard's if the
+  // new-document registration follows it.
   let heldEnable: Call | undefined;
   vi.stubGlobal("chrome", {
     debugger: {
       attach: async () => {},
       detach: async () => {},
       sendCommand: async (_target: unknown, method: string, params?: Record<string, unknown>) => {
+        if (method === "Emulation.setFocusEmulationEnabled") return {};
         if (method === "Page.enable") {
           heldEnable = { method, params };
           return {};
@@ -68,7 +70,7 @@ function page(opts: { visible?: boolean[]; point?: unknown; probe?: unknown } = 
   return (method: string, params?: Record<string, unknown>) => {
     if (method !== "Runtime.evaluate") return {};
     const expr = String(params?.expression);
-    if (expr.includes("visibilityState")) {
+    if (expr === "document.visibilityState") {
       const v = visible.length > 1 ? visible.shift() : visible[0];
       return evalOk(v ? "visible" : "hidden");
     }

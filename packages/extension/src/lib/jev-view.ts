@@ -15,8 +15,9 @@ export function jevStateFrom(connected: boolean, status: unknown): JevKeyState {
   return parsed.data.set ? { kind: "set", last4: parsed.data.last4 ?? "????" } : { kind: "unset" };
 }
 
-export function jevReadyText(last4: string): string {
-  return `Jev ready · ••••${last4}`;
+/** The key as the popup shows it next to "Ready": masked but for the last 4. */
+export function jevMaskedKey(last4: string): string {
+  return `••••${last4}`;
 }
 
 /** Which Jev controls show / are usable for a state. Pure so it's testable:
@@ -37,7 +38,7 @@ export function jevViewFlags(state: JevKeyState, replacing: boolean, saving = fa
   const set = state.kind === "set";
   const editing = set && replacing;
   return {
-    pitchHidden: set && !editing,
+    pitchHidden: set,
     readyHidden: !set,
     formHidden: set && !editing,
     actionsHidden: !set || editing,

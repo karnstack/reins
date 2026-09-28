@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { JevActParams, JevActResult, JevObservation } from "./jev.js";
+import { JevAction, JevActParams, JevActResult, JevObservation } from "./jev.js";
 
 describe("jev schemas", () => {
   it("parses an observation", () => {
@@ -26,8 +26,16 @@ describe("jev schemas", () => {
     expect(JevActParams.parse({ op: "click", node: 3 }).label).toBeUndefined();
   });
 
+  it("a fill may be marked submittable, and submit is an act op", () => {
+    expect(
+      JevAction.parse({ id: "e1", kind: "fill", node: 3, label: "Search", submit: true }).submit,
+    ).toBe(true);
+    expect(JevActParams.parse({ op: "submit", node: 3, label: "Search" }).op).toBe("submit");
+  });
+
   it("act result is ok or stale", () => {
     expect(JevActResult.parse({ ok: true })).toEqual({ ok: true });
+    expect(JevActResult.parse({ ok: true, openedTabId: 9 })).toEqual({ ok: true, openedTabId: 9 });
     expect(JevActResult.parse({ stale: true, reason: "gone" })).toEqual({
       stale: true,
       reason: "gone",

@@ -6,3 +6,9 @@ packages/cli/extension/
 coverage/
 *.log
 .DS_Store
+bench-out/
+
+# Planning notes (specs, plans, fix-loop ledgers) stay local; the code is the record.
+docs/superpowers/
+# bench-do.mjs summary output
+bench-do*.json

@@ -15,6 +15,8 @@ export interface AuditRecord {
   ok: boolean;
   denied?: boolean;
   error?: string;
+  /** For `do`: how the run ended, e.g. "done · 4 steps · 6 jev calls". */
+  outcome?: string;
   ms: number;
 }
 
@@ -43,6 +45,14 @@ export function redactParams(
       out[key] = "[redacted]";
     } else if (method === "key_set" && key === "key") {
       out[key] = "[redacted]";
+    } else if (method === "do" && key === "fills" && value && typeof value === "object") {
+      // --fill values are typed into pages; keep the names, drop the text.
+      out[key] = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+          k,
+          `[redacted ${String(v).length} chars]`,
+        ]),
+      );
     } else {
       out[key] = value;
     }

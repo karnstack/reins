@@ -1,4 +1,14 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,7 +18,10 @@ let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "reins-creds-"));
 });
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
+afterEach(() => {
+  chmodSync(dir, 0o700);
+  rmSync(dir, { recursive: true, force: true });
+});
 
 describe("credentials file", () => {
   it("reports not set when there is no file", () => {
@@ -44,8 +57,49 @@ describe("credentials file", () => {
     expect(readKey(dir)).toBeUndefined();
   });
 
-  it("treats a corrupt file as no key", () => {
+  it('a corrupt file is unreadable, not silently "not set", and is never echoed', () => {
+    writeFileSync(credentialsPath(dir), '{not json "ts_live_secret"');
+    for (const f of [() => readKey(dir), () => keyStatus(dir), () => writeKey(dir, "k")]) {
+      expect(f).toThrow(/credentials\.json is not valid JSON/);
+      expect(f).toThrow(/fix or delete it/);
+      let message = "";
+      try {
+        f();
+      } catch (err) {
+        message = (err as Error).message;
+      }
+      expect(message).not.toContain("secret");
+      expect(message).not.toContain("{not json");
+    }
+  });
+
+  it("a file that isn't JSON at the top level is unreadable too", () => {
+    writeFileSync(credentialsPath(dir), "[]");
+    expect(() => readKey(dir)).toThrow(/not valid JSON/);
+  });
+
+  it("removes its temp file when the rename fails", () => {
+    mkdirSync(credentialsPath(dir)); // a directory in the way: rename over it fails
+    expect(() => writeKey(dir, "ts_live_abcd1234")).toThrow();
+    expect(readdirSync(dir).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+
+  it.skipIf(process.getuid?.() === 0)("clear surfaces an unlink failure other than ENOENT", () => {
+    writeKey(dir, "ts_live_abcd1234");
+    chmodSync(dir, 0o500); // the file can be read but not unlinked
+    expect(() => clearKey(dir)).toThrow(/EACCES|EPERM/);
+    chmodSync(dir, 0o700);
+    expect(readKey(dir)).toBe("ts_live_abcd1234");
+  });
+
+  it("clear removes a corrupt file: it is the documented remedy", () => {
     writeFileSync(credentialsPath(dir), "{not json");
+    clearKey(dir);
+    expect(existsSync(credentialsPath(dir))).toBe(false);
     expect(readKey(dir)).toBeUndefined();
+  });
+
+  it("clear with no file is fine", () => {
+    expect(() => clearKey(dir)).not.toThrow();
   });
 });

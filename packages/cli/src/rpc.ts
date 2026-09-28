@@ -10,12 +10,15 @@ import { z } from "zod";
 import { type AuditHook, redactParams } from "./audit.js";
 import type { BridgePort, BridgeReply } from "./bridge.js";
 import { KEY_METHODS, type KeyService } from "./jev/keys.js";
+import type { DoResult } from "./jev/types.js";
 
 /** Daemon-side services and the per-request abort signal. */
 export interface RpcContext {
   keys?: KeyService;
   /** Aborted when the CLI hangs up or the daemon shuts down. */
   signal?: AbortSignal;
+  /** `reins do`, run in the daemon (serve.ts wires handleDo). */
+  doRun?: (params: Record<string, unknown>, signal: AbortSignal) => Promise<DoResult>;
 }
 
 const RpcBody = z.object({
@@ -164,6 +167,7 @@ export async function handleRpc(
     browserId?: string;
     meta?: ResponseMeta;
     error?: Error & { code?: string };
+    outcome?: string;
   }): void => {
     if (!audit) return;
     try {
@@ -184,6 +188,7 @@ export async function handleRpc(
         ok: outcome.ok,
         ...(outcome.error?.code === "policy_denied" ? { denied: true } : {}),
         ...(outcome.error !== undefined ? { error: outcome.error.message } : {}),
+        ...(outcome.outcome !== undefined ? { outcome: outcome.outcome } : {}),
         ms: Date.now() - started,
       });
     } catch {
@@ -199,6 +204,20 @@ export async function handleRpc(
       const status = await ctx.keys.handle(method, params);
       finish({ ok: true });
       return status;
+    }
+    if (method === "do") {
+      if (!ctx.doRun) throw new Error("reins do is not available in this daemon");
+      // The whole run is one audit line; each jev_act inside adds its own.
+      const result = await ctx.doRun(raw ?? {}, ctx.signal ?? new AbortController().signal);
+      finish({
+        ok: result.status === "done",
+        browserId,
+        outcome: `${result.status} · ${result.step} steps · ${result.jevCalls} jev calls`,
+        ...(result.status !== "done"
+          ? { error: new Error(`${result.status}: ${result.reason ?? ""}`) }
+          : {}),
+      });
+      return result;
     }
     if (method === "list_tabs") {
       const tabs = await listAllTabs(bridge, browserId);

@@ -256,6 +256,8 @@ describe("TOOL_COMMANDS: formatting", () => {
 
   it("open/nav/eval/text/cdp print their payloads", () => {
     expect(format("open", { tabId: 7 })).toBe("opened tab 7");
+    expect(format("click", { ok: true })).toBe("ok");
+    expect(format("click", { ok: true, openedTabId: 9 })).toBe("ok — opened tab 9 (now active)");
     expect(format("nav", { url: "https://x/" })).toBe("→ https://x/");
     expect(format("eval", { value: { a: 1 } })).toBe(JSON.stringify({ a: 1 }, null, 2));
     expect(format("text", { text: "hello" })).toBe("hello");
@@ -306,5 +308,75 @@ describe("TOOL_COMMANDS: formatting", () => {
 
   it("screenshot leaves output to the runner (file write)", () => {
     expect(cmd("screenshot").format).toBeUndefined();
+  });
+});
+
+describe("reins do", () => {
+  const c = TOOL_COMMANDS.do as ToolCommand;
+  const buildDo = (argv: string[]) =>
+    c.build(parseArgs(argv, { booleans: [...(c.booleans ?? []), "json"], multi: c.multi }));
+
+  it("builds a run from the goal, fills and confirms", () => {
+    expect(
+      buildDo([
+        "one-way",
+        "Zurich",
+        "→",
+        "London",
+        "--fill",
+        "from=Zurich",
+        "--fill=to=London",
+        "--confirm",
+        "Book",
+        "--tab",
+        "7",
+      ]),
+    ).toEqual({
+      tabId: 7,
+      goal: "one-way Zurich → London",
+      fills: { from: "Zurich", to: "London" },
+      confirms: ["Book"],
+      continue: false,
+      maxSteps: 30,
+      timeoutSec: 60,
+    });
+  });
+
+  it("--continue needs no goal", () => {
+    expect(buildDo(["--continue", "--fill", "passenger=Ada Lovelace"])).toMatchObject({
+      continue: true,
+      fills: { passenger: "Ada Lovelace" },
+    });
+  });
+
+  it.each([
+    [[], "a goal is required"],
+    [["g", "--fill", "from"], "--fill needs name=value"],
+    [["g", "--fill", "From=Zurich"], "lowercase"],
+    [["g", "--max-steps", "0"], "--max-steps"],
+    [["g", "--timeout", "1"], "--timeout"],
+  ])("rejects %j", (argv, message) => {
+    expect(() => buildDo(argv)).toThrow(message);
+  });
+
+  it("waits one bridge call (30 s) plus slack beyond the run's own timeout", () => {
+    expect(c.timeoutMs?.({ timeoutSec: 60 })).toBe(100_000);
+  });
+
+  it("exits 0 done, 2 handoff, 1 error", () => {
+    const r = (status: string) => ({
+      status,
+      steps: [],
+      url: "",
+      title: "",
+      elapsedMs: 0,
+      jevCalls: 0,
+      step: 0,
+      maxSteps: 30,
+      pageChanges: 0,
+    });
+    expect(c.exitCode?.(r("done"))).toBe(0);
+    expect(c.exitCode?.(r("risky_action"))).toBe(2);
+    expect(c.exitCode?.(r("error"))).toBe(1);
   });
 });

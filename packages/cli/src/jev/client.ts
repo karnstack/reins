@@ -63,6 +63,8 @@ export function createJevAsk(opts: {
   key: string;
   fetch?: Fetch;
   retry?: Partial<RetryPolicy>;
+  /** Input tokens each answered request cost (0 when the reply carries no usage). */
+  onUsage?: (inputTokens: number) => void;
 }): JevAsk {
   const client = new TypeSafeClient({
     apiKey: opts.key,
@@ -78,6 +80,8 @@ export function createJevAsk(opts: {
         body as Parameters<typeof client.systemOne>[0],
         signal ? { signal } : {},
       );
+      const tokens = result.usage?.input_tokens;
+      opts.onUsage?.(typeof tokens === "number" && Number.isFinite(tokens) ? tokens : 0);
       return result.answers as Record<string, unknown>;
     } catch (err) {
       throw translate(err);
@@ -85,10 +89,17 @@ export function createJevAsk(opts: {
   };
 }
 
+/** How far under the top probability a reported choice may sit. Probabilities
+ *  arrive rounded to two decimals, so a choice 0.01 under another is a tie as
+ *  reported, not a contradiction (the sum check tolerates the same 0.02). */
+export const PROBABILITY_TIE = 0.02 + 1e-6;
+
 /**
  * Check a choice answer beyond its type: the choice was offered, every option
  * has exactly one probability in [0, 1], they sum to ~1, and the choice is the
- * most likely. Anything else is an unusable answer — never act on it.
+ * most likely — or within rounding of it. Anything else is an unusable
+ * answer — never act on it. Call it only on a head the loop acts on: a
+ * speculative head's answer is never validated (see `interpret`).
  */
 export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
   const a = answer as Partial<ChoiceAnswer> | undefined;
@@ -101,12 +112,12 @@ export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
     !!probs &&
     typeof probs === "object" &&
     Object.keys(probs).length === ids.length &&
-    ids.every((id) => id in probs) &&
+    ids.every((id) => Object.hasOwn(probs, id)) &&
     [...values, a.confidence].every(
       (n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
     ) &&
     Math.abs(values.reduce((s, n) => s + n, 0) - 1) < 0.02 &&
-    (probs[a.choice] ?? 0) >= Math.max(...values) - 1e-6;
+    (probs[a.choice] ?? 0) >= Math.max(...values) - PROBABILITY_TIE;
   if (!valid) {
     throw new JevError(
       "TypeSafe returned an unusable answer — no action was taken",
@@ -114,6 +125,18 @@ export function validateChoice(answer: unknown, ids: string[]): ChoiceAnswer {
     );
   }
   return a as ChoiceAnswer;
+}
+
+/** Check a yes/no (`noul`) answer: one finite probability in [0, 1]. */
+export function validateNoul(answer: unknown): number {
+  const p = (answer as { noul?: unknown } | undefined)?.noul;
+  if (typeof p !== "number" || !Number.isFinite(p) || p < 0 || p > 1) {
+    throw new JevError(
+      "TypeSafe returned an unusable answer — no action was taken",
+      "invalid_answer",
+    );
+  }
+  return p;
 }
 
 /** One minimal call: resolves when TypeSafe accepts the key. */

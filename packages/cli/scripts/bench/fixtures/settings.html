@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Northwind — account settings</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #3b3f8c; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 760px; margin: 32px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; overflow: hidden; }
+  [role=tablist] { display: flex; border-bottom: 1px solid #dfe3e8; background: #fafbfc; }
+  [role=tab] { font: inherit; padding: 12px 18px; border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; color: #555; }
+  [role=tab][aria-selected=true] { color: #3b3f8c; border-bottom-color: #3b3f8c; font-weight: 600; }
+  [role=tabpanel] { padding: 20px; }
+  .setting { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eef0f3; gap: 16px; }
+  .setting:last-of-type { border-bottom: 0; }
+  .setting .label { font-weight: 600; }
+  .setting .hint { color: #666; font-size: 13px; }
+  [role=switch] { position: relative; width: 44px; height: 24px; border-radius: 12px; border: 0; background: #b9c0c8; cursor: pointer; flex: none; padding: 0; }
+  [role=switch]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+  [role=switch][aria-checked=true] { background: #2d8a4e; }
+  [role=switch][aria-checked=true]::after { left: 22px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-weight: 600; margin-bottom: 6px; }
+  .field input { font: inherit; padding: 8px 10px; border: 1px solid #b9c0c8; border-radius: 6px; width: 320px; max-width: 100%; }
+  .actions { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-top: 1px solid #dfe3e8; background: #fafbfc; }
+  .actions button { font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid #3b3f8c; background: #3b3f8c; color: #fff; cursor: pointer; }
+  .actions button:disabled { opacity: .5; cursor: default; }
+  #status { color: #2d8a4e; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>Northwind</header>
+<main>
+  <h1>Settings</h1>
+  <section class="card">
+    <div role="tablist" aria-label="Settings sections">
+      <button type="button" role="tab" id="tab-profile" aria-selected="true" aria-controls="panel-profile">Profile</button>
+      <button type="button" role="tab" id="tab-notifications" aria-selected="false" aria-controls="panel-notifications" tabindex="-1">Notifications</button>
+      <button type="button" role="tab" id="tab-security" aria-selected="false" aria-controls="panel-security" tabindex="-1">Security</button>
+    </div>
+
+    <div role="tabpanel" id="panel-profile" aria-labelledby="tab-profile">
+      <div class="field"><label for="display-name">Display name</label><input id="display-name" data-key="displayName" value="Sam Rivera"></div>
+      <div class="field"><label for="timezone">Time zone</label><input id="timezone" data-key="timezone" value="Europe/Zurich"></div>
+    </div>
+
+    <div role="tabpanel" id="panel-notifications" aria-labelledby="tab-notifications" hidden>
+      <div class="setting">
+        <div><div class="label" id="lbl-product">Product updates</div><div class="hint">News about new features.</div></div>
+        <button type="button" role="switch" aria-checked="true" aria-labelledby="lbl-product" data-key="productUpdates"></button>
+      </div>
+      <div class="setting">
+        <div><div class="label" id="lbl-digest">Weekly digest emails</div><div class="hint">A summary of your activity every Monday.</div></div>
+        <button type="button" role="switch" aria-checked="false" aria-labelledby="lbl-digest" data-key="weeklyDigest"></button>
+      </div>
+      <div class="setting">
+        <div><div class="label" id="lbl-mentions">Mention alerts</div><div class="hint">When someone mentions you in a comment.</div></div>
+        <button type="button" role="switch" aria-checked="false" aria-labelledby="lbl-mentions" data-key="mentionAlerts"></button>
+      </div>
+      <div class="setting">
+        <div><div class="label" id="lbl-security">Security alerts</div><div class="hint">Sign-ins from new devices. Recommended.</div></div>
+        <button type="button" role="switch" aria-checked="true" aria-labelledby="lbl-security" data-key="securityAlerts"></button>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="panel-security" aria-labelledby="tab-security" hidden>
+      <div class="setting">
+        <div><div class="label" id="lbl-2fa">Two-factor authentication</div><div class="hint">Ask for a code on every sign-in.</div></div>
+        <button type="button" role="switch" aria-checked="false" aria-labelledby="lbl-2fa" data-key="twoFactor"></button>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" id="save" disabled>Save changes</button>
+      <span id="status" aria-live="polite"></span>
+      <input type="hidden" id="saved-state" value="">
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  // Saved state lives only in #saved-state (JSON). Toggling a switch changes
+  // the pending state and enables Save; nothing is written until Save is clicked.
+  const DEFAULTS = {
+    displayName: "Sam Rivera",
+    timezone: "Europe/Zurich",
+    productUpdates: true,
+    weeklyDigest: false,
+    mentionAlerts: false,
+    securityAlerts: true,
+    twoFactor: false,
+  };
+  const saved = { ...DEFAULTS };
+  const pending = { ...DEFAULTS };
+  const savedInput = document.getElementById("saved-state");
+  const save = document.getElementById("save");
+  const status = document.getElementById("status");
+  savedInput.value = JSON.stringify(saved);
+
+  const dirty = () => Object.keys(DEFAULTS).some((k) => pending[k] !== saved[k]);
+  const refresh = () => { save.disabled = !dirty(); };
+
+  for (const tab of document.querySelectorAll("[role=tab]")) {
+    tab.addEventListener("click", () => {
+      for (const t of document.querySelectorAll("[role=tab]")) {
+        const on = t === tab;
+        t.setAttribute("aria-selected", String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      }
+    });
+  }
+  for (const sw of document.querySelectorAll("[role=switch]")) {
+    sw.addEventListener("click", () => {
+      const on = sw.getAttribute("aria-checked") !== "true";
+      sw.setAttribute("aria-checked", String(on));
+      pending[sw.dataset.key] = on;
+      status.textContent = "";
+      refresh();
+    });
+  }
+  for (const input of document.querySelectorAll("input[data-key]")) {
+    input.addEventListener("input", () => {
+      pending[input.dataset.key] = input.value;
+      status.textContent = "";
+      refresh();
+    });
+  }
+  save.addEventListener("click", () => {
+    if (!dirty()) return;
+    Object.assign(saved, pending);
+    savedInput.value = JSON.stringify(saved);
+    status.textContent = "Changes saved";
+    refresh();
+  });
+})();
+</script>
+</body>
+</html>

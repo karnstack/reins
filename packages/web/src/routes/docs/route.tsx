@@ -18,6 +18,7 @@ const NAV = [
   { to: "/docs/architecture", label: "Architecture", blurb: "CLI, daemon, extension" },
   { to: "/docs/security", label: "Security", blurb: "the localhost-only model" },
   { to: "/docs/comparison", label: "How it compares", blurb: "next to the alternatives" },
+  { to: "/docs/benchmarks", label: "Benchmarks", blurb: "reins do vs. step by step" },
   { to: "/docs/faq", label: "FAQ", blurb: "common questions" },
 ] as const;
 

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mailbox — drafts</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #1b4332; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; padding: 20px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+  .subject { font-weight: 600; }
+  .preview { color: #666; font-size: 13px; }
+  button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #b3261e; background: #fff; color: #b3261e; cursor: pointer; }
+  .confirm { margin-top: 12px; padding: 12px; border: 1px solid #b3261e; border-radius: 6px; background: #fff5f5; }
+  .confirm button.primary { background: #b3261e; color: #fff; }
+  .confirm button.secondary { border-color: #999; color: #333; }
+</style>
+</head>
+<body>
+<header>Mailbox</header>
+<main>
+  <section class="card">
+    <h1 style="margin-top:0">Drafts</h1>
+    <ul id="drafts">
+      <li data-name="Q3 plan"><div><div class="subject">Q3 plan</div><div class="preview">Here are the three priorities…</div></div><button type="button" aria-label="Delete draft: Q3 plan">Delete draft</button></li>
+      <li data-name="Weekly digest"><div><div class="subject">Weekly digest</div><div class="preview">This week the team shipped…</div></div><button type="button" aria-label="Delete draft: Weekly digest">Delete draft</button></li>
+      <li data-name="Onboarding email"><div><div class="subject">Onboarding email</div><div class="preview">Welcome! To get started…</div></div><button type="button" aria-label="Delete draft: Onboarding email">Delete draft</button></li>
+    </ul>
+    <div class="confirm" id="confirm" role="alertdialog" aria-labelledby="confirm-title" hidden>
+      <p id="confirm-title" style="margin-top:0"></p>
+      <button type="button" class="secondary" id="cancel">Cancel</button>
+      <button type="button" class="primary" id="confirm-delete">Delete</button>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  let target = null;
+  const confirm = document.getElementById("confirm");
+  document.getElementById("drafts").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    target = b.closest("li");
+    document.getElementById("confirm-title").textContent = `Delete the draft “${target.dataset.name}”? This cannot be undone.`;
+    confirm.hidden = false;
+  });
+  document.getElementById("cancel").addEventListener("click", () => { target = null; confirm.hidden = true; });
+  document.getElementById("confirm-delete").addEventListener("click", () => {
+    if (target) target.remove();
+    target = null;
+    confirm.hidden = true;
+  });
+})();
+</script>
+</body>
+</html>

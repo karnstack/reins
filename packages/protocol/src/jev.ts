@@ -20,6 +20,14 @@ export const JevAction = z.object({
   selected: z.string().optional(),
   expanded: z.string().optional(),
   delta: z.number().optional(),
+  /** A fill whose field may be submitted with Enter (search-like fields only). */
+  submit: z.boolean().optional(),
+  /** A click inside a cookie/consent/privacy banner or dialog (page-side
+   *  judgement): "Accept" there is not a risky action. */
+  consent: z.boolean().optional(),
+  /** Outside the viewport (a pager, or a control named by a goal term);
+   *  acting on it scrolls it into view first. */
+  offscreen: z.boolean().optional(),
 });
 export type JevAction = z.infer<typeof JevAction>;
 
@@ -39,13 +47,19 @@ export const JevObservation = z.object({
 });
 export type JevObservation = z.infer<typeof JevObservation>;
 
-export const JevObserveParams = z.object({ browserId, tabId });
+export const JevObserveParams = z.object({
+  browserId,
+  tabId,
+  /** Distinctive words of the goal: off-screen links/buttons named by one
+   *  are listed beside the viewport's controls (see `JevAction.offscreen`). */
+  terms: z.array(z.string()).optional(),
+});
 export type JevObserveParams = z.infer<typeof JevObserveParams>;
 
 export const JevActParams = z.object({
   browserId,
   tabId,
-  op: z.enum(["click", "type", "select", "scroll", "wait"]),
+  op: z.enum(["click", "type", "select", "submit", "scroll", "wait"]),
   node: z.number().optional(),
   /** The chosen element's label, for the audit trail; the extension ignores it. */
   label: z.string().optional(),
@@ -58,7 +72,8 @@ export const JevActParams = z.object({
 export type JevActParams = z.infer<typeof JevActParams>;
 
 export const JevActResult = z.union([
-  z.object({ ok: z.literal(true) }),
+  /** `openedTabId`: the click opened a new tab (target=_blank); the run follows it. */
+  z.object({ ok: z.literal(true), openedTabId: z.number().optional() }),
   z.object({ stale: z.literal(true), reason: z.string() }),
 ]);
 export type JevActResult = z.infer<typeof JevActResult>;

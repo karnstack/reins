@@ -18,6 +18,7 @@ export async function runKey(
   },
 ): Promise<string> {
   const [sub, provider = "typesafe", ...extra] = argv;
+  if (sub === "help" || sub === "--help" || sub === "-h") return KEY_USAGE;
   if (provider !== "typesafe" || extra.length > 0) throw new UsageError(KEY_USAGE);
   switch (sub) {
     case "set": {

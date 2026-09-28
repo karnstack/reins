@@ -80,6 +80,99 @@ describe("handleRpc", () => {
     expect(JSON.stringify(records)).not.toContain("abcd1234");
   });
 
+  it("runs do in the daemon and audits its outcome with fills redacted", async () => {
+    const bridge = fakeBridge();
+    const records: AuditRecord[] = [];
+    const doRun = vi.fn(async () => ({
+      status: "done" as const,
+      steps: [],
+      url: "",
+      title: "",
+      elapsedMs: 1,
+      jevCalls: 3,
+      inputTokens: 0,
+      step: 2,
+      maxSteps: 30,
+      pageChanges: 2,
+    }));
+    const signal = new AbortController().signal;
+    const result = await handleRpc(
+      bridge,
+      { method: "do", params: { goal: "g", fills: { from: "Zurich" } } },
+      (r) => records.push(r),
+      { doRun, signal },
+    );
+    expect(result).toMatchObject({ status: "done" });
+    expect(doRun).toHaveBeenCalledWith({ goal: "g", fills: { from: "Zurich" } }, signal);
+    expect(bridge.requestFull).not.toHaveBeenCalled();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      method: "do",
+      ok: true,
+      outcome: "done · 2 steps · 3 jev calls",
+      params: { goal: "g", fills: { from: "[redacted 6 chars]" } },
+    });
+    expect(records[0]?.error).toBeUndefined();
+    expect(JSON.stringify(records)).not.toContain("Zurich");
+  });
+
+  it("audits a stopped do as ok: false with the status and reason", async () => {
+    const records: AuditRecord[] = [];
+    const doRun = vi.fn(async () => ({
+      status: "risky_action" as const,
+      reason: 'next click is "Buy" (risky word)',
+      steps: [],
+      url: "",
+      title: "",
+      elapsedMs: 1,
+      jevCalls: 1,
+      inputTokens: 0,
+      step: 1,
+      maxSteps: 30,
+      pageChanges: 0,
+    }));
+    const result = await handleRpc(
+      fakeBridge(),
+      { method: "do", params: { goal: "g" } },
+      (r) => records.push(r),
+      { doRun },
+    );
+    expect(result).toMatchObject({ status: "risky_action" });
+    expect(records[0]).toMatchObject({
+      method: "do",
+      ok: false,
+      outcome: "risky_action · 1 steps · 1 jev calls",
+      error: 'risky_action: next click is "Buy" (risky word)',
+    });
+    expect(records[0]?.denied).toBeUndefined();
+  });
+
+  it("turns malformed do params into one readable RpcBadRequest line, audited as such", async () => {
+    const records: AuditRecord[] = [];
+    const doRun = vi.fn(async () => {
+      throw new RpcBadRequest("invalid reins do params: fills: Invalid");
+    });
+    const promise = handleRpc(
+      fakeBridge(),
+      { method: "do", params: { goal: "g", fills: { From: "Zurich" } } },
+      (r) => records.push(r),
+      { doRun },
+    );
+    await expect(promise).rejects.toBeInstanceOf(RpcBadRequest);
+    expect(records[0]).toMatchObject({
+      method: "do",
+      ok: false,
+      error: "invalid reins do params: fills: Invalid",
+    });
+    expect(JSON.stringify(records)).not.toContain("Zurich");
+  });
+
+  it("refuses do when the daemon has no doRun", async () => {
+    await expect(handleRpc(fakeBridge(), { method: "do", params: { goal: "g" } })).rejects.toThrow(
+      "reins do is not available in this daemon",
+    );
+  });
+
   it("rejects malformed bodies with RpcBadRequest", async () => {
     const bridge = fakeBridge();
     for (const body of [null, 42, "x", {}, { method: "" }, { method: "x", params: [] }]) {

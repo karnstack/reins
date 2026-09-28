@@ -110,10 +110,35 @@ describe("withDebugger session", () => {
   it("leaves the page untouched for everything else (reads, dialogs, eval)", async () => {
     // Read-tier commands must not mutate the page, and a command that has to
     // work under a JS dialog can't wait on an evaluate the dialog blocks.
+    // Focus emulation is the one exception: session-level, no page script,
+    // and a dialog doesn't block it.
     stubChrome();
     const calls = recordCommands();
     await withDebugger(7, async () => "read");
-    expect(calls).toEqual([]);
+    expect(calls.map((c) => c.method)).toEqual(["Emulation.setFocusEmulationEnabled"]);
+  });
+
+  it("emulates page focus once per attach, for every command", async () => {
+    // A tab reins opened has Chrome's omnibox focused: document.hasFocus() is
+    // false and sites that key behaviour off focus diverge from a human session.
+    stubChrome();
+    const calls = recordCommands();
+    await withDebugger(7, async () => "read");
+    await withDebugger(7, async () => "drive", { guard: true });
+    expect(calls.filter((c) => c.method === "Emulation.setFocusEmulationEnabled")).toEqual([
+      { method: "Emulation.setFocusEmulationEnabled", params: { enabled: true } },
+    ]);
+    // A new session emulates again: the setting died with the old one.
+    onDetach?.({ tabId: 7 });
+    await withDebugger(7, async () => "again");
+    expect(calls.filter((c) => c.method === "Emulation.setFocusEmulationEnabled")).toHaveLength(2);
+  });
+
+  it("still runs the command when focus emulation is refused", async () => {
+    stubChrome();
+    (chrome.debugger as unknown as { sendCommand: () => Promise<never> }).sendCommand = async () =>
+      Promise.reject(new Error("'Emulation.setFocusEmulationEnabled' wasn't found"));
+    expect(await withDebugger(7, async () => "ran")).toBe("ran");
   });
 
   it("re-registers the new-document guard with an absolute expiry on every renewal", async () => {
@@ -188,6 +213,7 @@ describe("cdpClick", () => {
     const events: Array<Record<string, unknown>> = [];
     const visible = [...(opts.visible ?? [true])];
     const update = vi.fn(async () => ({}));
+    const create = vi.fn(async () => ({ id: 41 }));
     vi.stubGlobal("chrome", {
       debugger: {
         attach: vi.fn(async () => {}),
@@ -197,7 +223,7 @@ describe("cdpClick", () => {
           if (method === "Input.dispatchMouseEvent") events.push(params);
           if (method !== "Runtime.evaluate") return {};
           const expr = String(params.expression);
-          if (expr.includes("visibilityState")) {
+          if (expr === "document.visibilityState") {
             const v = visible.length > 1 ? visible.shift() : visible[0];
             return { result: { value: v ? "visible" : "hidden" } };
           }
@@ -211,10 +237,10 @@ describe("cdpClick", () => {
           return { result: { value: null } };
         }),
       },
-      tabs: { update },
+      tabs: { update, create, get: vi.fn(async () => ({ id: 7, windowId: 2, index: 4 })) },
     });
     initDebugSessionListeners();
-    return { events, update };
+    return { events, update, create };
   }
 
   it("moves, presses with the left-button bitmask, then releases", async () => {
@@ -238,6 +264,35 @@ describe("cdpClick", () => {
       clickCount: 1,
     });
     expect(events[2]).toMatchObject({ type: "mouseReleased", button: "left", clickCount: 1 });
+  });
+
+  it("opens the tab a new-tab link would have, next to the opener and active", async () => {
+    // The probe cancelled the link's own navigation (which raises Chrome's
+    // window over the user's app) and reported its href; the extension opens
+    // it with chrome.tabs.create, which shows the tab without raising Chrome.
+    const { create, update } = stubClickChrome({
+      probe: { state: "hit", newTabUrl: "https://docs.example/start" },
+    });
+    expect(await cdpClick({ tabId: 7, ref: "e1", button: "left", clickCount: 1 })).toEqual({
+      ok: true,
+      openedTabId: 41,
+    });
+    expect(create).toHaveBeenCalledWith({
+      url: "https://docs.example/start",
+      windowId: 2,
+      index: 5,
+      openerTabId: 7,
+      active: true,
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("a click that opened no new-tab link is a plain ok", async () => {
+    const { create } = stubClickChrome();
+    expect(await cdpClick({ tabId: 7, ref: "e1", button: "left", clickCount: 1 })).toEqual({
+      ok: true,
+    });
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("uses the right-button bitmask for a right click", async () => {
@@ -418,7 +473,7 @@ describe("cdpType", () => {
         sendCommand: vi.fn(async (_t: unknown, method: string, params: { expression?: string }) => {
           methods.push(method);
           if (method !== "Runtime.evaluate") return {};
-          if (String(params.expression).includes("visibilityState")) {
+          if (params.expression === "document.visibilityState") {
             return {
               result: {
                 value: (visible.length > 1 ? visible.shift() : visible[0]) ? "visible" : "hidden",

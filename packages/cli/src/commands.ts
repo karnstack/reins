@@ -9,6 +9,8 @@ import type {
 } from "@reins/protocol";
 import { type ParsedArgs, UsageError } from "./args.js";
 import { groupsText, tabsText } from "./cli-commands.js";
+import { formatDoResult } from "./jev/format.js";
+import { type DoResult, doExitCode } from "./jev/types.js";
 
 /** One `reins <name>` tool subcommand: flags → /rpc params → printed text. */
 export interface ToolCommand {
@@ -23,6 +25,12 @@ export interface ToolCommand {
   build(a: ParsedArgs): Record<string, unknown>;
   /** Compact text output (default: pretty JSON of the raw result). */
   format?(result: unknown, a: ParsedArgs): string;
+  /** How long the CLI waits for the daemon's answer (default 30 s). */
+  timeoutMs?(params: Record<string, unknown>): number;
+  /** What a daemon timeout may mean for this command (e.g. "the run may still be finishing"). */
+  timeoutHint?: string;
+  /** Process exit code for a successful call (default 0). */
+  exitCode?(result: unknown): number;
 }
 
 function flagStr(a: ParsedArgs, name: string): string | undefined {
@@ -104,6 +112,28 @@ function base(a: ParsedArgs): Record<string, unknown> {
   const tab = flagInt(a, "tab");
   if (tab !== undefined) out.tabId = tab;
   return out;
+}
+
+/** Repeatable flag → list (empty when absent). */
+function listFlag(a: ParsedArgs, name: string): string[] {
+  const v = a.flags[name];
+  if (v === undefined) return [];
+  return (Array.isArray(v) ? v : [v]).map(String);
+}
+
+/** Repeatable --fill name=value → { name: value }. */
+function parseFills(a: ParsedArgs): Record<string, string> {
+  const fills: Record<string, string> = {};
+  for (const raw of listFlag(a, "fill")) {
+    const eq = raw.indexOf("=");
+    if (eq <= 0) throw new UsageError(`--fill needs name=value, got "${raw}"`);
+    const name = raw.slice(0, eq);
+    if (!/^[a-z0-9_-]+$/.test(name)) {
+      throw new UsageError(`--fill names are lowercase letters, digits, _ or -, got "${name}"`);
+    }
+    fills[name] = raw.slice(eq + 1);
+  }
+  return fills;
 }
 
 function target(a: ParsedArgs, required: boolean): Record<string, unknown> {
@@ -224,6 +254,40 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
     },
     format: (r) => `→ ${(r as { url: string }).url}`,
   },
+  do: {
+    method: "do",
+    usage:
+      "reins do '<goal>' [--fill name=value]... [--confirm '<label>']... [--continue] [--max-steps 30] [--timeout 60] [--tab <id>] [--browser <id>] [--json]",
+    summary:
+      "hand a small task to Jev: it clicks and types until done (needs `reins key set typesafe`)",
+    booleans: ["continue"],
+    multi: ["fill", "confirm"],
+    build: (a) => {
+      const goal = a.positional.join(" ").trim();
+      const cont = a.flags.continue === true;
+      if (!goal && !cont) throw new UsageError('a goal is required: reins do "<goal>"');
+      const maxSteps = flagInt(a, "max-steps") ?? 30;
+      if (maxSteps < 1 || maxSteps > 200) throw new UsageError("--max-steps must be 1–200");
+      const timeoutSec = flagInt(a, "timeout") ?? 60;
+      if (timeoutSec < 5 || timeoutSec > 600)
+        throw new UsageError("--timeout must be 5–600 seconds");
+      return {
+        ...base(a),
+        ...(goal ? { goal } : {}),
+        fills: parseFills(a),
+        confirms: listFlag(a, "confirm"),
+        continue: cont,
+        maxSteps,
+        timeoutSec,
+      };
+    },
+    // The loop cuts itself off at --timeout, but the jev_act in flight at that
+    // moment can still take one full bridge call (30 s) to come back.
+    timeoutMs: (p) => (Number(p.timeoutSec ?? 60) + 40) * 1000,
+    timeoutHint: "the run may still be finishing",
+    exitCode: (r) => doExitCode(r as DoResult),
+    format: (r) => formatDoResult(r as DoResult),
+  },
   snapshot: {
     method: "read_snapshot",
     usage: "reins snapshot [--tab <id>] [--max-chars <n>]",
@@ -251,7 +315,10 @@ export const TOOL_COMMANDS: Record<string, ToolCommand> = {
         ...(count !== undefined ? { clickCount: count } : {}),
       };
     },
-    format: ok,
+    format: (r) => {
+      const { openedTabId } = r as { openedTabId?: number };
+      return openedTabId === undefined ? "ok" : `ok — opened tab ${openedTabId} (now active)`;
+    },
   },
   type: {
     method: "type",

@@ -7,7 +7,7 @@ import {
   Policy,
   type Tier,
 } from "@reins/protocol";
-import { jevReadyText, jevStateFrom, jevViewFlags } from "./lib/jev-view.js";
+import { jevMaskedKey, jevStateFrom, jevViewFlags } from "./lib/jev-view.js";
 import { POLICY_KEY, type PolicyChange } from "./lib/policy.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
@@ -422,6 +422,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 const jevPitch = document.getElementById("jev-pitch") as HTMLElement;
 const jevReady = document.getElementById("jev-ready") as HTMLElement;
+const jevLast4 = document.getElementById("jev-last4") as HTMLElement;
 const jevForm = document.getElementById("jev-form") as HTMLFormElement;
 const jevKey = document.getElementById("jev-key") as HTMLInputElement;
 const jevSave = document.getElementById("jev-save") as HTMLButtonElement;
@@ -496,7 +497,7 @@ async function renderJev(connected: boolean, stickyError?: string): Promise<void
   const flags = jevViewFlags(state, jevReplacing, jevSaving);
   jevPitch.hidden = flags.pitchHidden;
   jevReady.hidden = flags.readyHidden;
-  if (state.kind === "set") jevReady.textContent = jevReadyText(state.last4);
+  if (state.kind === "set") jevLast4.textContent = jevMaskedKey(state.last4);
   jevForm.hidden = flags.formHidden;
   jevActions.hidden = flags.actionsHidden;
   jevCancel.hidden = flags.cancelHidden;
@@ -504,6 +505,7 @@ async function renderJev(connected: boolean, stickyError?: string): Promise<void
   jevKey.disabled = flags.disabled;
   jevSave.disabled = flags.disabled;
   jevCancel.disabled = flags.disabled;
+  jevRemove.disabled = flags.disabled;
   showJevError(flags.error ?? stickyError);
 }
 
@@ -511,7 +513,9 @@ function jevStopReplacing(): void {
   if (!jevReplacing) return;
   jevReplacing = false;
   jevKey.value = "";
-  void renderJev(true).then(() => jevReplace.focus());
+  void jevConnected()
+    .then((connected) => renderJev(connected))
+    .then(() => jevReplace.focus());
 }
 
 jevForm.addEventListener("submit", (ev) => {
@@ -519,8 +523,13 @@ jevForm.addEventListener("submit", (ev) => {
   const key = jevKey.value.trim();
   if (!key || jevSaving) return;
   jevSaving = true;
+  // Nothing may change the key while the daemon is checking this one: Cancel
+  // would clear the form under the request, Remove would race its write.
+  // The renderer re-enables them once the save settles.
   jevKey.disabled = true;
   jevSave.disabled = true;
+  jevCancel.disabled = true;
+  jevRemove.disabled = true;
   jevSave.textContent = "Checking…";
   void jevCall("key_set", { provider: "typesafe", key }, JEV_SET_TIMEOUT_MS)
     .then(() => {
@@ -544,7 +553,9 @@ jevForm.addEventListener("submit", (ev) => {
 
 jevReplace.addEventListener("click", () => {
   jevReplacing = true;
-  void renderJev(true).then(() => jevKey.focus());
+  void jevConnected()
+    .then((connected) => renderJev(connected))
+    .then(() => jevKey.focus());
 });
 
 jevCancel.addEventListener("click", jevStopReplacing);

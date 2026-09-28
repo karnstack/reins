@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forge — projects</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #2f3e6e; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 760px; margin: 32px auto; padding: 0 16px; }
+  .bar { display: flex; justify-content: space-between; align-items: center; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #eef0f3; }
+  th { font-size: 13px; color: #666; background: #fafbfc; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #eef0f3; }
+  button { font: inherit; padding: 9px 16px; border-radius: 6px; border: 1px solid #2f3e6e; background: #2f3e6e; color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: #2f3e6e; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .backdrop { position: fixed; inset: 0; background: rgba(20, 24, 40, .55); display: flex; align-items: center; justify-content: center; }
+  .modal { background: #fff; border-radius: 10px; width: 520px; max-width: calc(100% - 32px); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .modal header { background: #fff; color: #1a1a1a; border-bottom: 1px solid #dfe3e8; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
+  .modal header button { all: unset; cursor: pointer; font-size: 20px; color: #666; padding: 0 4px; }
+  .modal .body { padding: 20px; }
+  .steps { display: flex; gap: 12px; font-size: 13px; color: #666; margin-bottom: 16px; }
+  .steps .current { color: #2f3e6e; font-weight: 600; }
+  label { display: block; font-weight: 600; margin: 12px 0 6px; }
+  input[type=text], textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; font: inherit; border: 1px solid #b9c0c8; border-radius: 6px; }
+  [role=radiogroup] { display: grid; gap: 10px; }
+  [role=radio] { display: block; text-align: left; background: #fff; color: #1a1a1a; border: 1px solid #b9c0c8; border-radius: 8px; padding: 12px 14px; cursor: pointer; }
+  [role=radio]::before { content: "○ "; color: #888; }
+  [role=radio][aria-checked=true] { border-color: #2f3e6e; box-shadow: 0 0 0 2px #2f3e6e33; }
+  [role=radio][aria-checked=true]::before { content: "● "; color: #2f3e6e; }
+  [role=radio] .hint { display: block; font-weight: 400; font-size: 13px; color: #666; margin-left: 18px; }
+  .error { color: #b3261e; margin-top: 8px; }
+  .actions { display: flex; justify-content: space-between; margin-top: 20px; }
+  dl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; }
+  dt { color: #666; }
+</style>
+</head>
+<body>
+<header>Forge</header>
+<main>
+  <div class="bar">
+    <h1>Projects</h1>
+    <button type="button" id="new-project" aria-haspopup="dialog">New project</button>
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Visibility</th><th>Owner</th></tr></thead>
+    <tbody id="projects">
+      <tr><td>Billing service</td><td><span class="badge">Private</span></td><td>Sam Rivera</td></tr>
+      <tr><td>Docs site</td><td><span class="badge">Public</span></td><td>Sam Rivera</td></tr>
+      <tr><td>Mobile app</td><td><span class="badge">Team</span></td><td>Nadia Okafor</td></tr>
+    </tbody>
+  </table>
+  <input type="hidden" id="projects-state" value="[]">
+</main>
+
+<div class="backdrop" id="backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <header><span id="dialog-title">New project</span><button type="button" id="close" aria-label="Close">×</button></header>
+    <div class="body">
+      <div class="steps"><span id="s1" class="current">1 Details</span><span id="s2">2 Visibility</span><span id="s3">3 Review</span></div>
+
+      <form id="step1">
+        <label for="name">Project name</label>
+        <input id="name" name="name" type="text" autocomplete="off">
+        <label for="description">Description <span style="font-weight:400;color:#666">(optional)</span></label>
+        <textarea id="description" rows="2"></textarea>
+        <p class="error" id="err1" hidden>Enter a project name.</p>
+        <div class="actions"><button type="button" class="secondary" id="cancel1">Cancel</button><button type="submit">Next</button></div>
+      </form>
+
+      <form id="step2" hidden>
+        <label id="vis-label">Who can see this project?</label>
+        <div role="radiogroup" aria-labelledby="vis-label">
+          <button type="button" role="radio" aria-checked="true" data-value="private">Private<span class="hint">Only you can see and edit it.</span></button>
+          <button type="button" role="radio" aria-checked="false" data-value="team">Team<span class="hint">Everyone in your organisation can see it.</span></button>
+          <button type="button" role="radio" aria-checked="false" data-value="public">Public<span class="hint">Anyone on the internet can see it.</span></button>
+        </div>
+        <div class="actions"><button type="button" class="secondary" id="back2">Back</button><button type="submit">Next</button></div>
+      </form>
+
+      <form id="step3" hidden>
+        <dl>
+          <dt>Name</dt><dd id="rv-name"></dd>
+          <dt>Description</dt><dd id="rv-description"></dd>
+          <dt>Visibility</dt><dd id="rv-visibility"></dd>
+        </dl>
+        <div class="actions"><button type="button" class="secondary" id="back3">Back</button><button type="submit">Create project</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  // A three-step wizard in a modal dialog. Step 2 is a custom radio group
+  // (role=radio buttons, aria-checked) defaulting to Private. Only "Create
+  // project" on step 3 adds a row and records it in #projects-state; Cancel,
+  // Close and the backdrop discard everything.
+  const LABELS = { private: "Private", team: "Team", public: "Public" };
+  const created = [];
+  const backdrop = document.getElementById("backdrop");
+  const steps = [1, 2, 3].map((n) => document.getElementById(`step${n}`));
+  const marks = [1, 2, 3].map((n) => document.getElementById(`s${n}`));
+  const nameInput = document.getElementById("name");
+  const description = document.getElementById("description");
+  const radios = [...document.querySelectorAll("[role=radio]")];
+  const projectsState = document.getElementById("projects-state");
+  let visibility = "private";
+
+  function show(n) {
+    steps.forEach((s, i) => { s.hidden = i !== n - 1; });
+    marks.forEach((m, i) => m.classList.toggle("current", i === n - 1));
+  }
+  function open() {
+    nameInput.value = "";
+    description.value = "";
+    setVisibility("private");
+    document.getElementById("err1").hidden = true;
+    backdrop.hidden = false;
+    show(1);
+    nameInput.focus();
+  }
+  function close() { backdrop.hidden = true; }
+  function setVisibility(v) {
+    visibility = v;
+    for (const r of radios) {
+      const on = r.dataset.value === v;
+      r.setAttribute("aria-checked", String(on));
+      r.tabIndex = on ? 0 : -1;
+    }
+  }
+
+  document.getElementById("new-project").addEventListener("click", open);
+  document.getElementById("close").addEventListener("click", close);
+  document.getElementById("cancel1").addEventListener("click", close);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !backdrop.hidden) close(); });
+
+  steps[0].addEventListener("submit", (e) => {
+    e.preventDefault();
+    const ok = nameInput.value.trim().length > 0;
+    document.getElementById("err1").hidden = ok;
+    if (ok) show(2);
+  });
+  for (const r of radios) r.addEventListener("click", () => setVisibility(r.dataset.value));
+  document.getElementById("back2").addEventListener("click", () => show(1));
+  steps[1].addEventListener("submit", (e) => {
+    e.preventDefault();
+    document.getElementById("rv-name").textContent = nameInput.value.trim();
+    document.getElementById("rv-description").textContent = description.value.trim() || "—";
+    document.getElementById("rv-visibility").textContent = LABELS[visibility];
+    show(3);
+  });
+  document.getElementById("back3").addEventListener("click", () => show(2));
+  steps[2].addEventListener("submit", (e) => {
+    e.preventDefault();
+    const project = { name: nameInput.value.trim(), description: description.value.trim(), visibility };
+    created.push(project);
+    projectsState.value = JSON.stringify(created);
+    const tr = document.createElement("tr");
+    for (const text of [project.name, null, "Sam Rivera"]) {
+      const td = document.createElement("td");
+      if (text === null) {
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = LABELS[visibility];
+        td.appendChild(badge);
+      } else td.textContent = text;
+      tr.appendChild(td);
+    }
+    document.getElementById("projects").appendChild(tr);
+    close();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import type {
   ClickParams,
+  ClickResult,
   EvalParams,
   NavigateParams,
   OpenTabParams,
@@ -53,10 +54,28 @@ async function attachErrorMessage(tabId: number, attempt: number, msg: string): 
   }
 }
 
+/**
+ * Make the page report focus. A tab reins opened (about:blank, then
+ * navigated) or drives from the shell leaves Chrome's omnibox focused, so in
+ * the page `document.hasFocus()` is false — and sites that key behaviour off
+ * focus (GitHub's search combobox, a password manager's "menu is available"
+ * text) diverge from a human session. The emulation belongs to the debugger
+ * session, so every attach — any command, not only `reins do` — enables it
+ * once. Best-effort: a target that refuses it still runs the command.
+ */
+export async function emulateFocus(tabId: number): Promise<void> {
+  try {
+    await send(tabId, "Emulation.setFocusEmulationEnabled", { enabled: true });
+  } catch {
+    // Not a page target, or an older Chrome — the command itself still runs.
+  }
+}
+
 async function attachWithRetry(tabId: number, maxTries = 6): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       await chrome.debugger.attach({ tabId }, PROTOCOL);
+      await emulateFocus(tabId);
       return;
     } catch (err) {
       // A monitor may have grabbed the session mid-race; the caller reuses it.
@@ -377,6 +396,28 @@ export async function actionablePoint(
  * explicit: CDP's own defaults (button "none", clickCount 0) move the pointer
  * but never press.
  */
+/** pressAt's refusal when the press was seen landing on another element. */
+export const PRESS_MISSED = /landed on .+ instead — the page changed under the pointer/;
+
+/**
+ * Open `url` — a link's cancelled new-tab navigation — as the tab a click on
+ * the link would have opened: next to the opener, active, owing it as opener.
+ * chrome.tabs.create shows the tab inside Chrome without raising Chrome's
+ * window over the app the user is working in, which the link's own
+ * navigation would have done.
+ */
+export async function openLinkTab(tabId: number, url: string): Promise<number | undefined> {
+  const opener = await chrome.tabs.get(tabId);
+  const created = await chrome.tabs.create({
+    url,
+    windowId: opener.windowId,
+    index: opener.index + 1,
+    openerTabId: tabId,
+    active: true,
+  });
+  return created.id;
+}
+
 export async function pressAt(
   tabId: number,
   x: number,
@@ -384,7 +425,7 @@ export async function pressAt(
   what: string,
   button: "left" | "right" | "middle" = "left",
   clickCount = 1,
-): Promise<void> {
+): Promise<{ newTabUrl?: string }> {
   // CDP synthesizes a real click only when the pressed-button bitmask is set
   // (button alone isn't enough — the target never sees a `click`). Move the
   // pointer first so hit-testing lands on the element under (x, y).
@@ -414,16 +455,26 @@ export async function pressAt(
       `click on ${what} landed on ${probe.by} instead — the page changed under the pointer. Re-snapshot and retry.`,
     );
   }
+  // The press activated a link to a new tab: the probe cancelled the link's
+  // own navigation (it would raise Chrome's window over the user's app) and
+  // the caller opens the URL as a tab itself — see actionPoint.
+  return probe?.newTabUrl !== undefined ? { newTabUrl: probe.newTabUrl } : {};
 }
 
-export async function cdpClick(params: ClickParams): Promise<{ ok: true }> {
+export async function cdpClick(params: ClickParams): Promise<ClickResult> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
+  const button = params.button ?? "left";
+  const clickCount = params.clickCount ?? 1;
   return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     const { x, y } = await actionablePoint(tabId, css, "click", true);
-    await pressAt(tabId, x, y, css, params.button ?? "left", params.clickCount ?? 1);
-    return { ok: true };
+    const { newTabUrl } = await pressAt(tabId, x, y, css, button, clickCount);
+    if (newTabUrl === undefined) return { ok: true };
+    // The user sees the new tab as after a normal click, without Chrome
+    // raising its window over the app they are working in.
+    const openedTabId = await openLinkTab(tabId, newTabUrl);
+    return openedTabId === undefined ? { ok: true } : { ok: true, openedTabId };
   });
 }
 

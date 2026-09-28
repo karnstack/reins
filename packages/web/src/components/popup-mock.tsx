@@ -76,8 +76,8 @@ export function PopupMock({ className }: { className?: string }) {
             Drive this browser from your agent
           </p>
         </div>
-        <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          <span className="size-1.5 rounded-full bg-current" />
+        <span className="flex items-center gap-1.5 rounded-full bg-foreground/5 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-500" />
           Connected
         </span>
       </div>

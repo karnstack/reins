@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reins Docs</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0; background: #fff; color: #1a1a1a; }
+  header { background: #3b2f63; color: #fff; padding: 12px 24px; font-weight: 600; }
+  .layout { display: flex; gap: 32px; max-width: 960px; margin: 24px auto; padding: 0 16px; }
+  aside { width: 240px; flex: none; }
+  aside input { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 14px; border: 1px solid #b9c0c8; border-radius: 6px; margin-bottom: 12px; }
+  aside ul { list-style: none; padding: 0; margin: 0; }
+  aside li a { display: block; padding: 6px 8px; border-radius: 6px; color: #24292f; text-decoration: none; }
+  aside li a:hover { background: #f3f0fa; }
+  aside li a[aria-current=page] { background: #e6e1f5; font-weight: 600; }
+  article { flex: 1; }
+</style>
+</head>
+<body>
+<header>Reins Docs</header>
+<div class="layout">
+  <aside>
+    <label for="filter" style="display:block;font-weight:600;margin-bottom:6px">Search docs</label>
+    <input id="filter" type="search" placeholder="Filter articles…" autocomplete="off" aria-controls="toc">
+    <ul id="toc" aria-label="Articles"></ul>
+  </aside>
+  <article id="article" aria-live="polite">
+    <h1 id="article-title">Welcome</h1>
+    <div id="article-body"><p>Pick an article from the list, or filter the list with the search box.</p></div>
+  </article>
+</div>
+<script>
+(() => {
+  const ARTICLES = {
+    "getting-started": ["Getting started", "Install the CLI, pair the extension, run your first command."],
+    "commands": ["Command reference", "Every reins command with its flags."],
+    "site-policy": ["Site policy", "Per-site permissions: allow, readonly and deny patterns, and how popups are granted."],
+    "privacy-policy": ["Privacy policy", "What the daemon stores locally and what never leaves the machine."],
+    "policy-cli": ["Policy CLI", "Using `reins policy` to show, deny and readonly a pattern."],
+    "audit-log": ["Audit log", "The per-action trail and how to read it."],
+    "troubleshooting": ["Troubleshooting", "Doctor checks and common fixes."],
+  };
+  const toc = document.getElementById("toc");
+  const filter = document.getElementById("filter");
+  function renderList() {
+    const q = filter.value.trim().toLowerCase();
+    toc.innerHTML = Object.entries(ARTICLES)
+      .filter(([, [t, d]]) => !q || (t + " " + d).toLowerCase().includes(q))
+      .map(([slug, [t]]) => `<li><a href="#${slug}" data-slug="${slug}" ${location.hash === "#" + slug ? 'aria-current="page"' : ""}>${t}</a></li>`)
+      .join("") || "<li><em>No articles match.</em></li>";
+  }
+  function renderArticle() {
+    const slug = location.hash.slice(1);
+    const a = ARTICLES[slug];
+    if (!a) return;
+    document.getElementById("article-title").textContent = a[0];
+    document.getElementById("article-body").innerHTML = `<p>${a[1]}</p><p>This is the full text of the “${a[0]}” article.</p>`;
+    document.title = `${a[0]} — Reins Docs`;
+    renderList();
+  }
+  filter.addEventListener("input", renderList);
+  window.addEventListener("hashchange", renderArticle);
+  renderList();
+  renderArticle();
+})();
+</script>
+</body>
+</html>

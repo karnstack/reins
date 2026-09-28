@@ -4,7 +4,10 @@ import { BridgeHost } from "./bridge.js";
 import { candidatePorts, loadOrCreateConfig, recordPort } from "./config.js";
 import { type Daemon, startDaemon } from "./daemon.js";
 import { type FoundDaemon, probeHealth } from "./ensure.js";
+import { handleDo } from "./jev/do.js";
 import { createKeyService } from "./jev/keys.js";
+import { RunStore } from "./jev/runs.js";
+import { fileTraceSink } from "./jev/trace.js";
 import { createLogger, type Log, logsDir } from "./log.js";
 import { handleRpc } from "./rpc.js";
 
@@ -51,6 +54,12 @@ export async function runDaemon(): Promise<void> {
   const pruned = pruneAuditLogs(logsDir(), new Date());
   if (pruned.length > 0) log(`reins: pruned ${pruned.length} audit file(s) older than 30 days`);
   const keys = createKeyService({ dir: config.dir });
+  const runs = new RunStore();
+  // Opt-in `reins do` diagnostics: one JSON line per Jev call (question keys,
+  // probabilities, chosen targets, tokens — never page text or the key).
+  const traceFile = process.env.REINS_JEV_TRACE;
+  const trace = traceFile ? fileTraceSink(traceFile) : undefined;
+  if (trace) log(`reins: writing Jev trace lines to ${traceFile}`);
   const bridge: BridgeHost = new BridgeHost({
     allowedOrigins: loadAllowedOrigins(config.dir),
     log,
@@ -76,7 +85,17 @@ export async function runDaemon(): Promise<void> {
         bridge,
         log,
         audit,
-        context: { keys },
+        context: {
+          keys,
+          doRun: (params, signal) =>
+            handleDo(bridge, params, {
+              runs,
+              credentialsDir: config.dir,
+              signal,
+              audit,
+              ...(trace ? { trace } : {}),
+            }),
+        },
         onShutdown: () => void shutdown("/shutdown", () => daemon.close()),
       }),
     );

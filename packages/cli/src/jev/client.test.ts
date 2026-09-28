@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createJevAsk, JevError, validateChoice, validateKey } from "./client.js";
+import { createJevAsk, JevError, validateChoice, validateKey, validateNoul } from "./client.js";
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -26,6 +26,20 @@ describe("createJevAsk", () => {
     expect(url).toBe("https://api.typesafe.ai/v1/systemone");
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer ts_key_12345678");
     expect(JSON.parse(String(init.body)).model).toBe("jev-latest");
+  });
+
+  it("reports each request's input tokens, 0 when the reply has no usage", async () => {
+    const onUsage = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { ...OK, usage: { input_tokens: 1234, output_tokens: 2 } }))
+      .mockResolvedValueOnce(json(200, { ...OK, usage: undefined }))
+      .mockImplementation(async () => json(500, {})); // a fresh Response per retry
+    const ask = createJevAsk({ key: "ts_key_12345678", fetch, retry: NO_WAIT, onUsage });
+    await ask(BODY);
+    await ask(BODY);
+    await expect(ask(BODY)).rejects.toMatchObject({ code: "http" });
+    expect(onUsage.mock.calls).toEqual([[1234], [0]]);
   });
 
   it("retries a 429, then succeeds", async () => {
@@ -78,11 +92,46 @@ describe("validateChoice", () => {
     ["an extra probability", { ...good, probabilities: { a: 0.5, b: 0.3, c: 0.2 } }],
     ["probabilities that don't sum to 1", { ...good, probabilities: { a: 0.5, b: 0.1 } }],
     ["a choice that isn't the most likely", { ...good, probabilities: { a: 0.3, b: 0.7 } }],
+    ["a choice more than rounding under the top", { ...good, probabilities: { a: 0.48, b: 0.52 } }],
     ["confidence out of range", { ...good, confidence: 1.5 }],
     ["probabilities that aren't an object", { ...good, probabilities: "ab" }],
     ["nothing at all", undefined],
   ])("rejects %s", (_name, answer) => {
     expect(() => validateChoice(answer, ids)).toThrow(JevError);
+  });
+
+  it("accepts a choice within rounding of the top probability (a reported tie)", () => {
+    expect(() =>
+      validateChoice({ ...good, probabilities: { a: 0.49, b: 0.51 } }, ids),
+    ).not.toThrow();
+    expect(() =>
+      validateChoice({ ...good, probabilities: { a: 0.3, b: 0.31, c: 0.39 } }, ["a", "b", "c"]),
+    ).toThrow(JevError);
+    expect(() =>
+      validateChoice({ ...good, probabilities: { a: 0.38, b: 0.23, c: 0.39 } }, ["a", "b", "c"]),
+    ).not.toThrow();
+  });
+
+  it("only counts a probability the answer itself carries, not one from the prototype", () => {
+    const answer = { choice: "a", confidence: 0.9, probabilities: { a: 1, toString: 0 } };
+    expect(() => validateChoice(answer, ["a", "b"])).toThrow(JevError);
+    expect(() => validateChoice(answer, ["a", "toString"])).not.toThrow();
+  });
+});
+
+describe("validateNoul", () => {
+  it("accepts a probability in [0, 1] and rejects anything else", () => {
+    expect(validateNoul({ type: "noul", noul: 0 })).toBe(0);
+    expect(validateNoul({ noul: 0.5 })).toBe(0.5);
+    for (const bad of [
+      undefined,
+      {},
+      { noul: -0.1 },
+      { noul: 1.01 },
+      { noul: Number.NaN },
+      { noul: "1" },
+    ])
+      expect(() => validateNoul(bad)).toThrow(JevError);
   });
 });
 

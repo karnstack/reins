@@ -2,7 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { parseArgs, UsageError } from "./args.js";
+import { parseArgs, UsageError, wantsHelp } from "./args.js";
 import {
   browsersText,
   doctorReport,
@@ -10,7 +10,9 @@ import {
   helpText,
   logsInfo,
   RESTART_WAIT_MS,
+  rpcFailure,
   runRestart,
+  usageText,
 } from "./cli-commands.js";
 import { TOOL_COMMANDS, type ToolCommand } from "./commands.js";
 import { loadOrCreateConfig } from "./config.js";
@@ -31,12 +33,16 @@ async function rpc(
   port: number,
   method: string,
   params: Record<string, unknown>,
+  timeoutMs = 30_000,
+  timeoutHint?: string,
 ): Promise<unknown> {
   const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ method, params }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
+  }).catch((err: unknown) => {
+    throw rpcFailure(err, timeoutMs, timeoutHint);
   });
   const body = (await res.json().catch(() => ({}))) as { result?: unknown; error?: string };
   if (!res.ok) throw new Error(body.error ?? `daemon replied ${res.status}`);
@@ -52,10 +58,12 @@ function screenshotFile(out: string | undefined, format: string): string {
 }
 
 async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<void> {
-  const a = parseArgs(argv, {
-    booleans: [...(cmd.booleans ?? []), "json"],
-    multi: cmd.multi,
-  });
+  const spec = { booleans: [...(cmd.booleans ?? []), "json"], multi: cmd.multi };
+  if (wantsHelp(argv, spec)) {
+    console.log(usageText(cmd));
+    return;
+  }
+  const a = parseArgs(argv, spec);
   const params = cmd.build(a);
 
   const ensured = await ensureDaemon(loadOrCreateConfig());
@@ -67,7 +75,13 @@ async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<
     await waitForBrowsers(ensured.port);
   }
 
-  const result = await rpc(ensured.port, cmd.methodFor?.(params) ?? cmd.method, params);
+  const result = await rpc(
+    ensured.port,
+    cmd.methodFor?.(params) ?? cmd.method,
+    params,
+    cmd.timeoutMs?.(params),
+    cmd.timeoutHint,
+  );
 
   if (name === "screenshot") {
     const shot = result as { data: string; mimeType: string };
@@ -82,9 +96,11 @@ async function runTool(name: string, cmd: ToolCommand, argv: string[]): Promise<
 
   if (a.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
-    return;
+  } else {
+    console.log(cmd.format ? cmd.format(result, a) : JSON.stringify(result, null, 2));
   }
-  console.log(cmd.format ? cmd.format(result, a) : JSON.stringify(result, null, 2));
+  const code = cmd.exitCode?.(result) ?? 0;
+  if (code !== 0) process.exitCode = code;
 }
 
 async function main(): Promise<void> {
@@ -209,7 +225,12 @@ async function main(): Promise<void> {
 
     case "key": {
       // Key methods are answered by the daemon itself — no browser needed.
-      const { runKey } = await import("./key-cli.js");
+      const { KEY_USAGE, runKey } = await import("./key-cli.js");
+      // Usage needs no daemon either: answer before starting one.
+      if (rest[0] === undefined || wantsHelp(rest) || rest[0] === "help") {
+        console.log(KEY_USAGE);
+        break;
+      }
       const { readSecret } = await import("./secret.js");
       const ensured = await ensureDaemon(loadOrCreateConfig());
       console.log(
@@ -283,7 +304,12 @@ async function main(): Promise<void> {
     case undefined: {
       const topic = rest[0] !== undefined ? TOOL_COMMANDS[rest[0]] : undefined;
       if (topic) {
-        console.log(`${topic.usage}\n  ${topic.summary}`);
+        console.log(usageText(topic));
+        break;
+      }
+      if (rest[0] === "key") {
+        const { KEY_USAGE } = await import("./key-cli.js");
+        console.log(KEY_USAGE);
         break;
       }
       console.log(helpText(packageVersion(), TOOL_COMMANDS));

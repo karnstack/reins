@@ -23,7 +23,11 @@
       "outputs": ["release/**"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      // Strict env mode strips undeclared variables: without this the
+      // extension's real-browser suite never sees the Chrome CI installed and
+      // falls back to whatever /usr/bin/google-chrome the runner image ships.
+      "env": ["REINS_TEST_CHROME"]
     }
   }
 }

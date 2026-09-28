@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lumen — help center</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #1f5f5b; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; color: #1f5f5b; }
+  .faq { background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; }
+  .faq h3 { margin: 0; font-size: 15px; border-bottom: 1px solid #eef0f3; }
+  .faq h3:last-of-type { border-bottom: 0; }
+  .faq h3 button { all: unset; display: flex; justify-content: space-between; width: 100%; box-sizing: border-box; padding: 14px 16px; cursor: pointer; font-weight: 600; }
+  .faq h3 button::after { content: "+"; color: #888; }
+  .faq h3 button[aria-expanded=true]::after { content: "–"; }
+  .faq [role=region] { padding: 0 16px 16px; color: #333; border-bottom: 1px solid #eef0f3; }
+  .faq [role=region] p { margin: 0 0 12px; }
+  .feedback { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #666; }
+  .feedback button { font: inherit; padding: 4px 12px; border-radius: 14px; border: 1px solid #b9c0c8; background: #fff; cursor: pointer; }
+  .feedback button[aria-pressed=true] { background: #1f5f5b; color: #fff; border-color: #1f5f5b; }
+  .feedback .thanks { color: #1f5f5b; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>Lumen Help Center</header>
+<main>
+  <h1>Frequently asked questions</h1>
+  <p>Answers to the questions we hear most often. Open a question to read its answer.</p>
+
+  <h2>Account</h2>
+  <div class="faq" data-group="account">
+    <h3><button type="button" aria-expanded="false" aria-controls="a-password" data-id="password">How do I reset my password?</button></h3>
+    <div id="a-password" role="region" aria-labelledby="q-password" hidden>
+      <p>Open Settings → Security and choose “Reset password”. We email a link that stays valid for one hour.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-email" data-id="email">Can I change the email address on my account?</button></h3>
+    <div id="a-email" role="region" hidden>
+      <p>Yes. Settings → Profile lets you change it; we send a confirmation to the new address before it takes effect.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-delete" data-id="delete">How do I close my account?</button></h3>
+    <div id="a-delete" role="region" hidden>
+      <p>Settings → Account → “Close account”. Your data is removed after a 30-day grace period.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+  </div>
+
+  <h2>Billing</h2>
+  <div class="faq" data-group="billing">
+    <h3><button type="button" aria-expanded="false" aria-controls="a-invoice" data-id="invoice">Where can I download my invoices?</button></h3>
+    <div id="a-invoice" role="region" hidden>
+      <p>Every invoice is listed under Settings → Billing → Invoices as a PDF.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-cancel" data-id="cancel">Can I cancel my subscription at any time?</button></h3>
+    <div id="a-cancel" role="region" hidden>
+      <p>Yes. Cancel from Settings → Billing whenever you like; your plan stays active until the end of the period you already paid for, and there is no cancellation fee.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-refund" data-id="refund">Do you offer refunds?</button></h3>
+    <div id="a-refund" role="region" hidden>
+      <p>Annual plans can be refunded within 14 days of purchase. Monthly plans are not refunded, but you can cancel at any time.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-payment" data-id="payment">Which payment methods do you accept?</button></h3>
+    <div id="a-payment" role="region" hidden>
+      <p>Visa, Mastercard, American Express and SEPA direct debit for customers in the EU.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+  </div>
+
+  <h2>Shipping</h2>
+  <div class="faq" data-group="shipping">
+    <h3><button type="button" aria-expanded="false" aria-controls="a-countries" data-id="countries">Which countries do you ship to?</button></h3>
+    <div id="a-countries" role="region" hidden>
+      <p>All EU countries, Switzerland, the United Kingdom, the United States and Canada.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-track" data-id="track">How do I track my order?</button></h3>
+    <div id="a-track" role="region" hidden>
+      <p>The shipping confirmation email has a tracking link; it is also shown on the order's page under Orders.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+    <h3><button type="button" aria-expanded="false" aria-controls="a-return" data-id="return">Can I return an item?</button></h3>
+    <div id="a-return" role="region" hidden>
+      <p>Unused items can be returned within 30 days. Start a return from the order's page to get a prepaid label.</p>
+      <div class="feedback">Was this answer helpful? <button type="button" data-vote="yes">Yes</button><button type="button" data-vote="no">No</button><span class="thanks" hidden>Thanks for your feedback.</span></div>
+    </div>
+  </div>
+
+  <input type="hidden" id="feedback-state" value="{}">
+</main>
+<script>
+(() => {
+  // Accordion: one answer open per group, like most help centers. A vote is
+  // recorded in #feedback-state as {"<question id>": "yes"|"no"}; the Yes/No
+  // buttons live inside the (hidden until expanded) answer region.
+  const state = {};
+  const stateInput = document.getElementById("feedback-state");
+  const buttons = [...document.querySelectorAll("h3 > button[aria-expanded]")];
+
+  function setOpen(btn, open) {
+    btn.setAttribute("aria-expanded", String(open));
+    document.getElementById(btn.getAttribute("aria-controls")).hidden = !open;
+  }
+  for (const btn of buttons) {
+    btn.addEventListener("click", () => {
+      const open = btn.getAttribute("aria-expanded") !== "true";
+      for (const other of btn.closest(".faq").querySelectorAll("h3 > button[aria-expanded]")) {
+        if (other !== btn) setOpen(other, false);
+      }
+      setOpen(btn, open);
+    });
+  }
+  for (const vote of document.querySelectorAll(".feedback button[data-vote]")) {
+    vote.addEventListener("click", () => {
+      const region = vote.closest("[role=region]");
+      const id = region.id.replace(/^a-/, "");
+      state[id] = vote.dataset.vote;
+      stateInput.value = JSON.stringify(state);
+      for (const b of region.querySelectorAll("button[data-vote]")) b.setAttribute("aria-pressed", String(b === vote));
+      region.querySelector(".thanks").hidden = false;
+    });
+  }
+})();
+</script>
+</body>
+</html>

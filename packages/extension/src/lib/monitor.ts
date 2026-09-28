@@ -150,6 +150,11 @@ async function attachMonitor(tabId: number): Promise<Monitor> {
       throw attachErr;
     }
   }
+  // The monitor's session serves later drive commands too (cdp.ts reuses
+  // it), so it gets the same page-focus emulation as any attach; best-effort.
+  await chrome.debugger
+    .sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", { enabled: true })
+    .catch(() => {});
   try {
     await chrome.debugger.sendCommand({ tabId }, "Runtime.enable");
     await chrome.debugger.sendCommand({ tabId }, "Network.enable");

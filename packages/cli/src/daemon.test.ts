@@ -1,8 +1,16 @@
+import { mkdtempSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import type { AuditRecord } from "./audit.js";
 import { BridgeHost } from "./bridge.js";
 import { startDaemon } from "./daemon.js";
+import { handleDo } from "./jev/do.js";
+import { RunStore } from "./jev/runs.js";
+
+type DaemonContext = NonNullable<Parameters<typeof startDaemon>[0]["context"]>;
 
 /** Raw HTTP request with a forged Host header (fetch/undici won't send one). */
 function forgedHostRequest(opts: {
@@ -46,10 +54,34 @@ afterEach(async () => {
   bridge = undefined;
 });
 
-async function boot(onShutdown?: () => void) {
+async function boot(onShutdown?: () => void, context?: DaemonContext) {
   bridge = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: silent });
-  daemon = await startDaemon({ port: 0, bridge, log: silent, onShutdown });
+  daemon = await startDaemon({ port: 0, bridge, log: silent, onShutdown, context });
   return daemon;
+}
+
+/** A `do` that only ends when its signal fires, answering with the abort reason. */
+function abortOnlyDo(onStart?: (signal: AbortSignal) => void): NonNullable<DaemonContext["doRun"]> {
+  return (_p, signal) => {
+    onStart?.(signal);
+    return new Promise((resolve) =>
+      signal.addEventListener("abort", () =>
+        resolve({
+          status: "interrupted",
+          reason: (signal.reason as Error).message,
+          steps: [],
+          url: "",
+          title: "",
+          elapsedMs: 0,
+          jevCalls: 0,
+          inputTokens: 0,
+          step: 0,
+          maxSteps: 30,
+          pageChanges: 0,
+        }),
+      ),
+    );
+  };
 }
 
 /** Fake extension: answers list_tabs with one tab and echoes eval_js params. */
@@ -221,5 +253,125 @@ describe("daemon", () => {
     const d = await boot();
     const res = await fetch(`http://127.0.0.1:${d.port}/rpc`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("reins do lifecycle", () => {
+  it("aborts a run when the CLI hangs up", async () => {
+    let seen: AbortSignal | undefined;
+    const d = await boot(undefined, {
+      doRun: abortOnlyDo((signal) => {
+        seen = signal;
+      }),
+    });
+    const ctrl = new AbortController();
+    const req = fetch(`http://127.0.0.1:${d.port}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method: "do", params: { goal: "g" } }),
+      signal: ctrl.signal,
+    }).catch(() => undefined);
+    await vi.waitFor(() => expect(seen).toBeDefined());
+    expect(seen?.aborted).toBe(false);
+    ctrl.abort();
+    await req;
+    await vi.waitFor(() => expect(seen?.aborted).toBe(true));
+    expect((seen?.reason as Error).message).toBe("the reins CLI went away");
+  });
+
+  it("does not abort a run whose answer went out normally", async () => {
+    let seen: AbortSignal | undefined;
+    const d = await boot(undefined, {
+      doRun: async (_p, signal) => {
+        seen = signal;
+        return {
+          status: "done",
+          steps: [],
+          url: "",
+          title: "",
+          elapsedMs: 0,
+          jevCalls: 0,
+          inputTokens: 0,
+          step: 0,
+          maxSteps: 30,
+          pageChanges: 0,
+        };
+      },
+    });
+    const body = await rpc(d.port, { method: "do", params: { goal: "g" } });
+    expect(body.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(seen?.aborted).toBe(false);
+  });
+
+  it("answers an active run with 'daemon restarting' before shutting down", async () => {
+    const onShutdown = vi.fn();
+    const d = await boot(onShutdown, { doRun: abortOnlyDo() });
+    const run = fetch(`http://127.0.0.1:${d.port}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method: "do", params: { goal: "g" } }),
+    }).then((r) => r.json());
+    await new Promise((r) => setTimeout(r, 50));
+    const res = await fetch(`http://127.0.0.1:${d.port}/shutdown`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await run).toMatchObject({
+      result: { status: "interrupted", reason: "daemon restarting" },
+    });
+    await vi.waitFor(() => expect(onShutdown).toHaveBeenCalledOnce());
+  });
+
+  it("answers malformed do params with a 400 and a single-line error", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "reins-daemon-do-"));
+    try {
+      const records: AuditRecord[] = [];
+      bridge = new BridgeHost({ allowedOrigins: new Set([ORIGIN]), log: silent });
+      daemon = await startDaemon({
+        port: 0,
+        bridge,
+        log: silent,
+        audit: (r) => records.push(r),
+        context: {
+          doRun: (params, signal) =>
+            handleDo(bridge as BridgeHost, params, {
+              runs: new RunStore(),
+              credentialsDir: dir,
+              signal,
+            }),
+        },
+      });
+      const { status, json } = await rpc(daemon.port, {
+        method: "do",
+        params: { goal: "g", fills: { From: "Zurich" } },
+      });
+      expect(status).toBe(400);
+      expect(json.error).toMatch(/^invalid reins do params: fills/);
+      expect(json.error).not.toContain("\n");
+      expect(records).toHaveLength(1);
+      expect(records[0]?.error).toBe(json.error);
+      expect(JSON.stringify(records)).not.toContain("Zurich");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("shuts down within ~1 s even when a run ignores its abort", async () => {
+    const onShutdown = vi.fn();
+    const d = await boot(onShutdown, { doRun: () => new Promise(() => {}) });
+    const ctrl = new AbortController();
+    const stuck = fetch(`http://127.0.0.1:${d.port}/rpc`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method: "do", params: { goal: "g" } }),
+      signal: ctrl.signal,
+    }).catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 50));
+    const t0 = Date.now();
+    await fetch(`http://127.0.0.1:${d.port}/shutdown`, { method: "POST" });
+    await vi.waitFor(() => expect(onShutdown).toHaveBeenCalledOnce(), { timeout: 3000 });
+    expect(Date.now() - t0).toBeLessThan(2500);
+    // The run never answers; hang up so the server can close its socket.
+    ctrl.abort();
+    await stuck;
   });
 });

@@ -2,7 +2,15 @@
   "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/dist", "!**/.turbo", "!**/*.svg", "!.claude", "!**/routeTree.gen.ts"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.turbo",
+      "!**/*.svg",
+      "!.claude",
+      "!**/routeTree.gen.ts",
+      "!packages/cli/scripts/bench/fixtures"
+    ]
   },
   "css": { "parser": { "tailwindDirectives": true } },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
