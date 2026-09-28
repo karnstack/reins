@@ -86,43 +86,74 @@ reins status
 
 ## Delegate a whole task: `reins do` (when a TypeSafe key is set)
 
-For a multi-step form, search, filter or navigation task, hand it over instead
-of snapshot → click → snapshot. It's much faster: Jev picks each action in
-~0.2 s, and you only think twice.
+One call instead of a snapshot → click → snapshot session. Jev (TypeSafe's
+small action model) picks each click, typed field and dropdown choice; you only
+decide what to do with the outcome. Typical tasks take 2–12 s and a fraction
+of a cent, against 15–130 s of step-by-step turns.
 
-    reins do 'one-way flights Zurich → London, Sep 20 2026, 1 adult; stop when results show' \
+    reins do 'one-way flights from Zurich to London on 20 November 2026, 1 adult, economy; stop when results show' \
       --fill from=Zurich --fill to=London --tab 12
 
-- Pass **every value the goal mentions** as `--fill name=value`. Jev picks which
-  field gets which value; it never invents text. `--fill` values are sent to
-  TypeSafe along with the page, so never pass a password as `--fill`: password
-  fields are never read anyway, so do logins manually.
-- If the user already asked for the final action (book, send, pay), pre-approve
-  it: `--confirm 'Book'`. A goal that names the button as a whole word
-  ("… and pay now") pre-approves it too. Otherwise risky clicks stop the run.
-- Single-quote goals and labels, as `reins do` itself does in every `next:`
-  line: page labels can contain `$` or backticks, and single quotes keep the
-  shell from expanding them.
-- Exit 0 = `done`. **DONE is Jev's opinion — always verify** with
-  `reins snapshot` / `reins text` (the printed `next:` line does exactly that).
-  A done line marked `unsure` (self-check below 0.5) means the goal is
-  probably not met: verify, and fall back to step-by-step for what is missing.
-- Exit 2 = a stop. The printed `next:` line is usually a command to run as
-  printed (`reins do --continue …`). For `dialog` it names the `reins dialog`
-  command with a choice to make (`--accept` or `--dismiss`), then
-  `reins do --continue`; for `stuck`/`blocked` it says to switch to manual
-  and is not a command. `--continue` resumes the same run on the same tab;
-  runs are forgotten after 15 minutes or a daemon restart, so start over with
-  the goal if `--continue` says so.
-- Exit 1 = an error; no `next:` line is printed.
-- `stuck` or `blocked` → switch to manual commands for that part.
-- The risky-label stop is a heuristic (English words; unlabeled buttons stop).
-  "Accept" inside a cookie/consent banner is not stopped on; "Accept" anywhere
-  else is. Don't rely on it for anything you wouldn't do yourself.
-- Takes `--tab <id>`, `--browser <id>` and `--json` like every page command.
-- No key (`reins do` says so)? Ask the user to run `reins key set typesafe`
-  themselves, or to save it in the reins extension popup. Never ask them to
-  paste a key into the chat.
+**Use it for** searches, filters and sorting, multi-step forms, consent
+banners, date pickers and plain navigation ("open the X page"). **Don't use it
+for** logins, anything that needs a password, reading or extracting data
+(`reins text` / `reins eval` are exact and cheaper), or steps you'd want to
+watch one by one.
+
+### Calling it
+
+- **Every value the goal mentions goes in `--fill name=value`**: search terms,
+  names, amounts, codes a picker needs (`--fill to=JPY`). Jev chooses which
+  field gets which value; it never invents text. A field with no matching fill
+  stops the run with `needs_text`. Fills are sent to TypeSafe with the page, so
+  never pass a password (password fields are never read anyway).
+- **Say the whole goal, including the end state**: "sorted by most stars",
+  "stop when results show". Jev stops as soon as it thinks the goal is met.
+- **Pre-approve the final action only if the user asked for it**:
+  `--confirm 'Book'`, or name the button as a whole word in the goal ("… and
+  pay now"). Otherwise clicks on buy/pay/send/delete-style buttons stop the
+  run. "Accept" on a cookie or consent banner never needs approval.
+- Single-quote goals and labels (the `next:` lines do too): page labels can
+  contain `$` or backticks.
+- Takes `--tab`, `--browser`, `--json`, `--max-steps` (30) and `--timeout`
+  (60 s) like other page commands.
+
+### Reading the result
+
+| Outcome | What it means | What you do |
+|---|---|---|
+| `done … self-check 0.9` (exit 0) | Jev says the goal is met and its own check agrees | Glance at the page (`reins snapshot` / `reins text`) before you report success |
+| `done (unsure: self-check 0.3)` (exit 0) | Jev stopped, but its check says the goal is probably **not** met | **Verify, then finish the missing part step by step.** Don't report success |
+| `risky_action` (exit 2) | The next click looks irreversible (pay, send, delete, …) | Ask the user; if they agree, run the printed `next:` line (it adds `--confirm`) |
+| `needs_text` (exit 2) | A field needs a value you didn't pass | Re-run the `next:` line with the missing `--fill` |
+| `dialog` (exit 2) | A JS alert/confirm is open | `reins dialog --accept` or `--dismiss`, then `reins do --continue` |
+| `left_site` (exit 2) | The page moved to another site | Decide whether that's expected; continue manually if so |
+| `stuck` / `blocked` (exit 2) | Jev can't make progress here | Switch to step-by-step for this part; the page is left where it stopped |
+| `budget` / `interrupted` (exit 2) | Out of steps/time, or the tab was hidden/closed | `reins do --continue` (fresh budget), or finish manually |
+| error (exit 1) | reins or TypeSafe failed; nothing more was done | Read the message; retry once or go manual |
+
+The self-check is the number to trust. On reins' benchmark every wrong `done`
+was marked unsure; about one right `done` in seven is marked unsure too, so
+unsure means "check", not "failed".
+
+`--continue` resumes the same run on the same tab. Runs are forgotten after 15
+minutes or a daemon restart; if `--continue` says so, start over with the goal.
+
+### Limits
+
+- Jev sometimes declares `done` before every constraint is applied (a filter
+  or sort left unset, a date picked but not confirmed). That's what the
+  self-check catches; verify the constraint you care about.
+- On pages with two similar search boxes (site-wide vs. this list) it can pick
+  the wrong one.
+- It reads open shadow DOM, not closed shadow roots, and only what the page
+  exposes: a site that labels its fields wrongly confuses it.
+- The risky-click stop is an English-word heuristic plus "unlabelled buttons
+  stop". Don't rely on it for anything you wouldn't do yourself.
+
+No key (`reins do` says so)? Ask the user to run `reins key set typesafe`
+themselves or save it in the reins extension popup. Never ask them to paste a
+key into the chat.
 
 ## Commands
 
