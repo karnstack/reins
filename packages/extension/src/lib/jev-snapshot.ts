@@ -10,6 +10,7 @@
  */
 
 import type { JevAction } from "@reins/protocol";
+import type { pageDom } from "./page-dom.js";
 
 interface JevCache {
   ids: WeakMap<Element, number>;
@@ -25,7 +26,10 @@ interface JevCache {
  *  erased, so the serialized function stays self-contained. */
 type Action = Omit<JevAction, "id"> & { id?: string };
 
-export function jevSnapshot(terms: string[] = []): {
+export function jevSnapshot(
+  terms: string[],
+  dom: typeof pageDom,
+): {
   url: string;
   title: string;
   text: string;
@@ -61,127 +65,11 @@ export function jevSnapshot(terms: string[] = []): {
   };
   for (const [id, e] of c.nodes) if (!e.isConnected) c.nodes.delete(id);
 
-  // Shadow DOM: what an open shadow root renders is part of the page a
-  // person sees (a site's search box or dialog built as a web component), so
-  // controls and text are collected through open roots, recursively, and
-  // ancestor walks cross the boundary through the host. A closed root cannot
-  // be reached from the page and stays invisible.
-  const parentOf = (n: Node): Element | null => {
-    const p = n.parentNode;
-    if (!p) return null;
-    if (p instanceof ShadowRoot) return p.host;
-    return p.nodeType === 1 ? (p as Element) : null;
-  };
-  /** `closest`, crossing shadow boundaries. */
-  const ancestor = (e: Element, sel: string): Element | null => {
-    for (let p: Element | null = e; p; p = parentOf(p)) if (p.matches(sel)) return p;
-    return null;
-  };
-  /** The element with `id` in the tree `e` belongs to (a shadow root has its own ids). */
-  const byId = (e: Element, id: string): Element | null => {
-    const root = e.getRootNode();
-    return root instanceof Document || root instanceof ShadowRoot ? root.getElementById(id) : null;
-  };
+  // Shadow DOM: controls and text are collected through open shadow roots,
+  // and ancestor walks cross the boundary (see pageDom).
+  const { parentOf, ancestor, visible, name, collect } = dom();
   const safe = (e: Element) =>
     !["password", "file", "hidden"].includes((e as HTMLInputElement).type);
-  const visible = (e: Element) =>
-    !ancestor(e, '[aria-hidden="true"],[inert]') &&
-    e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
-  /** What an element renders, the way the accessibility tree reads it: an
-   *  open shadow root's children stand in for the host's own (which only
-   *  show through slots), and a slot stands for what is assigned to it. */
-  const rendered = (e: Element): Node[] => {
-    if (e.shadowRoot) return [...e.shadowRoot.childNodes];
-    if (e instanceof HTMLSlotElement) return e.assignedNodes({ flatten: true });
-    return [...e.childNodes];
-  };
-  const name = (e: Element | null, seen = new Set<Element>()): string => {
-    if (!e || seen.has(e)) return "";
-    seen.add(e);
-    const input = e as HTMLInputElement;
-    const referenced = (e.getAttribute("aria-labelledby") ?? "")
-      .split(/\s+/)
-      .map((id) => name(byId(e, id), seen))
-      .filter(Boolean)
-      .join(" ");
-    const raw =
-      referenced ||
-      e.getAttribute("aria-label") ||
-      [...(input.labels ?? [])]
-        .map((l) => name(l, seen))
-        .filter(Boolean)
-        .join(" ") ||
-      (["button", "submit", "reset"].includes(input.type) && e.tagName === "INPUT"
-        ? input.value
-        : "") ||
-      e.getAttribute("alt") ||
-      // A select's options are not its name. Text is read through open
-      // shadow roots and slots, so a web-component option or button whose
-      // words sit in its own root (or come in through a slot) is named.
-      (e.tagName === "INPUT" || e.tagName === "SELECT"
-        ? ""
-        : rendered(e)
-            .map((n) =>
-              n.nodeType === 3
-                ? (n.textContent ?? "")
-                : n.nodeType === 1 && (n as Element).getAttribute("aria-hidden") !== "true"
-                  ? name(n as Element, seen)
-                  : "",
-            )
-            .join(" ")) ||
-      "";
-    const own = raw.replace(/\s+/g, " ").trim();
-    if (own) return own;
-    // No label of its own: a title or placeholder is a weak name, and a form
-    // control gets the row or group it sits in — the first cell of an
-    // enclosing table row that is not its own, a fieldset's legend, a
-    // labelled group — so "Year" under "Start Date" and "Year" under "End
-    // Date" read apart, and an unlabelled select is not just "combobox".
-    const weak = (e.getAttribute("title") || e.getAttribute("placeholder") || "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!e.matches("input,select,textarea")) return weak;
-    const ctx = context(e);
-    return ctx ? (weak ? `${ctx}: ${weak}` : ctx) : weak;
-  };
-  // A cell's own words: what a person reads as the row's label. Controls in
-  // the cell (a select's options, a button's caption) are not that label.
-  const cellText = (cell: Element): string => {
-    let out = "";
-    const walk = (n: Node) => {
-      if (n.nodeType === 3) out += `${n.textContent ?? ""} `;
-      else if (n.nodeType === 1) {
-        const el = n as Element;
-        if (
-          /^(SELECT|INPUT|TEXTAREA|BUTTON|SCRIPT|STYLE)$/.test(el.tagName) ||
-          el.getAttribute("aria-hidden") === "true"
-        )
-          return;
-        for (const c of el.childNodes) walk(c);
-      }
-    };
-    walk(cell);
-    return out.replace(/\s+/g, " ").trim();
-  };
-  const context = (e: Element): string => {
-    for (let p = parentOf(e); p && p !== document.body; p = parentOf(p)) {
-      if (p.tagName === "TR") {
-        for (const cell of p.children) {
-          if (cell.contains(e)) continue;
-          const t = cellText(cell);
-          if (t && t.length <= 60) return t;
-        }
-      } else if (p.tagName === "FIELDSET") {
-        const legend = p.querySelector(":scope > legend");
-        const t = legend ? name(legend) : "";
-        if (t) return t;
-      } else if (p.getAttribute("role") === "group") {
-        const t = name(p);
-        if (t) return t;
-      }
-    }
-    return "";
-  };
   const roles = [
     "button",
     "link",
@@ -299,16 +187,7 @@ export function jevSnapshot(terms: string[] = []): {
 
   // Every control in document order, descending into open shadow roots where
   // their hosts sit (so ids stay positional across light and shadow trees).
-  const controls: Element[] = [];
-  const collect = (root: Node): void => {
-    const tw = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
-      const e = n as Element;
-      if (e.matches(selector)) controls.push(e);
-      if (e.shadowRoot) collect(e.shadowRoot);
-    }
-  };
-  collect(document.documentElement);
+  const controls = collect(selector);
   const actions: Action[] = [];
   // Beyond the viewport, two kinds of control are worth listing (the page's
   // text stays viewport-only): a pager — a next/previous/page-N control, or

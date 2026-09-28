@@ -19,10 +19,11 @@ import { WebSocket } from "ws";
 vi.mock("./monitor.js", () => ({ isMonitored: () => false }));
 
 import { autofillGuard } from "./autofill-guard.js";
-import { __resetDebugSessions, cdpClick, cdpType, drivePage } from "./cdp.js";
+import { __resetDebugSessions, cdpClick, cdpSnapshot, cdpType, drivePage } from "./cdp.js";
 import { initDialogTracking, jevAct, jevObserve, openDialog } from "./jev.js";
 import { jevSnapshot } from "./jev-snapshot.js";
-import { handleDialog, hover, pressKey } from "./page-actions.js";
+import { fill, handleDialog, hover, pressKey } from "./page-actions.js";
+import { pageDom } from "./page-dom.js";
 
 const CHROME = [
   process.env.REINS_TEST_CHROME,
@@ -158,6 +159,49 @@ const JEV_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
   });
 </script></body></html>`;
 
+/** `reins snapshot` and ref-addressed commands: shadow DOM, custom controls. */
+const STEPS_FIXTURE = `<!doctype html><html><head><meta charset="utf-8"><style>
+  body { margin: 0; font: 14px sans-serif }
+  .card { display: block; position: relative; border: 1px solid #999; padding: 12px; margin: 6px; width: 240px }
+  .card input, [role=switch] input { position: absolute; width: 0; height: 0; margin: 0; padding: 0; border: 0; appearance: none }
+  [role=switch] { display: inline-block; position: relative; width: 44px; height: 24px; background: #ccc }
+</style></head><body>
+<x-search id="xs"></x-search>
+<x-field id="xf"><span slot="label">Due date</span></x-field>
+<div id="sealed"></div>
+<fieldset><legend>Plan</legend>
+  <label class="card"><input type="radio" name="plan" id="solo" value="solo" checked> Solo</label>
+  <label class="card"><input type="radio" name="plan" id="team" value="team"> Team</label>
+</fieldset>
+<input type="checkbox" id="terms" style="display:none"><label for="terms" class="card">I agree</label>
+<div role="switch" id="sw" aria-checked="false" aria-label="Dark mode"><input type="checkbox" id="swi"></div>
+<span id="dc" style="display:contents"><button id="dcb">Chip</button></span>
+<div role="tablist"><button role="tab" id="t1">One</button><button role="tab" id="t2">Two</button></div>
+<div id="p1"><input id="one" aria-label="First field"></div>
+<div id="p2" hidden><button role="switch" id="alerts" aria-checked="false" aria-label="Alerts">x</button></div>
+<script>
+  window.__log = [];
+  document.addEventListener("click", (e) => __log.push("click:" + (e.composedPath()[0].id || e.composedPath()[0].tagName)), true);
+  // A site search built as a web component: field and button in an open root.
+  { const r = document.getElementById("xs").attachShadow({ mode: "open" });
+    r.innerHTML = '<input id="sq" placeholder="Search the docs"><button id="sb">Search</button>';
+    r.getElementById("sb").addEventListener("click", () => __log.push("search:" + r.getElementById("sq").value)); }
+  // A button two shadow roots down whose caption is slotted through both.
+  { const r = document.getElementById("xf").attachShadow({ mode: "open" });
+    r.innerHTML = '<x-inner id="xi"><slot name="label" slot="lbl"></slot></x-inner>';
+    const inner = r.getElementById("xi").attachShadow({ mode: "open" });
+    inner.innerHTML = '<button id="pick"><slot name="lbl"></slot></button>';
+    inner.getElementById("pick").addEventListener("click", () => __log.push("pick")); }
+  document.getElementById("sealed").attachShadow({ mode: "closed" }).innerHTML = "<button>Sealed</button>";
+  const sw = document.getElementById("sw"), swi = document.getElementById("swi");
+  sw.addEventListener("click", () => { swi.checked = !swi.checked; sw.setAttribute("aria-checked", String(swi.checked)); });
+  const alerts = document.getElementById("alerts");
+  alerts.addEventListener("click", () => alerts.setAttribute("aria-checked", String(alerts.getAttribute("aria-checked") !== "true")));
+  for (const [tab, show] of [["t1", "p1"], ["t2", "p2"]]) document.getElementById(tab).addEventListener("click", () => {
+    for (const p of ["p1", "p2"]) document.getElementById(p).hidden = p !== show;
+  });
+</script></body></html>`;
+
 let chromeProc: ChildProcess | undefined;
 /** Scripts drivePage injected, with the tab (socket) each belongs to. */
 const injected: Array<{ identifier: string; tabId: number | undefined }> = [];
@@ -270,7 +314,9 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
           ? LOGIN_FIXTURE
           : path === "/jev"
             ? JEV_FIXTURE.replace("SLOW_URL", slowUrl)
-            : FIXTURE,
+            : path === "/steps"
+              ? STEPS_FIXTURE
+              : FIXTURE,
       );
     });
     // A second origin (so its tab gets its own renderer, as another site's
@@ -743,7 +789,7 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
   });
 
   type Snap = NonNullable<ReturnType<typeof jevSnapshot>>;
-  const snap = () => evaluate<Snap>(`(${jevSnapshot})()`);
+  const snap = () => evaluate<Snap>(`(${jevSnapshot})([], ${pageDom})`);
   const nodeOf = (s: Snap, label: string) => s.actions.find((a) => a.label === label)?.node;
 
   it("jev: lists visible controls, including a fixed-position dialog, and skips the rest", async () => {
@@ -1020,4 +1066,77 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
     await new Promise((r) => setTimeout(r, 200));
     expect(openDialog(1)).toBeUndefined();
   }, 10_000);
+
+  const refOf = async (role: string, name: string) => {
+    const { refs } = await cdpSnapshot({ tabId: 1, mode: "a11y" });
+    const hit = refs.find((r) => r.role === role && r.name === name);
+    if (!hit) throw new Error(`no ${role} "${name}" in ${JSON.stringify(refs)}`);
+    return hit.ref;
+  };
+  const byRef = (ref: string) => cdpClick({ tabId: 1, ref, button: "left", clickCount: 1 });
+
+  it("snapshot: lists controls in an open shadow root, and click/type/fill by ref reach them; a closed root stays invisible", async () => {
+    await load("/steps");
+    const { content } = await cdpSnapshot({ tabId: 1, mode: "a11y" });
+    expect(content).toMatch(/e\d+: input "Search the docs"/);
+    expect(content).toMatch(/e\d+: button "Search"/);
+    expect(content).not.toContain("Sealed");
+    const field = await refOf("input", "Search the docs");
+    await fill({ tabId: 1, ref: field, value: "fe" });
+    await cdpType({ tabId: 1, ref: field, text: "tch", submit: false });
+    await byRef(await refOf("button", "Search"));
+    expect(await log()).toContain("search:fetch");
+  });
+
+  it("snapshot: a shadow button two roots down is named by its slotted caption", async () => {
+    await load("/steps");
+    await byRef(await refOf("button", "Due date"));
+    // The press lands on the slotted caption, inside the button as rendered.
+    expect(await log()).toEqual(["click:SPAN", "pick"]);
+  });
+
+  it("snapshot: refs are re-issued each time, so a ref an element hidden since held reaches its new owner", async () => {
+    await load("/steps");
+    const first = await refOf("input", "First field");
+    await byRef(await refOf("tab", "Two"));
+    // The panel switch hid the field; the switch now listed takes its number.
+    const alerts = await refOf("switch", "Alerts");
+    expect(alerts).toBe(first);
+    await byRef(alerts);
+    expect(await evaluate("document.getElementById('alerts').getAttribute('aria-checked')")).toBe(
+      "true",
+    );
+  });
+
+  it("a radio card whose native input is 0x0 is clicked by ref through its label, and ends checked", async () => {
+    await load("/steps");
+    await byRef(await refOf("input", "Team"));
+    expect(await evaluate("document.getElementById('team').checked")).toBe(true);
+    expect(await evaluate("document.getElementById('solo').checked")).toBe(false);
+  });
+
+  it("a display:none checkbox is clicked through its label[for]", async () => {
+    await load("/steps");
+    await click("#terms");
+    expect(await evaluate("document.getElementById('terms').checked")).toBe(true);
+  });
+
+  it("a role=switch toggle whose native checkbox is 0x0 is clicked by the checkbox's ref, and ends checked", async () => {
+    await load("/steps");
+    await cdpSnapshot({ tabId: 1, mode: "a11y" });
+    const ref = await evaluate<string>(
+      "document.getElementById('swi').getAttribute('data-reins-ref')",
+    );
+    await byRef(ref);
+    expect(await evaluate("document.getElementById('swi').checked")).toBe(true);
+    expect(await evaluate("document.getElementById('sw').getAttribute('aria-checked')")).toBe(
+      "true",
+    );
+  });
+
+  it("a display:contents element is clicked on its first rendered child", async () => {
+    await load("/steps");
+    await click("#dc");
+    expect(await log()).toEqual(["click:dcb"]);
+  });
 });

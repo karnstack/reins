@@ -16,6 +16,7 @@ import {
   resolveTabId,
   selectorFor,
   send,
+  targetExpr,
   withDebugger,
 } from "./cdp.js";
 import { parseKeySpec } from "./keys.js";
@@ -71,7 +72,9 @@ export async function hover(params: HoverParams): Promise<{ ok: true }> {
   const css = selectorFor(params.ref, params.selector);
   return drivePage(tabId, async () => {
     await ensureVisible(tabId);
-    const { x, y } = await actionablePoint(tabId, css, "hover", false);
+    const { x, y } = await actionablePoint(tabId, css, "hover", false, {
+      locate: targetExpr(params.ref, params.selector),
+    });
     await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     return { ok: true };
   });
@@ -81,8 +84,7 @@ export async function scroll(params: ScrollParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   let expression: string;
   if (params.ref !== undefined || params.selector !== undefined) {
-    const css = selectorFor(params.ref, params.selector);
-    expression = `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return false; el.scrollIntoView({block:"center"}); return true; })()`;
+    expression = `(() => { const el = ${targetExpr(params.ref, params.selector)}; if (!el) return false; el.scrollIntoView({block:"center"}); return true; })()`;
   } else if (params.by) {
     expression = `(window.scrollBy(${params.by.dx}, ${params.by.dy}), true)`;
   } else if (params.to === "top") {
@@ -104,7 +106,7 @@ export async function fill(params: FillParams): Promise<{ ok: true }> {
   // Native value setter so frameworks (React) observe the change; then the
   // events a real user interaction would produce.
   const expression = `(() => {
-    const el = document.querySelector(${JSON.stringify(css)});
+    const el = ${targetExpr(params.ref, params.selector)};
     if (!el) return false;
     el.focus();
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
@@ -130,7 +132,7 @@ export async function selectOption(params: SelectOptionParams): Promise<{ ok: tr
   const value = JSON.stringify(params.value);
   // Match by option value first, then by visible label.
   const expression = `(() => {
-    const el = document.querySelector(${JSON.stringify(css)});
+    const el = ${targetExpr(params.ref, params.selector)};
     if (!el) return "missing";
     if (!(el instanceof HTMLSelectElement)) return "notselect";
     el.value = ${value};
@@ -156,6 +158,24 @@ export async function upload(params: UploadParams): Promise<{ ok: true }> {
   const tabId = await resolveTabId(params.tabId);
   const css = selectorFor(params.ref, params.selector);
   return drivePage(tabId, async () => {
+    if (!params.selector && params.ref) {
+      // A ref may sit in an open shadow root, out of DOM.querySelector's reach:
+      // hand CDP the element itself.
+      const { result } = await send<{ result: { objectId?: string; subtype?: string } }>(
+        tabId,
+        "Runtime.evaluate",
+        { expression: targetExpr(params.ref) },
+      );
+      if (!result.objectId || result.subtype === "null")
+        throw new Error(`element not found: ${css}`);
+      const { objectId } = result;
+      try {
+        await send(tabId, "DOM.setFileInputFiles", { files: params.files, objectId });
+      } finally {
+        await send(tabId, "Runtime.releaseObject", { objectId }).catch(() => {});
+      }
+      return { ok: true };
+    }
     const doc = await send<{ root: { nodeId: number } }>(tabId, "DOM.getDocument", { depth: 0 });
     const { nodeId } = await send<{ nodeId: number }>(tabId, "DOM.querySelector", {
       nodeId: doc.root.nodeId,
@@ -170,9 +190,7 @@ export async function upload(params: UploadParams): Promise<{ ok: true }> {
 export async function readText(params: ReadTextParams): Promise<{ text: string }> {
   const tabId = await resolveTabId(params.tabId);
   const hasTarget = params.ref !== undefined || params.selector !== undefined;
-  const target = hasTarget
-    ? `document.querySelector(${JSON.stringify(selectorFor(params.ref, params.selector))})`
-    : "document.body";
+  const target = hasTarget ? targetExpr(params.ref, params.selector) : "document.body";
   const expression = `(() => { const el = ${target}; return el ? el.innerText : null; })()`;
   return withDebugger(tabId, async () => {
     const text = await evaluate<string | null>(tabId, expression);

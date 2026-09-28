@@ -67,7 +67,8 @@ const GROUPS: Array<{ id: string; title: string; intro?: ReactNode; rows: [strin
   {
     id: "interaction",
     title: "Interaction",
-    intro: "Interaction commands address elements by ref (from reins snapshot) or by CSS selector.",
+    intro:
+      "Interaction commands address elements by ref (from reins snapshot) or by CSS selector. Snapshot and refs reach into open shadow roots; a CSS selector matches the light DOM only.",
     rows: [
       [
         "reins snapshot [--tab <id>] [--max-chars <n>]",

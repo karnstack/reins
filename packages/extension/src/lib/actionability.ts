@@ -35,7 +35,16 @@ export type ProbeResult = (
  * reaches the element; read it back with `readProbe`.
  *
  * With `node`, the target is the Jev node cache entry (`reins do` observed it
- * by id); `selector` then only names it in messages.
+ * by id); with `locate`, whatever that function returns (a ref looked up
+ * through shadow roots). `selector` then only names it in messages.
+ *
+ * A target with no box of its own is pressed where it shows: a native radio
+ * or checkbox shrunk to 0×0 (or display:none) under a styled card is pressed
+ * through its visible <label> (which forwards the click to it) or the custom
+ * radio/switch/checkbox/option it sits in; a `display: contents` wrapper
+ * through its first rendered child. Every check — disabled, covered, moving —
+ * then applies to the element actually pressed, and "disabled" to the
+ * original target as well.
  *
  * A click target inside an `<a href target=_blank>` (or any link whose
  * effective target, including a `<base target>`, names no frame of this page)
@@ -54,17 +63,61 @@ export async function actionPoint(
   timeoutMs: number,
   forClick: boolean,
   node: number | null = null,
+  locate: (() => Element | null) | null = null,
 ): Promise<ActionPoint> {
   // A Jev node id points at the exact element reins do observed; otherwise
-  // the CSS selector is re-queried (frameworks may swap nodes while we wait).
+  // the target is re-queried (frameworks may swap nodes while we wait).
   const find = (): Element | null => {
-    if (node === null) return document.querySelector(selector);
+    if (node === null) {
+      const el = locate ? locate() : document.querySelector(selector);
+      return el?.isConnected ? el : null;
+    }
     const cache = (
       window as unknown as Record<symbol, { nodes?: Map<number, Element> } | undefined>
     )[Symbol.for("reins.jev")];
     const el = cache?.nodes?.get(node);
     return el?.isConnected ? el : null;
   };
+  // The parent as rendered (the flat tree, the path events take): slotted
+  // content's parent is its slot, a shadow root's is its host.
+  const up = (n: Node): Node | null =>
+    (n instanceof Element && n.assignedSlot) ||
+    n.parentNode ||
+    (n instanceof ShadowRoot ? n.host : null);
+  const sized = (e: Element) => {
+    const r = e.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  // The first box a display:contents element renders, looking through
+  // nested display:contents children, its shadow root and slots.
+  const firstBox = (e: Element): Element | null => {
+    const kids = e.shadowRoot
+      ? [...e.shadowRoot.children]
+      : e instanceof HTMLSlotElement
+        ? e.assignedElements({ flatten: true })
+        : [...e.children];
+    for (const k of kids) {
+      if (sized(k)) return k;
+      if (getComputedStyle(k).display === "contents") {
+        const inner = firstBox(k);
+        if (inner) return inner;
+      }
+    }
+    return null;
+  };
+  const CUSTOM =
+    '[role="radio"],[role="switch"],[role="checkbox"],[role="option"],[role="menuitemradio"],[role="menuitemcheckbox"]';
+  // Where to press for `t`: itself when it has a box, else what shows for it.
+  const standIn = (t: Element): Element => {
+    if (sized(t)) return t;
+    if (getComputedStyle(t).display === "contents") return firstBox(t) ?? t;
+    for (const l of (t as HTMLInputElement).labels ?? []) if (sized(l)) return l;
+    for (let p = up(t); p; p = up(p)) {
+      if (p instanceof Element && p.matches(CUSTOM)) return sized(p) ? p : t;
+    }
+    return t;
+  };
+  const disabled = (e: Element) => e.matches(":disabled") || !!e.closest('[aria-disabled="true"]');
   const describe = (n: Element | null): string => {
     if (!n) return "nothing (the point is outside the viewport)";
     let s = n.tagName.toLowerCase();
@@ -158,8 +211,9 @@ export async function actionPoint(
   let reason = "";
   for (let first = true; ; first = false) {
     // Re-query every attempt: frameworks may swap the node while we wait.
-    const el = find();
-    if (!el) {
+    const found = find();
+    const el = found && standIn(found);
+    if (!found || !el) {
       if (first) return { error: "notfound" };
       reason = "element was removed from the page";
     } else {
@@ -170,7 +224,7 @@ export async function actionPoint(
       const { r, still } = await settle(el);
       if (r.width === 0 || r.height === 0) {
         reason = "element has zero size (hidden?)";
-      } else if (forClick && (el.matches(":disabled") || el.closest('[aria-disabled="true"]'))) {
+      } else if (forClick && (disabled(el) || disabled(found))) {
         reason = "element is disabled";
       } else {
         const x = r.x + r.width / 2;
@@ -182,7 +236,7 @@ export async function actionPoint(
           hit = inner;
         }
         let n: Node | null = hit;
-        while (n && n !== el) n = n.parentNode ?? (n instanceof ShadowRoot ? n.host : null);
+        while (n && n !== el) n = up(n);
         // Slotted content: when the top-most box at the point is light-DOM
         // content a host slots into `el` (a web component's button whose
         // caption arrives through <slot>), hit-testing retargets it to the
@@ -214,7 +268,7 @@ export async function actionPoint(
               const now = find();
               const path = e.composedPath();
               state.result =
-                path.includes(el) || (now !== null && path.includes(now))
+                path.includes(el) || (now !== null && path.includes(standIn(now)))
                   ? { state: "hit" }
                   : { state: "missed", by: describe(at instanceof Element ? at : null) };
             };
