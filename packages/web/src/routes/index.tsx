@@ -73,7 +73,9 @@ function Home() {
         <Column className="py-10">
           <Meta lines={["karnstack", "reins", "2026 · MIT"]} />
 
-          <div className="mt-16">
+          <JevCallout />
+
+          <div className="mt-12">
             <h1 className={cn(TEXT, "font-semibold tracking-wide text-balance uppercase")}>
               <span aria-hidden="true" className="mr-2 text-muted-foreground select-none">
                 #
@@ -103,6 +105,22 @@ function Home() {
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+/**
+ * The one piece of news on the page: a line, not a banner. Bracketed like the
+ * header's links; the figures are the benchmark's medians, linked to it.
+ */
+function JevCallout() {
+  return (
+    <p className={cn(TEXT, "mt-10 max-w-[68ch] border-l-2 border-primary pl-4")}>
+      <span className="mr-2 font-semibold tracking-wide text-primary uppercase">[ new ]</span>
+      <Code>reins do</Code> hands a whole browsing task to Jev, TypeSafe's action model: one command
+      instead of a click-by-click session. On our benchmark it was 4.6x faster at the median and
+      about 100x cheaper. <A href="/docs/commands#delegate">How it works</A> ·{" "}
+      <A href="/docs/benchmarks">the benchmark</A>
+    </p>
   );
 }
 
