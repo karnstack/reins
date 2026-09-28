@@ -60,9 +60,9 @@ describe("popup Jev view flags", () => {
     expect(jevViewFlags({ kind: "unset" }, false, true).disabled).toBe(true);
     expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true, false).disabled).toBe(false);
   });
-  it("set + replacing: form and Cancel shown, Replace/Remove hidden", () => {
+  it("set + replacing: form and Cancel shown, Replace/Remove hidden, no pitch", () => {
     expect(jevViewFlags({ kind: "set", last4: "a1b2" }, true)).toMatchObject({
-      pitchHidden: false,
+      pitchHidden: true,
       readyHidden: false,
       formHidden: false,
       actionsHidden: true,

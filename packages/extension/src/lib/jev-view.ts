@@ -38,7 +38,7 @@ export function jevViewFlags(state: JevKeyState, replacing: boolean, saving = fa
   const set = state.kind === "set";
   const editing = set && replacing;
   return {
-    pitchHidden: set && !editing,
+    pitchHidden: set,
     readyHidden: !set,
     formHidden: set && !editing,
     actionsHidden: !set || editing,
