@@ -1,5 +1,12 @@
 # @reins/extension
 
+## 0.6.0
+
+### Minor Changes
+
+- f2b0801: `reins do '<goal>'` hands a small browser task to TypeSafe's Jev model: it reads the page, picks each click, field and dropdown with one Jev call per step, and types only the values the agent passed with `--fill`. It stops and prints the exact next command for risky clicks (buy, send, delete, ...), missing values, dialogs, leaving the site, or no progress. `--continue` resumes the run, and `--confirm '<label>'` pre-approves a click. Exit codes: 0 done, 2 stopped for input, 1 error. On the extension side: the `jev_observe` / `jev_act` handlers (site tier `full`), per-tab JS dialog tracking, and a pre-action re-check of each chosen element. Jev can also submit a search field with Enter (`SUBMIT_SEARCH`, search-like fields only), a click that opens a new tab moves the run to that tab, three stale acts in a row stop the run as `stuck`, and the summary line reports the Jev input tokens used. A click on a link that opens a new tab (`target="_blank"`), from `reins click` or `reins do`, no longer lets Chrome raise its window over the app you are working in: the extension opens the tab itself, next to the current one and active; `reins click` reports the new tab's id (`openedTabId` in `--json`).
+- c7b6513: `reins key set|status|clear typesafe` stores a TypeSafe API key in `~/.reins/credentials.json` (readable only by you), after checking it with TypeSafe. The extension popup gains a Jev section to save, replace or remove the same key. This is the setup for `reins do`. On the extension side: the popup gains the Jev key section and its `reins:call` frame carries a per-call timeout for the slow key check.
+
 ## 0.5.0
 
 ### Minor Changes
