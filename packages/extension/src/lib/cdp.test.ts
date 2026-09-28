@@ -9,6 +9,7 @@ import {
   cdpOpenTab,
   cdpType,
   initDebugSessionListeners,
+  targetExpr,
   withDebugger,
 } from "./cdp.js";
 
@@ -383,7 +384,45 @@ describe("actionablePoint for a Jev node", () => {
     const expr = (
       sendCommand.mock.calls[0] as unknown as [unknown, string, { expression: string }]
     )[2].expression;
-    expect(expr).toMatch(/\("node 12", 500, true, 12\)$/);
+    expect(expr).toMatch(/\("node 12", 500, true, 12, null\)$/);
+  });
+
+  it("passes a locator for a ref, which looks through open shadow roots", async () => {
+    const sendCommand = vi.fn(async () => ({ result: { value: { x: 5, y: 6 } } }));
+    vi.stubGlobal("chrome", {
+      debugger: {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        onDetach: { addListener: () => {} },
+        sendCommand,
+      },
+    });
+    await actionablePoint(7, '[data-reins-ref="e3"]', "click", true, {
+      locate: targetExpr("e3"),
+    });
+    const expr = (
+      sendCommand.mock.calls[0] as unknown as [unknown, string, { expression: string }]
+    )[2].expression;
+    expect(expr).toContain(", null, () => (function findRef(ref) {");
+    expect(expr).toMatch(/\)\("e3"\)\)$/);
+  });
+});
+
+describe("targetExpr", () => {
+  it("a selector stays plain light-DOM CSS", () => {
+    expect(targetExpr("e1", "#go")).toBe('document.querySelector("#go")');
+  });
+
+  it("a ref is found by walking open shadow roots", () => {
+    const expr = targetExpr("e1");
+    expect(expr).toMatch(/^\(function findRef\(ref\) \{/);
+    expect(expr).toContain("shadowRoot");
+    expect(expr).toContain("data-reins-ref");
+    expect(expr).toMatch(/\("e1"\)$/);
+  });
+
+  it("needs one or the other", () => {
+    expect(() => targetExpr()).toThrow("requires a ref or selector");
   });
 });
 

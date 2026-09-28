@@ -443,7 +443,7 @@ claude.ai connectors, so their definitions were in the context too).
 **What the step-by-step arm measures.** It is Claude plus reins' step
 commands, and some of its failures are the step commands': `reins snapshot`
 does not read shadow roots (mdn, openlibrary) and reported "zero size" on
-controls in fx-wizard and fx-settings. A better step toolkit, or a Claude
+controls in fx-wizard and fx-settings. Both were fixed after this benchmark (0.6.1: the snapshot reads open shadow roots, and stale refs from an earlier snapshot no longer point at hidden elements). The fx-wizard page also opened with its modal already showing, for both arms, because a CSS rule overrode `hidden`; that fixture bug was fixed afterwards too. A better step toolkit, or a Claude
 allowed to navigate by URL or use other tabs, would score higher and differ
 in speed and cost.
 

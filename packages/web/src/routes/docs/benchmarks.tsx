@@ -1014,8 +1014,10 @@ function BenchmarksPage() {
       <P>
         Read from each failed run's final reply. Several point at reins' own step commands rather
         than at Claude's reasoning: <Code>reins snapshot</Code>, which the step-by-step arm reads
-        pages with, does not look inside shadow roots, while <Code>reins do</Code>'s observation
-        does.
+        pages with, did not look inside shadow roots at the time, while <Code>reins do</Code>'s
+        observation did, and stale refs from an earlier snapshot could point at hidden elements
+        ("zero size"). Both are fixed in 0.6.1. The fx-wizard page also opened with its modal
+        already showing, for both arms, because of a CSS bug in the fixture (fixed since).
       </P>
       <Ul>
         <li>

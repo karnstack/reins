@@ -26,10 +26,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: jdx/mise-action@v4.2.0
+      # Same Chrome as ci.yml, so the extension's real-browser suite runs the
+      # same way here as it did on the PR.
+      - uses: browser-actions/setup-chrome@v2.2.0
+        id: chrome
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+        env:
+          REINS_TEST_CHROME: ${{ steps.chrome.outputs.chrome-path }}
       - run: pnpm build
 
       - name: Version or publish (changesets)

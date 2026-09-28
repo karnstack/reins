@@ -24,6 +24,7 @@ import {
   jevSubmitFocus,
   jevSubmitted,
 } from "./jev-snapshot.js";
+import { pageDom } from "./page-dom.js";
 
 /** reins do waits this long for a covered or moving target, then re-reads the page. */
 export const JEV_ACTION_TIMEOUT_MS = 500;
@@ -178,8 +179,10 @@ async function readOnce(
   const settled = tab?.status !== "loading" || doc.ready === "interactive";
   if (!settled && !overdue) return undefined;
   return (
-    (await evaluate<Snapshot | null>(tabId, `(${jevSnapshot})(${JSON.stringify(terms)})`)) ??
-    undefined
+    (await evaluate<Snapshot | null>(
+      tabId,
+      `(${jevSnapshot})(${JSON.stringify(terms)}, ${pageDom})`,
+    )) ?? undefined
   );
 }
 

@@ -13,6 +13,8 @@ import type {
 import { actionPoint, type ProbeResult, readProbe } from "./actionability.js";
 import { autofillGuard } from "./autofill-guard.js";
 import { isMonitored } from "./monitor.js";
+import { findRef, pageDom } from "./page-dom.js";
+import { type StepSnapshot, stepSnapshot } from "./snapshot.js";
 
 const PROTOCOL = "1.3";
 
@@ -293,42 +295,34 @@ export async function cdpNavigate(params: NavigateParams): Promise<{ url: string
   });
 }
 
-/** Tag interactive/labelled elements with data-reins-ref and return a compact tree + refs. */
-const SNAPSHOT_EXPR = `(() => {
-  const refs = [];
-  let n = 0;
-  const sel = "a,button,input,textarea,select,[role],h1,h2,h3,[contenteditable=true]";
-  for (const el of document.querySelectorAll(sel)) {
-    if (!(el instanceof HTMLElement) || el.offsetParent === null) continue;
-    const ref = "e" + (++n);
-    el.setAttribute("data-reins-ref", ref);
-    const role = el.getAttribute("role") || el.tagName.toLowerCase();
-    const name = (el.getAttribute("aria-label") || el.textContent || el.getAttribute("placeholder") || "").trim().slice(0, 80);
-    refs.push({ ref, role, name });
-  }
-  const text = refs.map(r => r.ref + ": " + r.role + " " + JSON.stringify(r.name)).join("\\n");
-  return { content: text, refs };
-})()`;
-
-export async function cdpSnapshot(
-  params: SnapshotParams,
-): Promise<{ content: string; refs: Array<{ ref: string; role?: string; name?: string }> }> {
+export async function cdpSnapshot(params: SnapshotParams): Promise<StepSnapshot> {
   const tabId = await resolveTabId(params.tabId);
   return withDebugger(tabId, async () => {
-    const { result } = await send<{
-      result: {
-        value: { content: string; refs: Array<{ ref: string; role?: string; name?: string }> };
-      };
-    }>(tabId, "Runtime.evaluate", { expression: SNAPSHOT_EXPR, returnByValue: true });
+    const { result } = await send<{ result: { value: StepSnapshot } }>(tabId, "Runtime.evaluate", {
+      expression: `(${stepSnapshot})(${pageDom})`,
+      returnByValue: true,
+    });
     const value = result.value;
     const content = params.maxChars ? value.content.slice(0, params.maxChars) : value.content;
     return { content, refs: value.refs };
   });
 }
 
+/** How a command's target is named in its messages. */
 export function selectorFor(ref?: string, selector?: string): string {
   if (selector) return selector;
   if (ref) return `[data-reins-ref="${ref}"]`;
+  throw new Error("requires a ref or selector");
+}
+
+/**
+ * A page expression evaluating to the command's target, or null. A selector
+ * is plain CSS on the light DOM (`document.querySelector`); a ref is found
+ * through open shadow roots, where `reins snapshot` tags elements too.
+ */
+export function targetExpr(ref?: string, selector?: string): string {
+  if (selector) return `document.querySelector(${JSON.stringify(selector)})`;
+  if (ref) return `(${findRef})(${JSON.stringify(ref)})`;
   throw new Error("requires a ref or selector");
 }
 
@@ -361,20 +355,22 @@ export async function ensureVisible(tabId: number): Promise<void> {
 
 /**
  * Resolve a point where trusted pointer input will land on the element.
- * `opts.node` targets a Jev node id instead of the selector (which then only
- * names the element in errors); `opts.timeoutMs` overrides the default wait.
+ * `opts.node` targets a Jev node id, and `opts.locate` a page expression
+ * (`targetExpr`), instead of the selector — which then only names the
+ * element in errors; `opts.timeoutMs` overrides the default wait.
  */
 export async function actionablePoint(
   tabId: number,
   css: string,
   action: string,
   forClick: boolean,
-  opts: { node?: number; timeoutMs?: number } = {},
+  opts: { node?: number; locate?: string; timeoutMs?: number } = {},
 ): Promise<{ x: number; y: number }> {
+  const locate = opts.locate === undefined ? "null" : `() => ${opts.locate}`;
   const { result } = await send<{
     result: { value: { x: number; y: number } | { error: string } };
   }>(tabId, "Runtime.evaluate", {
-    expression: `(${actionPoint})(${JSON.stringify(css)}, ${opts.timeoutMs ?? ACTION_TIMEOUT_MS}, ${forClick}, ${opts.node ?? null})`,
+    expression: `(${actionPoint})(${JSON.stringify(css)}, ${opts.timeoutMs ?? ACTION_TIMEOUT_MS}, ${forClick}, ${opts.node ?? null}, ${locate})`,
     returnByValue: true,
     awaitPromise: true,
   });
@@ -468,7 +464,9 @@ export async function cdpClick(params: ClickParams): Promise<ClickResult> {
   const clickCount = params.clickCount ?? 1;
   return drivePage(tabId, async () => {
     await ensureVisible(tabId);
-    const { x, y } = await actionablePoint(tabId, css, "click", true);
+    const { x, y } = await actionablePoint(tabId, css, "click", true, {
+      locate: targetExpr(params.ref, params.selector),
+    });
     const { newTabUrl } = await pressAt(tabId, x, y, css, button, clickCount);
     if (newTabUrl === undefined) return { ok: true };
     // The user sees the new tab as after a normal click, without Chrome
@@ -484,7 +482,7 @@ export async function cdpType(params: TypeParams): Promise<{ ok: true }> {
   return drivePage(tabId, async () => {
     await ensureVisible(tabId);
     const { result } = await send<{ result: { value: boolean } }>(tabId, "Runtime.evaluate", {
-      expression: `(() => { const el = document.querySelector(${JSON.stringify(css)}); if (!el) return false; el.focus(); return true; })()`,
+      expression: `(() => { const el = ${targetExpr(params.ref, params.selector)}; if (!el) return false; el.focus(); return true; })()`,
       returnByValue: true,
     });
     if (!result.value) throw new Error(`element not found: ${css}`);
@@ -546,12 +544,13 @@ export async function cdpWaitFor(params: WaitForParams): Promise<{ ok: true }> {
   const state = params.state ?? "visible";
   const timeoutMs = params.timeoutMs ?? 5000;
 
+  const target = targetExpr(params.ref, params.selector);
   let checkExpr: string;
   if (state === "present") {
-    checkExpr = `!!document.querySelector(${JSON.stringify(css)})`;
+    checkExpr = `!!${target}`;
   } else if (state === "visible") {
     checkExpr = `(() => {
-      const el = document.querySelector(${JSON.stringify(css)});
+      const el = ${target};
       if (!el) return false;
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);
@@ -560,7 +559,7 @@ export async function cdpWaitFor(params: WaitForParams): Promise<{ ok: true }> {
   } else {
     // hidden: element missing OR not visible
     checkExpr = `(() => {
-      const el = document.querySelector(${JSON.stringify(css)});
+      const el = ${target};
       if (!el) return true;
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);

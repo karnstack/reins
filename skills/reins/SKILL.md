@@ -76,13 +76,16 @@ reins status
 1. **Find the tab** — `reins tabs` lists every tab in every connected
    browser (`b1  tab 12 *  Title — url`; `*` = active tab).
 2. **See what's interactive** — `reins snapshot --tab 12` prints elements
-   with refs like `e5: button "Submit"`.
+   with refs like `e5: button "Submit"`, including ones inside open shadow
+   roots (web components); closed shadow roots stay invisible.
 3. **Act on refs** — `reins click --ref e5 --tab 12`,
    `reins type --ref e3 --text "hi" --enter --tab 12`.
-   CSS selectors work anywhere a ref does: `--selector "#submit"`.
+   CSS selectors work anywhere a ref does: `--selector "#submit"` — but only
+   on the light DOM; use a ref for an element inside a shadow root.
 4. **Verify** — `reins text --tab 12` (visible page text) or
    `reins screenshot --tab 12` (prints an image path — Read the file to view
-   it). Refs go stale after navigation; re-run `snapshot`.
+   it). Refs go stale after navigation, and each `snapshot` re-issues them
+   (only the latest snapshot's refs are valid); re-run `snapshot`.
 
 ## Delegate a whole task: `reins do` (when a TypeSafe key is set)
 

@@ -214,6 +214,29 @@ describe("upload", () => {
     expect(set?.params).toEqual({ files: ["/tmp/cv.pdf"], nodeId: 42 });
   });
 
+  it("hands CDP the element itself for a ref, which may sit in a shadow root", async () => {
+    const calls = stubChrome((method) => {
+      if (method === "Runtime.evaluate") return { result: { type: "object", objectId: "obj-1" } };
+      return {};
+    });
+    await upload({ ref: "e4", files: ["/tmp/cv.pdf"], tabId: 1 });
+    expect(calls[0]?.params?.expression).toContain('"e4"');
+    expect(calls.some((c) => c.method === "DOM.querySelector")).toBe(false);
+    const set = calls.find((c) => c.method === "DOM.setFileInputFiles");
+    expect(set?.params).toEqual({ files: ["/tmp/cv.pdf"], objectId: "obj-1" });
+    expect(calls.at(-1)).toEqual({
+      method: "Runtime.releaseObject",
+      params: { objectId: "obj-1" },
+    });
+  });
+
+  it("errors when no element holds the ref", async () => {
+    stubChrome(() => ({ result: { type: "object", subtype: "null" } }));
+    await expect(upload({ ref: "e9", files: ["/tmp/a"], tabId: 1 })).rejects.toThrow(
+      'element not found: [data-reins-ref="e9"]',
+    );
+  });
+
   it("errors when the selector matches nothing", async () => {
     stubChrome((method) => {
       if (method === "DOM.getDocument") return { root: { nodeId: 1 } };
