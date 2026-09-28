@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="shared.css" />
+<style>
+  .stage { position: relative; height: 560px; margin-top: 40px; }
+  .browser { position: absolute; left: 0; top: 0; width: 700px; height: 620px; }
+  .term { position: absolute; right: -8px; top: 70px; width: 670px; z-index: 5; }
+  .term pre { font-size: 14px; }
+
+  .shop { padding: 22px 28px; }
+  .nav2 { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #52525b; }
+  .nav2 b { font-size: 16px; color: #18181b; }
+  h2 { margin: 22px 0 14px; font-size: 22px; letter-spacing: -0.01em; }
+  .card { width: 330px; border: 1px solid #e4e4e7; border-radius: 10px; padding: 16px; font-size: 13.5px; }
+  .row { display: flex; justify-content: space-between; padding: 7px 0; color: #3f3f46; }
+  .row.total { border-top: 1px solid #e4e4e7; margin-top: 6px; padding-top: 12px; font-weight: 700; color: #18181b; }
+  .nan { color: #dc2626; }
+  .pay { margin-top: 14px; height: 38px; border-radius: 8px; background: #18181b; color: #fff; display: grid; place-items: center; font-weight: 600; opacity: 0.45; }
+  .toast { position: absolute; left: 28px; top: 450px; width: 330px; display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 13px; line-height: 1.4; }
+  .toast i { flex: none; width: 16px; height: 16px; border-radius: 50%; background: #dc2626; margin-top: 1px; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="meta">
+    <span class="brand"><img src="logo.svg" width="26" height="26" alt="" />reins</span>
+    <span>reins.tech</span>
+  </div>
+  <h1 class="headline"><span class="hash">#</span>Console and network, no DevTools</h1>
+  <p class="sub">Your agent reads the page's errors and failed requests on its own, then goes and fixes the code that caused them.</p>
+
+  <div class="stage">
+    <div class="browser">
+      <div class="tabs">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="tab tab--active"><span class="fav" style="background:#2563eb"></span>Checkout · Acme Shop</div>
+        <div class="tab"><span class="fav" style="background:#a1a1aa"></span>Orders · Admin</div>
+      </div>
+      <div class="toolbar">
+        <div class="nav">←&nbsp; →&nbsp; ↻</div>
+        <div class="omnibox"><span class="host">localhost:5173</span><span class="path">/checkout</span></div>
+        <div class="ext ext--on"><img src="logo.svg" width="20" height="20" alt="" /></div>
+      </div>
+      <div class="debugbar"><span class="icon"></span>"reins" started debugging this browser<span class="cancel">Cancel</span></div>
+      <div class="shop">
+        <div class="nav2"><b>Acme Shop</b><span>Cart (3)</span></div>
+        <h2>Checkout</h2>
+        <div class="card">
+          <div class="row"><span>Trail runner ×1</span><span>$128.00</span></div>
+          <div class="row"><span>Wool socks ×2</span><span>$36.00</span></div>
+          <div class="row"><span>Shipping</span><span>$6.00</span></div>
+          <div class="row total"><span>Total</span><span class="nan">$NaN</span></div>
+          <div class="pay">Pay now</div>
+        </div>
+      </div>
+      <div class="toast"><i></i><span>Something went wrong placing your order. Please try again.</span></div>
+    </div>
+
+    <div class="term">
+      <div class="term__bar"><i></i><i></i><i></i><span>claude — ~/shop</span></div>
+<pre><span class="p">$</span> <span class="c">reins console --level error</span>
+<span class="er">[error]</span><span class="o"> TypeError: Cannot read properties of undefined (reading 'price')</span>
+<span class="er">[error]</span><span class="o"> checkout failed: 500 Internal Server Error</span>
+<span class="p">$</span> <span class="c">reins network --url /api</span>
+<span class="o">GET http://localhost:5173/api/cart -> </span><span class="ok">200</span>
+<span class="o">GET http://localhost:5173/api/shipping -> </span><span class="ok">200</span>
+<span class="o">POST http://localhost:5173/api/checkout -> </span><span class="er">500</span>
+<span class="p">$</span> <span class="c">reins eval 'window.__cart.items.length'</span>
+<span class="o">3</span>
+<span class="p">$</span> <span class="caret"></span></pre>
+    </div>
+  </div>
+</div>
+</body>
+</html>

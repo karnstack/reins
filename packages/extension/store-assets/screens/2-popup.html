@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="shared.css" />
+<style>
+  .cols { display: grid; grid-template-columns: 560px 1fr; gap: 40px; }
+  .headline { font-size: 38px; }
+  .tiers { margin: 40px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+  .tiers li { display: grid; grid-template-columns: 84px 1fr; gap: 18px; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 17px; line-height: 1.45; color: var(--ink-2); }
+  .tier { justify-self: start; padding: 3px 10px; border-radius: 6px; font-size: 15px; font-weight: 600; }
+  .t-deny { background: rgb(220 38 38 / 0.08); color: #b91c1c; }
+  .t-read { background: rgb(245 158 11 / 0.16); color: #9a4b00; }
+  .t-full { background: rgb(124 58 237 / 0.1); color: #6d28d9; }
+
+  .right { position: relative; height: 800px; margin-top: -56px; }
+  .browser { position: absolute; left: 0; right: -120px; top: 56px; border-radius: 12px 0 0 0; box-shadow: 0 0 0 1px var(--line-strong); }
+  .page { height: 700px; background: #fafafa; }
+  .pop { position: absolute; right: 26px; top: 146px; width: 446px; height: 780px; border-radius: 12px; overflow: hidden; background: #fff;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 24px 60px -12px rgb(24 24 27 / 0.35), 0 8px 20px -8px rgb(24 24 27 / 0.2); }
+  .pop iframe { border: 0; width: 372px; height: 680px; transform: scale(1.2); transform-origin: 0 0; }
+  .ext--on { outline: 2px solid #c4b5fd; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="cols">
+    <div>
+      <div class="meta"><span class="brand"><img src="logo.svg" width="26" height="26" alt="" />reins</span></div>
+      <h1 class="headline"><span class="hash">#</span>You decide what it can touch</h1>
+      <p class="sub">Every site resolves to one tier, checked inside the extension before a command reaches the tab. Granting more takes a click here. An agent in your shell can't make one.</p>
+      <ul class="tiers">
+        <li><span class="tier t-deny">deny</span><span>Nothing. The site's tabs are hidden from the agent.</span></li>
+        <li><span class="tier t-read">read</span><span>Snapshot, text, screenshot. No clicks, no typing.</span></li>
+        <li><span class="tier t-full">full</span><span>Everything, including eval and raw CDP.</span></li>
+      </ul>
+    </div>
+    <div class="right">
+      <div class="browser">
+        <div class="tabs">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="tab tab--active"><span class="fav" style="background:#0f766e"></span>My Bank · Accounts</div>
+        </div>
+        <div class="toolbar">
+          <div class="nav">←&nbsp; →&nbsp; ↻</div>
+          <div class="omnibox"><span class="lock">🔒</span><span class="host">mybank.com</span><span class="path">/accounts</span></div>
+          <div class="ext ext--on" style="margin-right:112px"><img src="logo.svg" width="20" height="20" alt="" /></div>
+        </div>
+        <div class="page"></div>
+      </div>
+      <div class="pop"><iframe src="popup-frame.html" title="reins popup"></iframe></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

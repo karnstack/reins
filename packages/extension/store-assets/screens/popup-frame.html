@@ -1,0 +1,83 @@
+<!doctype html>
+<!-- The real popup markup and stylesheet, frozen in its connected state with
+     a few site rules. Framed by 2-popup.html so popup.css keeps its tokens. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="light" />
+<link rel="stylesheet" href="../../src/popup.css" />
+</head>
+<body>
+<main class="reins">
+  <header class="reins__header">
+    <span class="reins__mark" aria-hidden="true">
+      <svg aria-hidden="true" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M42 42 C 42 80, 86 48, 86 86" stroke="#fff" stroke-width="12" stroke-linecap="round" fill="none" />
+        <circle cx="42" cy="42" r="13" fill="#fff" />
+        <circle cx="86" cy="86" r="13" fill="#fff" />
+      </svg>
+    </span>
+    <div class="reins__heading">
+      <h1 class="reins__title">reins</h1>
+      <p class="reins__subtitle">Drive this browser from your agent</p>
+    </div>
+    <span class="reins__status reins__status--connected" role="status">
+      <span class="reins__status-dot"></span>
+      <span class="reins__status-label">Connected</span>
+    </span>
+  </header>
+
+  <dl class="reins__info">
+    <div class="reins__info-row"><dt>Daemon</dt><dd>v0.6.0 · 127.0.0.1:8765</dd></div>
+    <div class="reins__info-row"><dt>This browser</dt><dd>b1 (Chrome)</dd></div>
+  </dl>
+
+  <button class="reins__btn reins__btn--ghost reins__btn--block reins__btn--danger" type="button">Disconnect</button>
+
+  <section class="reins__section reins__jev">
+    <h2 class="reins__section-title">Jev</h2>
+    <div class="reins__jev-key">
+      <p class="reins__jev-ready">
+        <span class="reins__dot reins__dot--ok"></span>
+        <span>Ready</span>
+        <span class="reins__jev-last4">••••7f3a</span>
+      </p>
+      <div class="reins__jev-actions">
+        <button class="reins__btn reins__btn--ghost" type="button">Replace</button>
+        <button class="reins__btn reins__btn--ghost reins__btn--danger" type="button">Remove</button>
+      </div>
+    </div>
+  </section>
+  <section class="reins__section reins__policy">
+    <h2 class="reins__section-title">Site permissions</h2>
+    <div class="reins__policy-rows">
+      <div class="reins__policy-row">
+        <span class="reins__policy-host">mybank.com</span>
+        <fieldset class="reins__seg">
+          <button type="button" data-tier="full">Full</button>
+          <button type="button" data-tier="read">Read</button>
+          <button type="button" data-tier="deny" class="reins__seg--on">Deny</button>
+        </fieldset>
+      </div>
+      <div class="reins__policy-row">
+        <span class="reins__policy-rowlabel">Default for other sites</span>
+        <div class="reins__select"><button class="reins__select-btn" type="button"><span class="reins__select-label">Full</span><span class="reins__select-chevron">▾</span></button></div>
+      </div>
+    </div>
+    <ul class="reins__policy-rules">
+      <li class="reins__policy-rule"><code class="reins__policy-pattern">mybank.com</code><span class="reins__tier reins__tier--deny">deny</span><button type="button" class="reins__policy-del">×</button></li>
+      <li class="reins__policy-rule"><code class="reins__policy-pattern">mail.google.com</code><span class="reins__tier reins__tier--read">read</span><button type="button" class="reins__policy-del">×</button></li>
+      <li class="reins__policy-rule"><code class="reins__policy-pattern">*.github.com</code><span class="reins__tier reins__tier--full">full</span><button type="button" class="reins__policy-del">×</button></li>
+      <li class="reins__policy-rule"><code class="reins__policy-pattern">localhost</code><span class="reins__tier reins__tier--full">full</span><button type="button" class="reins__policy-del">×</button></li>
+    </ul>
+    <form class="reins__policy-add">
+      <input class="reins__input reins__input--mono" placeholder="*.example.com" />
+      <div class="reins__select reins__select--up"><button class="reins__select-btn" type="button"><span class="reins__select-label">Full</span><span class="reins__select-chevron">▾</span></button></div>
+      <button class="reins__policy-add-btn" type="button">＋</button>
+    </form>
+  </section>
+
+  <details class="reins__advanced"><summary>Advanced</summary></details>
+</main>
+</body>
+</html>

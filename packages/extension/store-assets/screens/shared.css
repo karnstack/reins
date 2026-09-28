@@ -1,0 +1,418 @@
+/* Chrome Web Store screenshots, 1280×800. Same language as reins.tech: the
+   words are mono and square, the drawings of real UI (browser, popup) are
+   sans and keep their corners. Render with ./render.sh. */
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400..700&family=Inter:wght@400..700&display=block");
+
+:root {
+  --bg: #ffffff;
+  --ink: #18181b;
+  --ink-2: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --line: rgb(24 24 27 / 0.1);
+  --line-strong: rgb(24 24 27 / 0.18);
+  --fill: rgb(24 24 27 / 0.04);
+  --primary: #7c3aed;
+  --primary-ink: #6d28d9;
+  --primary-tint: rgb(124 58 237 / 0.08);
+  --term-bg: #16161a;
+  --term-ink: #e4e4e7;
+  --term-muted: #8b8b95;
+  --term-accent: #a78bfa;
+  --ok: #16a34a;
+  --err: #dc2626;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+.slide {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  padding: 56px 72px 0;
+  /* the faint grid the eye reads as paper, not decoration */
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+.slide::before {
+  /* fade the grid out under the caption so the words sit on white */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    #fff 0%,
+    #fff 30%,
+    rgb(255 255 255 / 0.55) 60%,
+    rgb(255 255 255 / 0.2) 100%
+  );
+  pointer-events: none;
+}
+
+.slide > * {
+  position: relative;
+}
+
+/* ---- caption --------------------------------------------------------- */
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 17px;
+}
+
+.brand svg {
+  width: 26px;
+  height: 26px;
+}
+
+.headline {
+  margin: 34px 0 0;
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.headline .hash {
+  color: var(--primary);
+  margin-right: 14px;
+}
+
+.sub {
+  margin: 16px 0 0;
+  max-width: 64ch;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  border-left: 3px solid var(--primary);
+  padding-left: 16px;
+}
+
+.sub code {
+  color: var(--primary-ink);
+  font-weight: 600;
+}
+
+/* ---- terminal ---------------------------------------------------------- */
+
+.term {
+  background: var(--term-bg);
+  color: var(--term-ink);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.6),
+    0 30px 60px -20px rgb(24 24 27 / 0.45),
+    0 12px 24px -12px rgb(24 24 27 / 0.3);
+  font-family: var(--mono);
+  overflow: hidden;
+}
+
+.term__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  font-size: 12px;
+  color: var(--term-muted);
+}
+
+.term__bar i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #3f3f46;
+}
+
+.term__bar span {
+  margin-left: 10px;
+}
+
+.term pre {
+  margin: 0;
+  padding: 18px 22px 22px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.75;
+  white-space: pre;
+}
+
+.term .p {
+  color: var(--term-accent);
+}
+.term .c {
+  color: #fff;
+  font-weight: 500;
+}
+.term .o {
+  color: var(--term-muted);
+}
+.term .ok {
+  color: #4ade80;
+}
+.term .er {
+  color: #f87171;
+}
+.term .hl {
+  color: #fde68a;
+}
+.term .caret {
+  display: inline-block;
+  width: 9px;
+  height: 18px;
+  vertical-align: -3px;
+  background: var(--term-accent);
+}
+
+/* ---- browser window ------------------------------------------------------ */
+
+.browser {
+  font-family: var(--sans);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 40px 80px -30px rgb(24 24 27 / 0.35),
+    0 16px 32px -16px rgb(24 24 27 / 0.2);
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 42px;
+  padding: 0 12px;
+  background: #dfe1e5;
+}
+
+.tabs .lights {
+  display: flex;
+  gap: 8px;
+  align-self: center;
+  margin: 0 14px 0 4px;
+}
+
+.tabs .lights i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.tabs .lights i:nth-child(1) {
+  background: #ff5f57;
+}
+.tabs .lights i:nth-child(2) {
+  background: #febc2e;
+}
+.tabs .lights i:nth-child(3) {
+  background: #28c840;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  width: 200px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  color: #3c4043;
+  border-radius: 8px 8px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tab--active {
+  background: #fff;
+}
+
+.tab .fav {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.group-chip {
+  align-self: center;
+  margin: 0 2px 0 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #8b5cf6;
+}
+
+.group-line {
+  box-shadow: inset 0 -2px 0 #8b5cf6;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.toolbar .nav {
+  display: flex;
+  gap: 14px;
+  color: #5f6368;
+  font-size: 15px;
+}
+
+.omnibox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 15px;
+  background: #f1f3f4;
+  font-size: 13.5px;
+  color: #202124;
+}
+
+.omnibox .lock {
+  color: #5f6368;
+  font-size: 12px;
+}
+
+.omnibox .host {
+  color: #202124;
+}
+.omnibox .path {
+  color: #5f6368;
+}
+
+.ext {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.ext svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ext--on {
+  background: #ede9fe;
+}
+
+.ext .badge {
+  position: absolute;
+}
+
+/* Chrome's own infobar while an extension is attached with chrome.debugger */
+.debugbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 13px;
+  color: #202124;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.debugbar .icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #1a73e8;
+  position: relative;
+}
+
+.debugbar .icon::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #1a73e8;
+}
+
+.debugbar .cancel {
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+/* ref chips: what `reins snapshot` calls each element */
+.ref {
+  position: absolute;
+  z-index: 3;
+  padding: 3px 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgb(124 58 237 / 0.35);
+}
+
+.ref--dark {
+  background: var(--ink);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+}
+
+.outlined {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.cursor {
+  position: absolute;
+  z-index: 4;
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+}

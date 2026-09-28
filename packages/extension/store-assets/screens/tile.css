@@ -1,0 +1,46 @@
+/* Promo tiles. The store shows them on white, often small, so unlike the
+   screenshots they sit on the terminal's dark ground. */
+html,
+body {
+  background: var(--term-bg);
+}
+
+.tile {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background-color: var(--term-bg);
+  background-image:
+    radial-gradient(120% 90% at 100% 100%, rgb(124 58 237 / 0.45), transparent 60%),
+    linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size:
+    auto,
+    24px 24px,
+    24px 24px;
+}
+
+.tile > * {
+  position: relative;
+}
+
+.tile .brand {
+  color: #fff;
+}
+
+:where(.tile p) {
+  margin: 0;
+}
+
+.tile em {
+  font-style: normal;
+  color: var(--term-accent);
+}
+
+.tile .cmd {
+  color: var(--term-muted);
+}
+
+.tile .p {
+  color: var(--term-accent);
+}

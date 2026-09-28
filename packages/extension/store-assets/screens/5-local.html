@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="shared.css" />
+<style>
+  .machine { position: relative; margin-top: 48px; padding: 38px 32px 32px; border: 2px dashed rgb(124 58 237 / 0.45); background: rgb(255 255 255 / 0.85); }
+  .machine-label { position: absolute; top: -14px; left: 24px; padding: 2px 10px; background: #fff; font-size: 15px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-ink); }
+  .flow { display: grid; grid-template-columns: 1fr 64px 1fr 64px 1fr; align-items: center; }
+  .node { border: 1px solid var(--line-strong); background: #fff; padding: 18px 20px; box-shadow: 0 10px 24px -16px rgb(24 24 27 / 0.3); }
+  .node small { display: block; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .node b { display: block; margin-top: 8px; font-size: 21px; font-weight: 650; }
+  .node code { display: block; margin-top: 6px; font-size: 15px; color: var(--primary-ink); }
+  .node--ext b { display: flex; align-items: center; gap: 10px; }
+  .arrow { position: relative; height: 2px; background: var(--ink); margin: 0 6px; }
+  .arrow::after { content: ""; position: absolute; right: -2px; top: -6px; border: 7px solid transparent; border-left: 10px solid var(--ink); border-right: 0; }
+  .facts { margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line-strong); }
+  .fact { padding: 16px 0 14px; border-bottom: 1px solid var(--line); font-size: 17px; }
+  .fact span { display: block; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .fact b { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="meta">
+    <span class="brand"><img src="logo.svg" width="26" height="26" alt="" />reins</span>
+    <span>reins.tech</span>
+  </div>
+  <h1 class="headline"><span class="hash">#</span>Everything runs on your machine</h1>
+  <p class="sub">The CLI, a daemon it starts on demand, and this extension talk over 127.0.0.1. Chrome shows its debugging banner the whole time, and Disconnect cuts it off.</p>
+
+  <div class="machine">
+    <span class="machine-label">your machine</span>
+    <div class="flow">
+      <div class="node"><small>your agent</small><b>reins &lt;cmd&gt;</b><code>Claude Code, Cursor, Codex…</code></div>
+      <div class="arrow"></div>
+      <div class="node"><small>daemon</small><b>127.0.0.1:8765</b><code>starts on demand</code></div>
+      <div class="arrow"></div>
+      <div class="node node--ext"><small>this extension</small><b><img src="logo.svg" width="24" height="24" alt="" />your browser</b><code>chrome.debugger → tab</code></div>
+    </div>
+    <div class="facts">
+      <div class="fact"><span>hosted service</span><b>None</b></div>
+      <div class="fact"><span>account</span><b>None</b></div>
+      <div class="fact"><span>telemetry</span><b>None. No analytics, no remote code</b></div>
+      <div class="fact"><span>license</span><b>MIT, open source</b></div>
+      <div class="fact"><span>browsers</span><b>Chrome, Brave, Edge, Arc, Dia</b></div>
+      <div class="fact"><span>install the CLI</span><b style="color:var(--primary-ink)">npm i -g @karnstack/reins</b></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

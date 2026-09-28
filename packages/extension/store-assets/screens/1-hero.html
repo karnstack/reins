@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="shared.css" />
+<style>
+  .stage { position: relative; height: 560px; margin-top: 40px; }
+  .browser { position: absolute; left: 290px; top: 0; width: 846px; height: 620px; }
+  .term { position: absolute; left: -8px; top: 120px; width: 440px; z-index: 5; }
+
+  .app { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
+  .side { background: #fafafa; border-right: 1px solid #eee; padding: 18px 14px; font-size: 13px; color: #52525b; }
+  .side .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #18181b; margin-bottom: 22px; }
+  .side .logo i { width: 20px; height: 20px; border-radius: 6px; background: #18181b; }
+  .side .item { position: relative; display: block; padding: 7px 10px; border-radius: 6px; margin-bottom: 2px; }
+  .side .item.on { background: #fff; color: #18181b; font-weight: 600; box-shadow: 0 0 0 1px #e4e4e7; }
+  .main { padding: 20px 26px; position: relative; }
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .top h2 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  .who { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #52525b; }
+  .who i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #ef4444); }
+  .bar { display: flex; gap: 10px; margin-top: 18px; position: relative; }
+  .search { position: relative; flex: 1; height: 34px; border: 1px solid #e4e4e7; border-radius: 7px; padding: 0 12px; display: flex; align-items: center; font-size: 13px; color: #a1a1aa; }
+  .btn { position: relative; height: 34px; padding: 0 14px; border-radius: 7px; display: flex; align-items: center; font-size: 13px; font-weight: 600; }
+  .btn--pri { background: #18181b; color: #fff; }
+  table { width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 500; color: #71717a; padding: 8px 6px; border-bottom: 1px solid #e4e4e7; }
+  td { padding: 11px 6px; border-bottom: 1px solid #f1f1f3; color: #27272a; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .pill { padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; }
+  .paid { background: #dcfce7; color: #166534; }
+  .due { background: #fef3c7; color: #92400e; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="meta">
+    <span class="brand"><img src="logo.svg" width="26" height="26" alt="" />reins</span>
+    <span>reins.tech</span>
+  </div>
+  <h1 class="headline"><span class="hash">#</span>Drive the browser you're signed in to</h1>
+  <p class="sub">Your coding agent gets your real Chrome, logins and all. No debug profile, no launch flags, no signing in again.</p>
+
+  <div class="stage">
+    <div class="browser">
+      <div class="tabs">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="tab"><span class="fav" style="background:#24292f"></span>Pull requests</div>
+        <span class="group-chip">agent</span>
+        <div class="tab tab--active group-line"><span class="fav" style="background:#18181b"></span>Invoices · Acme</div>
+        <div class="tab group-line"><span class="fav" style="background:#f97316"></span>Stripe export</div>
+      </div>
+      <div class="toolbar">
+        <div class="nav">←&nbsp; →&nbsp; ↻</div>
+        <div class="omnibox"><span class="lock">🔒</span><span class="host">app.acme.dev</span><span class="path">/billing/invoices</span></div>
+        <div class="ext ext--on"><img src="logo.svg" width="20" height="20" alt="" /></div>
+      </div>
+      <div class="debugbar"><span class="icon"></span>"reins" started debugging this browser<span class="cancel">Cancel</span></div>
+      <div class="app">
+        <div class="side">
+          <div class="logo"><i></i>Acme</div>
+          <span class="item">Overview</span>
+          <span class="item">Customers</span>
+          <span class="item on">Invoices</span>
+          <span class="item">Payouts</span>
+          <span class="item">Settings</span>
+        </div>
+        <div class="main">
+          <div class="top"><h2>Invoices</h2><span class="who"><i></i>maya@acme.dev</span></div>
+          <div class="bar">
+            <div class="search"><span class="ref" style="left:-8px;top:-10px">e9</span>Search invoices</div>
+            <div class="btn" style="box-shadow:0 0 0 1px #e4e4e7">Filter</div>
+            <div class="btn btn--pri outlined"><span class="ref" style="right:-10px;top:-12px">e7</span>Export CSV</div>
+            <svg aria-hidden="true" class="cursor" style="right:-6px;top:24px" viewBox="0 0 16 16"><path d="M1 1l4.5 13 2.2-5.3L13 6.5 1 1z" fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="round"/></svg>
+          </div>
+          <table>
+            <tr><th>Invoice</th><th>Customer</th><th>Amount</th><th>Status</th></tr>
+            <tr><td style="position:relative"><span class="ref" style="left:78px;top:10px">e12</span>INV-2041</td><td>Northwind</td><td class="num">$4,200.00</td><td><span class="pill paid">Paid</span></td></tr>
+            <tr><td>INV-2040</td><td>Globex</td><td class="num">$1,180.00</td><td><span class="pill due">Due</span></td></tr>
+            <tr><td>INV-2039</td><td>Initech</td><td class="num">$9,640.00</td><td><span class="pill paid">Paid</span></td></tr>
+            <tr><td>INV-2038</td><td>Umbrella</td><td class="num">$720.00</td><td><span class="pill paid">Paid</span></td></tr>
+            <tr><td>INV-2037</td><td>Hooli</td><td class="num">$3,015.00</td><td><span class="pill due">Due</span></td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="term">
+      <div class="term__bar"><i></i><i></i><i></i><span>claude — ~/acme</span></div>
+<pre><span class="p">$</span> <span class="c">reins snapshot</span>
+<span class="o">e7: button "Export CSV"</span>
+<span class="o">e9: textbox "Search invoices"</span>
+<span class="o">e12: link "INV-2041"</span>
+<span class="p">$</span> <span class="c">reins click --ref e7</span>
+<span class="ok">ok</span>
+<span class="p">$</span> <span class="c">reins text</span>
+<span class="o">Export ready: invoices-2026-09.csv</span>
+<span class="p">$</span> <span class="caret"></span></pre>
+    </div>
+  </div>
+</div>
+</body>
+</html>
