@@ -1,0 +1,192 @@
+bench-do: 30 task(s) × do × 5 run(s) → /private/tmp/claude-501/-Users-karn-code-karnstack-reins/bbc3712e-531b-4ca8-8df5-67caa76fa70f/scratchpad/bench-out-r5/2026-09-28T11-41-38-184Z (fixtures on 127.0.0.1:54392)
+fx-autocomplete do #1: 4979 ms ✓ (done step=3 jev=5)
+fx-autocomplete do #2: 4027 ms ✓ (done step=3 jev=5)
+fx-autocomplete do #3: 3850 ms ✓ (done step=3 jev=5)
+fx-autocomplete do #4: 3798 ms ✓ (done step=3 jev=5)
+fx-autocomplete do #5: 3838 ms ✓ (done step=3 jev=5)
+fx-datepicker do #1: 4336 ms ✗ (done step=4 jev=6)
+fx-datepicker do #2: 4413 ms ✗ (done step=4 jev=6)
+fx-datepicker do #3: 4409 ms ✗ (done step=4 jev=6)
+fx-datepicker do #4: 4574 ms ✗ (done step=4 jev=6)
+fx-datepicker do #5: 4690 ms ✗ (done step=4 jev=6)
+fx-consent do #1: 4879 ms ✓ (done step=3 jev=5)
+fx-consent do #2: 4986 ms ✓ (done step=3 jev=5)
+fx-consent do #3: 5391 ms ✓ (done step=3 jev=5)
+fx-consent do #4: 5250 ms ✓ (done step=3 jev=5)
+fx-consent do #5: 5550 ms ✓ (done step=3 jev=5)
+fx-filters do #1: 7175 ms ✗ (done step=7 jev=9)
+fx-filters do #2: 7333 ms ✗ (done step=7 jev=9)
+fx-filters do #3: 8269 ms ✗ (done step=7 jev=9)
+fx-filters do #4: 7811 ms ✗ (done step=7 jev=9)
+fx-filters do #5: 7849 ms ✗ (done step=7 jev=9)
+fx-newtab do #1: 5895 ms ✓ (done step=4 jev=6)
+fx-newtab do #2: 5631 ms ✓ (done step=4 jev=6)
+fx-newtab do #3: 6203 ms ✓ (done step=4 jev=6)
+fx-newtab do #4: 6104 ms ✓ (done step=4 jev=6)
+fx-newtab do #5: 6073 ms ✓ (done step=4 jev=6)
+fx-form do #1: 8345 ms ✓ (done step=8 jev=10)
+fx-form do #2: 7911 ms ✓ (done step=8 jev=10)
+fx-form do #3: 7701 ms ✓ (done step=8 jev=10)
+fx-form do #4: 8515 ms ✓ (done step=8 jev=10)
+fx-form do #5: 8126 ms ✓ (done step=8 jev=10)
+fx-risky do #1: 686 ms ✓ (risky_action step=0 jev=1 — next click is "Delete draft: Weekly digest" (its label says "delete"))
+fx-risky do #2: 655 ms ✓ (risky_action step=0 jev=1 — next click is "Delete draft: Weekly digest" (its label says "delete"))
+fx-risky do #3: 653 ms ✓ (risky_action step=0 jev=1 — next click is "Delete draft: Weekly digest" (its label says "delete"))
+fx-risky do #4: 653 ms ✓ (risky_action step=0 jev=1 — next click is "Delete draft: Weekly digest" (its label says "delete"))
+fx-risky do #5: 632 ms ✓ (risky_action step=0 jev=1 — next click is "Delete draft: Weekly digest" (its label says "delete"))
+flights do #1: 16536 ms ✓ (done step=11 jev=13)
+flights do #2: 16224 ms ✓ (done step=10 jev=13)
+flights do #3: 15874 ms ✓ (done step=11 jev=13)
+flights do #4: 14984 ms ✓ (done step=10 jev=12)
+flights do #5: 15566 ms ✓ (done step=10 jev=12)
+wikipedia do #1: 4131 ms ✓ (done step=2 jev=4)
+wikipedia do #2: 3947 ms ✓ (done step=2 jev=4)
+wikipedia do #3: 4015 ms ✓ (done step=2 jev=4)
+wikipedia do #4: 4659 ms ✓ (done step=2 jev=4)
+wikipedia do #5: 4146 ms ✓ (done step=2 jev=4)
+github do #1: 12372 ms ✓ (done step=5 jev=7)
+github do #2: 11306 ms ✓ (done step=5 jev=7)
+github do #3: 10965 ms ✓ (done step=5 jev=7)
+github do #4: 15153 ms ✗ (done step=6 jev=8)
+github do #5: 9794 ms ✓ (done step=5 jev=7)
+cookies do #1: 10886 ms ✓ (done step=3 jev=5)
+cookies do #2: 7164 ms ✓ (done step=3 jev=5)
+cookies do #3: 6721 ms ✓ (done step=3 jev=5)
+cookies do #4: 9308 ms ✓ (done step=3 jev=5)
+cookies do #5: 8506 ms ✓ (done step=3 jev=5)
+arxiv do #1: 9230 ms ✗ (done step=4 jev=6)
+arxiv do #2: 6772 ms ✗ (done step=4 jev=6)
+arxiv do #3: 10605 ms ✗ (done step=5 jev=7)
+arxiv do #4: 5713 ms ✗ (done step=4 jev=6)
+arxiv do #5: 9235 ms ✗ (done step=4 jev=6)
+npm do #1: 3474 ms ✓ (done step=2 jev=4)
+npm do #2: 4326 ms ✓ (done step=3 jev=5)
+npm do #3: 4690 ms ✓ (done step=3 jev=5)
+npm do #4: 3409 ms ✓ (done step=2 jev=4)
+npm do #5: 3534 ms ✓ (done step=2 jev=4)
+mdn do #1: 5083 ms ✓ (done step=3 jev=5)
+mdn do #2: 4433 ms ✓ (done step=3 jev=5)
+mdn do #3: 4814 ms ✓ (done step=3 jev=5)
+mdn do #4: 4770 ms ✓ (done step=3 jev=5)
+mdn do #5: 4273 ms ✓ (done step=3 jev=5)
+cambridge do #1: 7102 ms ✓ (done step=2 jev=4)
+cambridge do #2: 6544 ms ✓ (done step=2 jev=4)
+cambridge do #3: 6496 ms ✓ (done step=2 jev=4)
+cambridge do #4: 6534 ms ✓ (done step=2 jev=4)
+cambridge do #5: 5671 ms ✓ (done step=2 jev=4)
+huggingface do #1: 17492 ms ✗ (stuck step=8 jev=9 — 3 actions in a row changed nothing)
+huggingface do #2: 17710 ms ✗ (stuck step=8 jev=9 — 3 actions in a row changed nothing)
+huggingface do #3: 8546 ms ✗ (done step=5 jev=7)
+huggingface do #4: 5110 ms ✓ (done step=4 jev=6)
+huggingface do #5: 17488 ms ✗ (stuck step=8 jev=9 — 3 actions in a row changed nothing)
+amazon do #1: 11766 ms ✓ (done step=3 jev=5)
+amazon do #2: 9415 ms ✓ (done step=3 jev=5)
+amazon do #3: 8935 ms ✓ (done step=3 jev=5)
+amazon do #4: 9253 ms ✓ (done step=3 jev=5)
+amazon do #5: 8656 ms ✓ (done step=3 jev=5)
+hackernews do #1: 4015 ms ✓ (done step=2 jev=4)
+hackernews do #2: 3795 ms ✓ (done step=2 jev=4)
+hackernews do #3: 3828 ms ✓ (done step=2 jev=4)
+hackernews do #4: 3650 ms ✓ (done step=2 jev=4)
+hackernews do #5: 4002 ms ✓ (done step=2 jev=4)
+wolframalpha do #1: 7044 ms ✓ (done step=5 jev=7)
+wolframalpha do #2: 6785 ms ✓ (done step=5 jev=7)
+wolframalpha do #3: 6874 ms ✓ (done step=5 jev=7)
+wolframalpha do #4: 6143 ms ✓ (done step=4 jev=6)
+wolframalpha do #5: 5516 ms ✓ (done step=4 jev=6)
+pydocs do #1: 8370 ms ✓ (done step=4 jev=6)
+pydocs do #2: 6358 ms ✓ (done step=3 jev=5)
+pydocs do #3: 5520 ms ✓ (done step=3 jev=5)
+pydocs do #4: 5935 ms ✓ (done step=3 jev=5)
+pydocs do #5: 5324 ms ✓ (done step=3 jev=5)
+pypi do #1: 17087 ms ✓ (done step=3 jev=5)
+pypi do #2: 6706 ms ✓ (done step=3 jev=5)
+pypi do #3: 7360 ms ✓ (done step=3 jev=5)
+pypi do #4: 7600 ms ✓ (done step=3 jev=5)
+pypi do #5: 6683 ms ✓ (done step=3 jev=5)
+datecalc do #1: 27049 ms ✗ (budget step=30 jev=31 — reached 30 steps)
+datecalc do #2: 10084 ms ✓ (done step=7 jev=9)
+datecalc do #3: 11523 ms ✓ (done step=9 jev=11)
+datecalc do #4: 9525 ms ✓ (done step=7 jev=9)
+datecalc do #5: 11395 ms ✓ (done step=9 jev=11)
+fx-settings do #1: 3386 ms ✓ (done step=3 jev=5)
+fx-settings do #2: 3471 ms ✓ (done step=3 jev=5)
+fx-settings do #3: 3076 ms ✓ (done step=3 jev=5)
+fx-settings do #4: 3700 ms ✓ (done step=3 jev=5)
+fx-settings do #5: 3048 ms ✓ (done step=3 jev=5)
+fx-orders do #1: 878 ms ✗ (blocked step=0 jev=1 — Jev found nothing on the page that can make progress)
+fx-orders do #2: 612 ms ✗ (blocked step=0 jev=1 — Jev found nothing on the page that can make progress)
+fx-orders do #3: 904 ms ✗ (blocked step=0 jev=1 — Jev found nothing on the page that can make progress)
+fx-orders do #4: 714 ms ✗ (blocked step=0 jev=1 — Jev found nothing on the page that can make progress)
+fx-orders do #5: 592 ms ✗ (blocked step=0 jev=1 — Jev found nothing on the page that can make progress)
+lit do #1: 8892 ms ✓ (done step=4 jev=9)
+lit do #2: 7803 ms ✓ (done step=4 jev=8)
+lit do #3: 7741 ms ✓ (done step=4 jev=8)
+lit do #4: 6590 ms ✓ (done step=4 jev=8)
+lit do #5: 6405 ms ✓ (done step=4 jev=8)
+musicbrainz do #1: 4879 ms ✓ (done step=3 jev=5)
+musicbrainz do #2: 5024 ms ✓ (done step=3 jev=5)
+musicbrainz do #3: 4715 ms ✓ (done step=3 jev=5)
+musicbrainz do #4: 4854 ms ✓ (done step=3 jev=5)
+musicbrainz do #5: 5019 ms ✓ (done step=3 jev=5)
+openlibrary do #1: 14611 ms ✓ (done step=5 jev=7)
+openlibrary do #2: 14207 ms ✓ (done step=5 jev=9)
+openlibrary do #3: 11319 ms ✓ (done step=5 jev=8)
+openlibrary do #4: 15419 ms ✓ (done step=5 jev=9)
+openlibrary do #5: 15404 ms ✓ (done step=5 jev=9)
+crates do #1: 8054 ms ✓ (done step=4 jev=6)
+crates do #2: 6745 ms ✓ (done step=4 jev=6)
+crates do #3: 6757 ms ✓ (done step=4 jev=6)
+crates do #4: 6350 ms ✓ (done step=4 jev=6)
+crates do #5: 6502 ms ✓ (done step=4 jev=6)
+iana do #1: 1696 ms ✓ (done step=1 jev=3)
+iana do #2: 1730 ms ✓ (done step=1 jev=3)
+iana do #3: 1905 ms ✓ (done step=1 jev=3)
+iana do #4: 2110 ms ✓ (done step=1 jev=3)
+iana do #5: 1752 ms ✓ (done step=1 jev=3)
+osm do #1: 6384 ms ✓ (done step=4 jev=6)
+osm do #2: 6143 ms ✓ (done step=3 jev=5)
+osm do #3: 6647 ms ✓ (done step=3 jev=5)
+osm do #4: 6377 ms ✓ (done step=3 jev=5)
+osm do #5: 5325 ms ✓ (done step=3 jev=5)
+
+| task | tier | set | do verified | manual verified | do median (ms) | manual median (ms) | speed-up | do statuses |
+|---|---|---|---|---|---|---|---|---|
+| fx-autocomplete | fixture | dev | 5/5 | 0/0 | 3850 | — | — | done, done, done, done, done |
+| fx-datepicker | fixture | dev | 0/5 | 0/0 | — | — | — | done, done, done, done, done |
+| fx-consent | fixture | dev | 5/5 | 0/0 | 5250 | — | — | done, done, done, done, done |
+| fx-filters | fixture | dev | 0/5 | 0/0 | — | — | — | done, done, done, done, done |
+| fx-newtab | fixture | dev | 5/5 | 0/0 | 6073 | — | — | done, done, done, done, done |
+| fx-form | fixture | dev | 5/5 | 0/0 | 8126 | — | — | done, done, done, done, done |
+| fx-risky | fixture | dev | 5/5 | 0/0 | 653 | — | — | risky_action, risky_action, risky_action, risky_action, risky_action |
+| flights | live | dev | 5/5 | 0/0 | 15874 | — | — | done, done, done, done, done |
+| wikipedia | live | dev | 5/5 | 0/0 | 4131 | — | — | done, done, done, done, done |
+| github | live | dev | 4/5 | 0/0 | 10965 | — | — | done, done, done, done, done |
+| cookies | live | dev | 5/5 | 0/0 | 8506 | — | — | done, done, done, done, done |
+| arxiv | live | dev | 0/5 | 0/0 | — | — | — | done, done, done, done, done |
+| npm | live | dev | 5/5 | 0/0 | 3534 | — | — | done, done, done, done, done |
+| mdn | live | dev | 5/5 | 0/0 | 4770 | — | — | done, done, done, done, done |
+| cambridge | live | dev | 5/5 | 0/0 | 6534 | — | — | done, done, done, done, done |
+| huggingface | live | dev | 1/5 | 0/0 | 5110 | — | — | stuck, stuck, done, done, stuck |
+| amazon | live | dev | 5/5 | 0/0 | 9253 | — | — | done, done, done, done, done |
+| hackernews | live | dev | 5/5 | 0/0 | 3828 | — | — | done, done, done, done, done |
+| wolframalpha | live | dev | 5/5 | 0/0 | 6785 | — | — | done, done, done, done, done |
+| pydocs | live | dev | 5/5 | 0/0 | 5935 | — | — | done, done, done, done, done |
+| pypi | live | dev | 5/5 | 0/0 | 7360 | — | — | done, done, done, done, done |
+| datecalc | live | dev | 4/5 | 0/0 | 10084 | — | — | budget, done, done, done, done |
+| fx-settings | fixture | dev | 5/5 | 0/0 | 3386 | — | — | done, done, done, done, done |
+| fx-orders | fixture | dev | 0/5 | 0/0 | — | — | — | blocked, blocked, blocked, blocked, blocked |
+| lit | live | dev | 5/5 | 0/0 | 7741 | — | — | done, done, done, done, done |
+| musicbrainz | live | dev | 5/5 | 0/0 | 4879 | — | — | done, done, done, done, done |
+| openlibrary | live | dev | 5/5 | 0/0 | 14611 | — | — | done, done, done, done, done |
+| crates | live | dev | 5/5 | 0/0 | 6745 | — | — | done, done, done, done, done |
+| iana | live | dev | 5/5 | 0/0 | 1752 | — | — | done, done, done, done, done |
+| osm | live | dev | 5/5 | 0/0 | 6377 | — | — | done, done, done, done, done |
+
+| set | tier | do verified | manual verified |
+|---|---|---|---|
+| dev | fixture | 30/45 | 0/0 |
+| dev | live | 94/105 | 0/0 |
+| dev | all | 124/150 | 0/0 |
+
+wrote /private/tmp/claude-501/-Users-karn-code-karnstack-reins/bbc3712e-531b-4ca8-8df5-67caa76fa70f/scratchpad/r5.json
