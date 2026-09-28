@@ -101,21 +101,30 @@ repo must be public for it to resolve).
 ## Graphic assets
 
 The **Graphic assets** section of the listing form. Ready-made, branded assets
-live in [`packages/extension/store-assets/`](../packages/extension/store-assets)
-(regenerate with `python3 packages/extension/store-assets/generate.py`).
+live in [`packages/extension/store-assets/`](../packages/extension/store-assets).
+All of them are HTML in `store-assets/screens/` (the popup screenshot frames
+the real `popup.css`); re-render with `store-assets/screens/render.sh`.
 
 | Slot | Required | Size | Format | Use |
 |---|---|---|---|---|
 | **Store icon** | ✅ | 128×128 | PNG | `packages/extension/icons/icon-128.png` |
-| **Screenshots** (≤5) | ✅ (≥1) | 1280×800 or 640×400 | JPEG / 24-bit PNG, no alpha | `store-assets/screenshot-1280x800.png` |
+| **Screenshots** (≤5) | ✅ (≥1) | 1280×800 or 640×400 | JPEG / 24-bit PNG, no alpha | `store-assets/screenshot-{1..5}-1280x800.png`, uploaded in order |
 | **Small promo tile** | optional | 440×280 | JPEG / 24-bit PNG, no alpha | `store-assets/small-tile-440x280.png` |
 | **Marquee promo tile** | optional | 1400×560 | JPEG / 24-bit PNG, no alpha | `store-assets/marquee-1400x560.png` |
 | Global promo video | optional | — | YouTube URL | skip |
 
-The generated screenshot is a **branded hero** — enough to submit. For a
-stronger listing, add real captures too (up to 5): the toolbar popover in its
-connected state, and an agent driving a page. Capture at exactly 1280×800 (or
-640×400) with no alpha channel.
+The five screenshots, in upload order:
+
+1. **Hero**: an agent driving a signed-in page, refs on the elements, Chrome's
+   debugging banner showing.
+2. **Site permissions**: the popup, connected, with deny / read / full rules.
+3. **`reins do`**: one command for a whole task, with the benchmark medians.
+4. **Debugging**: console errors and a failing request, read from the shell.
+5. **Local-only**: agent → daemon on 127.0.0.1 → extension, and the facts.
+
+Terminal output in them follows the CLI's real formats; if a formatter
+changes, update the matching slide. Slide 3's figures come from
+`packages/web/src/routes/docs/benchmarks.tsx`.
 
 ## Store listing description (paste-ready)
 

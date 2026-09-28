@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="shared.css" />
+<link rel="stylesheet" href="tile.css" />
+<style>
+  html, body, .tile { width: 1400px; height: 560px; }
+  .tile { display: grid; grid-template-columns: 1fr 560px; gap: 56px; align-items: center; padding: 0 80px; }
+  .brand { gap: 16px; font-size: 44px; }
+  .brand img { width: 64px; height: 64px; }
+  .line { margin-top: 34px; font-size: 44px; line-height: 1.15; font-weight: 650; text-transform: uppercase; letter-spacing: 0.01em; }
+  .line .hash { color: var(--term-accent); margin-right: 14px; }
+  .cmd { margin-top: 30px; font-size: 20px; }
+  .term { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 40px 80px -20px rgb(0 0 0 / 0.6); background: #0e0e11; }
+  .term pre { font-size: 17px; }
+</style>
+</head>
+<body>
+<div class="tile">
+  <div>
+    <span class="brand"><img src="logo.svg" alt="" />reins</span>
+    <p class="line"><span class="hash">#</span>Drive the browser you're <em>signed in to</em></p>
+    <p class="cmd"><span class="p">$</span> npm i -g @karnstack/reins</p>
+  </div>
+  <div class="term">
+    <div class="term__bar"><i></i><i></i><i></i><span>claude — ~/acme</span></div>
+<pre><span class="p">$</span> <span class="c">reins snapshot</span>
+<span class="o">e7: button "Export CSV"</span>
+<span class="o">e9: textbox "Search invoices"</span>
+<span class="p">$</span> <span class="c">reins click --ref e7</span>
+<span class="ok">ok</span>
+<span class="p">$</span> <span class="c">reins do 'open the latest invoice'</span>
+<span class="ok">done</span><span class="o"> in 2.9s · 2 steps · 3 jev calls · 9k tokens</span>
+<span class="p">$</span> <span class="caret"></span></pre>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="shared.css" />
+<style>
+  .stage { display: grid; grid-template-columns: 760px 1fr; gap: 44px; margin-top: 44px; align-items: start; }
+  .term pre { font-size: 15.5px; }
+  .stats { display: grid; gap: 0; border-top: 1px solid var(--line-strong); }
+  .stat { padding: 22px 0 20px; border-bottom: 1px solid var(--line-strong); }
+  .stat b { display: block; font-size: 64px; line-height: 1; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); }
+  .stat span { display: block; margin-top: 10px; font-size: 17px; color: var(--ink-2); }
+  .foot { margin-top: 16px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  .tag { display: inline-block; margin-left: 12px; padding: 4px 10px; vertical-align: 8px; font-size: 14px; font-weight: 600; letter-spacing: 0.06em; color: var(--primary-ink); background: var(--primary-tint); border: 1px solid rgb(124 58 237 / 0.25); }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="meta">
+    <span class="brand"><img src="logo.svg" width="26" height="26" alt="" />reins</span>
+    <span>reins.tech</span>
+  </div>
+  <h1 class="headline"><span class="hash">#</span>Hand off the whole task<span class="tag">NEW</span></h1>
+  <p class="sub"><code>reins do</code> gives a browsing goal to Jev, TypeSafe's action model. Jev picks each click in about 0.2 s. Your agent supplies the values and checks the result.</p>
+
+  <div class="stage">
+    <div class="term">
+      <div class="term__bar"><i></i><i></i><i></i><span>claude — ~/app</span></div>
+<pre><span class="p">$</span> <span class="c">reins do 'find the package and open it' --fill query=zod</span>
+<span class="ok">done</span><span class="o"> in 3.5s · 3 steps · 4 jev calls · 16k tokens · self-check 0.94</span>
+<span class="o">  1 click  "Search packages"</span>
+<span class="o">  2 type   "Search packages" ← </span><span class="hl">query</span>
+<span class="o">  3 click  "zod"</span>
+<span class="o">now: https://www.npmjs.com/package/zod — "zod - npm"</span>
+<span class="o">next: reins snapshot   # verify before trusting DONE</span>
+<span class="p">$</span> <span class="c">reins snapshot</span>
+<span class="o">e2: link "zod"</span>
+<span class="o">e5: button "Copy install command"</span>
+<span class="p">$</span> <span class="caret"></span></pre>
+    </div>
+    <div>
+      <div class="stats">
+        <div class="stat"><b>4.6×</b><span>faster, median</span></div>
+        <div class="stat"><b>~100×</b><span>cheaper, median</span></div>
+      </div>
+      <p class="foot">vs. the agent clicking step by step, on the reins benchmark. Optional: needs a TypeSafe key.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>
