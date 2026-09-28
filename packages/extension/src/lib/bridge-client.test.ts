@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
 import { BridgeClient, type DispatchOutcome, type SocketLike } from "./bridge-client.js";
 
@@ -497,5 +497,51 @@ describe("BridgeClient", () => {
     await new Promise<void>((res) => setTimeout(res, 50));
 
     expect(serverConnections).toBe(2);
+  });
+});
+
+describe("call (extension → daemon)", () => {
+  /** Connect the module-level client and register a server-side handler for `call` frames. */
+  async function connected(onCall: (frame: Record<string, unknown>, ws: WebSocket) => void) {
+    harness = await startServer();
+    const h = harness;
+    client = makeClient([`ws://127.0.0.1:${h.port}`]);
+    client.start();
+    await vi.waitFor(() => expect(client?.connected).toBe(true));
+    h.current()?.on("message", (data: RawData) => {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === "call") onCall(msg, h.current() as WebSocket);
+    });
+  }
+
+  it("sends a call frame and resolves with the daemon's result", async () => {
+    await connected((frame, ws) =>
+      ws.send(JSON.stringify({ type: "response", id: frame.id, ok: true, result: { set: false } })),
+    );
+    await expect(client?.call("key_status", {})).resolves.toEqual({ set: false });
+  });
+
+  it("rejects with the daemon's error message", async () => {
+    await connected((frame, ws) =>
+      ws.send(
+        JSON.stringify({
+          type: "response",
+          id: frame.id,
+          ok: false,
+          error: { code: "CALL_FAILED", message: "TypeSafe rejected the API key" },
+        }),
+      ),
+    );
+    await expect(client?.call("key_set", { key: "x" })).rejects.toThrow("TypeSafe rejected");
+  });
+
+  it("times out with an upgrade hint when an older daemon ignores the call", async () => {
+    await connected(() => {});
+    await expect(client?.call("key_status", {}, 50)).rejects.toThrow("reins restart");
+  });
+
+  it("rejects straight away when not connected", async () => {
+    client = makeClient([], { schedule: () => {} });
+    await expect(client.call("key_status", {})).rejects.toThrow("not connected");
   });
 });

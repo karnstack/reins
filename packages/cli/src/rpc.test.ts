@@ -64,6 +64,22 @@ describe("handleRpc", () => {
     expect(result.tabs[1]).toMatchObject({ browserId: "b2", browser: "Brave" });
   });
 
+  it("answers key methods in the daemon, never forwarding them to a browser", async () => {
+    const bridge = fakeBridge();
+    const keys = { handle: vi.fn(async () => ({ provider: "typesafe" as const, set: false })) };
+    const records: AuditRecord[] = [];
+    const result = await handleRpc(
+      bridge,
+      { method: "key_set", params: { key: "ts_live_abcd1234" } },
+      (r) => records.push(r),
+      { keys },
+    );
+    expect(result).toEqual({ provider: "typesafe", set: false });
+    expect(keys.handle).toHaveBeenCalledWith("key_set", { key: "ts_live_abcd1234" });
+    expect(bridge.requestFull).not.toHaveBeenCalled();
+    expect(JSON.stringify(records)).not.toContain("abcd1234");
+  });
+
   it("rejects malformed bodies with RpcBadRequest", async () => {
     const bridge = fakeBridge();
     for (const body of [null, 42, "x", {}, { method: "" }, { method: "x", params: [] }]) {

@@ -9,6 +9,14 @@ import {
 import { z } from "zod";
 import { type AuditHook, redactParams } from "./audit.js";
 import type { BridgePort, BridgeReply } from "./bridge.js";
+import { KEY_METHODS, type KeyService } from "./jev/keys.js";
+
+/** Daemon-side services and the per-request abort signal. */
+export interface RpcContext {
+  keys?: KeyService;
+  /** Aborted when the CLI hangs up or the daemon shuts down. */
+  signal?: AbortSignal;
+}
 
 const RpcBody = z.object({
   method: z.string().min(1),
@@ -141,6 +149,7 @@ export async function handleRpc(
   bridge: BridgePort,
   body: unknown,
   audit?: AuditHook,
+  ctx: RpcContext = {},
 ): Promise<unknown> {
   const parsed = RpcBody.safeParse(body);
   if (!parsed.success) {
@@ -185,6 +194,12 @@ export async function handleRpc(
   };
 
   try {
+    if (KEY_METHODS.has(method)) {
+      if (!ctx.keys) throw new Error(`${method} is not available in this daemon`);
+      const status = await ctx.keys.handle(method, params);
+      finish({ ok: true });
+      return status;
+    }
     if (method === "list_tabs") {
       const tabs = await listAllTabs(bridge, browserId);
       finish({ ok: true, browserId });

@@ -207,6 +207,20 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "key": {
+      // Key methods are answered by the daemon itself — no browser needed.
+      const { runKey } = await import("./key-cli.js");
+      const { readSecret } = await import("./secret.js");
+      const ensured = await ensureDaemon(loadOrCreateConfig());
+      console.log(
+        await runKey(rest, {
+          rpc: (method, params) => rpc(ensured.port, method, params),
+          readSecret,
+        }),
+      );
+      break;
+    }
+
     case "browsers": {
       const found = await findDaemon(loadOrCreateConfig());
       if (!found) {

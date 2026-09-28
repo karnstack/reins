@@ -103,6 +103,42 @@ export const WelcomeFrame = z.object({
 });
 export type WelcomeFrame = z.infer<typeof WelcomeFrame>;
 
+/** Extension → server: invoke one of the few daemon methods the extension may
+ *  call (the popup's key management). Answered with a ResponseFrame carrying
+ *  the same id. The daemon refuses any method outside CALL_METHODS. */
+export const CallFrame = z.object({
+  type: z.literal("call"),
+  id: z.string().min(1),
+  method: z.string().min(1),
+  params: z.unknown(),
+});
+export type CallFrame = z.infer<typeof CallFrame>;
+
+/** The only methods a `call` frame may invoke. */
+export const CALL_METHODS = ["key_set", "key_status", "key_clear"] as const;
+export type CallMethod = (typeof CALL_METHODS)[number];
+
+/** Services reins stores an API key for. */
+export const KeyProvider = z.enum(["typesafe"]);
+export type KeyProvider = z.infer<typeof KeyProvider>;
+
+export const KeySetParams = z.object({
+  provider: KeyProvider.default("typesafe"),
+  key: z.string().trim().min(8, "that doesn't look like an API key"),
+});
+export type KeySetParams = z.infer<typeof KeySetParams>;
+
+export const KeyProviderParams = z.object({ provider: KeyProvider.default("typesafe") });
+export type KeyProviderParams = z.infer<typeof KeyProviderParams>;
+
+/** What anyone may learn about a stored key: whether it's set, and its last 4. */
+export const KeyStatus = z.object({
+  provider: KeyProvider,
+  set: z.boolean(),
+  last4: z.string().optional(),
+});
+export type KeyStatus = z.infer<typeof KeyStatus>;
+
 /** Result payload for the `list_tabs` method. */
 export const ListTabsResult = z.object({ tabs: z.array(Tab) });
 export type ListTabsResult = z.infer<typeof ListTabsResult>;

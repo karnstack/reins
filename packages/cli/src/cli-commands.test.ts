@@ -43,6 +43,7 @@ describe("helpText", () => {
       "doctor",
       "logs",
       "daemon",
+      "key",
     ]) {
       expect(text).toContain(cmd);
     }

@@ -7,6 +7,7 @@ import {
   Policy,
   type Tier,
 } from "@reins/protocol";
+import { jevReadyText, jevStateFrom, jevViewFlags } from "./lib/jev-view.js";
 import { POLICY_KEY, type PolicyChange } from "./lib/policy.js";
 import { loadSettings, saveSettings } from "./lib/settings.js";
 import { normalizeStatus, type WorkerStatus } from "./lib/status.js";
@@ -71,8 +72,10 @@ async function refresh(): Promise<void> {
       | { status?: unknown; info?: ConnInfo }
       | undefined;
     render(normalizeStatus(res?.status), res?.info);
+    void renderJev(normalizeStatus(res?.status) === "connected");
   } catch {
     render("idle");
+    void renderJev(false);
   }
 }
 
@@ -410,6 +413,155 @@ policyAdd.addEventListener("submit", (ev) => {
 // re-render on any storage change to the key so the view never goes stale.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && POLICY_KEY in changes) void renderPolicy();
+});
+
+// ─── Jev key ─────────────────────────────────────────────────────────────────
+// The key lives in ~/.reins/credentials.json, written only by the daemon. The
+// popup sends it once (reins:call → offscreen → daemon) and afterwards only
+// ever sees whether a key is set and its last four characters.
+
+const jevPitch = document.getElementById("jev-pitch") as HTMLElement;
+const jevReady = document.getElementById("jev-ready") as HTMLElement;
+const jevForm = document.getElementById("jev-form") as HTMLFormElement;
+const jevKey = document.getElementById("jev-key") as HTMLInputElement;
+const jevSave = document.getElementById("jev-save") as HTMLButtonElement;
+const jevCancel = document.getElementById("jev-cancel") as HTMLButtonElement;
+const jevActions = document.getElementById("jev-actions") as HTMLElement;
+const jevReplace = document.getElementById("jev-replace") as HTMLButtonElement;
+const jevRemove = document.getElementById("jev-remove") as HTMLButtonElement;
+const jevOffline = document.getElementById("jev-offline") as HTMLElement;
+const jevError = document.getElementById("jev-error") as HTMLElement;
+
+/** key_set awaits a live TypeSafe validation in the daemon (8 s per attempt
+ *  plus retries); the default 5 s call timeout would misreport a slow check
+ *  as an outdated daemon. */
+const JEV_SET_TIMEOUT_MS = 20_000;
+
+let jevReplacing = false;
+let jevSaving = false;
+// Renders race (each awaits a round trip); only the newest may touch the DOM.
+let jevRenderGen = 0;
+
+async function jevCall(
+  method: string,
+  params: Record<string, unknown> = {},
+  timeoutMs?: number,
+): Promise<unknown> {
+  const res = (await chrome.runtime.sendMessage({
+    type: "reins:call",
+    method,
+    params,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  })) as { result?: unknown; error?: string } | undefined;
+  if (!res || res.error !== undefined)
+    throw new Error(res?.error ?? "not connected to the reins daemon");
+  return res.result;
+}
+
+function showJevError(message: string | undefined): void {
+  jevError.hidden = message === undefined;
+  jevError.textContent = message ?? "";
+}
+
+/** Daemon connectivity as the worker sees it right now. */
+async function jevConnected(): Promise<boolean> {
+  try {
+    const res = (await chrome.runtime.sendMessage({ type: "reins:status" })) as
+      | { status?: unknown }
+      | undefined;
+    return normalizeStatus(res?.status) === "connected";
+  } catch {
+    return false;
+  }
+}
+
+/** Re-fetch the key status and paint the section. `stickyError` survives a
+ *  successful status read — used after a failed save so the reason stays
+ *  visible while disabled/hidden flags are recomputed from the truth. */
+async function renderJev(connected: boolean, stickyError?: string): Promise<void> {
+  const gen = ++jevRenderGen;
+  let status: unknown;
+  let error: string | undefined;
+  if (connected) {
+    try {
+      status = await jevCall("key_status", { provider: "typesafe" });
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+    }
+  }
+  if (gen !== jevRenderGen) return;
+  const state = error
+    ? { kind: "error" as const, message: error }
+    : jevStateFrom(connected, status);
+  const flags = jevViewFlags(state, jevReplacing, jevSaving);
+  jevPitch.hidden = flags.pitchHidden;
+  jevReady.hidden = flags.readyHidden;
+  if (state.kind === "set") jevReady.textContent = jevReadyText(state.last4);
+  jevForm.hidden = flags.formHidden;
+  jevActions.hidden = flags.actionsHidden;
+  jevCancel.hidden = flags.cancelHidden;
+  jevOffline.hidden = flags.offlineHidden;
+  jevKey.disabled = flags.disabled;
+  jevSave.disabled = flags.disabled;
+  jevCancel.disabled = flags.disabled;
+  showJevError(flags.error ?? stickyError);
+}
+
+function jevStopReplacing(): void {
+  if (!jevReplacing) return;
+  jevReplacing = false;
+  jevKey.value = "";
+  void renderJev(true).then(() => jevReplace.focus());
+}
+
+jevForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const key = jevKey.value.trim();
+  if (!key || jevSaving) return;
+  jevSaving = true;
+  jevKey.disabled = true;
+  jevSave.disabled = true;
+  jevSave.textContent = "Checking…";
+  void jevCall("key_set", { provider: "typesafe", key }, JEV_SET_TIMEOUT_MS)
+    .then(() => {
+      jevKey.value = "";
+      jevReplacing = false;
+      jevSaving = false;
+      return renderJev(true);
+    })
+    .catch(async (err: unknown) => {
+      // Re-render from the live connection state (the daemon may have gone
+      // away mid-save) with the failure reason kept on screen.
+      jevSaving = false;
+      const message = err instanceof Error ? err.message : String(err);
+      await renderJev(await jevConnected(), message);
+    })
+    .finally(() => {
+      // Only the label: whether Save is usable is the renderer's call.
+      jevSave.textContent = "Save";
+    });
+});
+
+jevReplace.addEventListener("click", () => {
+  jevReplacing = true;
+  void renderJev(true).then(() => jevKey.focus());
+});
+
+jevCancel.addEventListener("click", jevStopReplacing);
+jevKey.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && jevReplacing) {
+    ev.preventDefault();
+    jevStopReplacing();
+  }
+});
+
+jevRemove.addEventListener("click", () => {
+  void jevCall("key_clear", { provider: "typesafe" })
+    .then(() => renderJev(true))
+    .catch(async (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      await renderJev(await jevConnected(), message);
+    });
 });
 
 void refresh();

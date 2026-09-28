@@ -44,7 +44,7 @@ Each answer below fits its field's 1,000-character limit. Paste verbatim.
 **Single purpose description**
 
 ```text
-reins has one narrow purpose: let the user's own coding agent (software running on their machine) drive their own browser. A local companion daemon — installed by the user via the reins CLI (npm: @karnstack/reins) and bound to 127.0.0.1 — sends commands that this extension executes: list/open/close/focus/group tabs, navigate, click, type, fill forms, scroll, take screenshots, read page text, and read console messages and network requests for debugging. All communication is confined to the user's machine; the extension never contacts a remote server and never sends data anywhere except the user's own local daemon.
+reins has one narrow purpose: let the user's own coding agent (software running on their machine) drive their own browser. A local companion daemon — installed by the user via the reins CLI (npm: @karnstack/reins) and bound to 127.0.0.1 — sends commands that this extension executes: list/open/close/focus/group tabs, navigate, click, type, fill forms, scroll, take screenshots, read page text, and read console messages and network requests for debugging. All communication is confined to the user's machine; the extension never contacts a remote server and never sends data anywhere except the user's own local daemon. Optionally, the user can paste an API key for TypeSafe (the service behind `reins do`) into the popup; the extension passes it once to the local daemon, which stores it on the user's machine. The extension never sends it anywhere else.
 ```
 
 **debugger justification**
@@ -84,9 +84,11 @@ local agent in the *page* context via the DevTools Protocol — the same as the
 user typing into the DevTools console — not remote code executed with extension
 privileges.)
 
-**Data usage** — check **none** of the collection boxes. The extension collects
-nothing for the developer: no analytics, no telemetry, no remote servers. Page
-data is only relayed to the user's own local daemon on 127.0.0.1. Tick all
+**Data usage** — check only **Authentication information**: an optional API key
+the user types in the popup, passed only to the local daemon. Leave every other
+collection box unchecked. The extension collects nothing for the developer: no
+analytics, no telemetry, no remote servers. Page data is only relayed to the
+user's own local daemon on 127.0.0.1. Tick all
 three certification checkboxes (no sale/transfer to third parties; no use
 unrelated to the single purpose; no creditworthiness/lending use) — all
 truthfully apply, and the form requires all three.
@@ -127,7 +129,7 @@ Take the reins of your real, logged-in browser from your coding agent.
 
 reins lets AI coding agents — Claude Code, Cursor, Codex, GitHub Copilot, and any tool with a shell — drive the actual Chromium browser you already use, with all your sessions and logins intact. No separate automation profile, no launch flags, no signing in again. Your agent lists tabs, opens pages, clicks, types, fills forms, scrolls, screenshots, reads the page, runs JavaScript, and inspects console and network activity — right in your everyday browser.
 
-Everything stays on your machine. The extension talks only to a small companion program running locally on 127.0.0.1. Nothing is ever sent to a remote server, and no page data leaves your computer.
+Everything stays on your machine. The extension talks only to a small companion program running locally on 127.0.0.1. Nothing is sent to a remote server, and no page data leaves your computer, unless you opt in to reins do by saving a TypeSafe API key; then the local companion program (never the extension) sends page state to TypeSafe while a reins do run is working. See https://reins.tech/docs/security#reins-do for exactly what is sent.
 
 HOW IT WORKS
 

@@ -108,13 +108,62 @@ function SecurityPage() {
         </li>
       </Ul>
 
+      <H2 id="reins-do">reins do and TypeSafe</H2>
+      <P>
+        <Code>reins do</Code> is off until you save a TypeSafe API key (
+        <Code>reins key set typesafe</Code>, or the Jev section of the extension popup). Once a key
+        is saved, and only while a <Code>reins do</Code> run is working, the daemon (not the
+        extension) sends this to <Code>api.typesafe.ai</Code>, under your own TypeSafe account:
+      </P>
+      <Ul>
+        <li>
+          the goal you gave, and your <Code>--fill</Code> names and values
+        </li>
+        <li>the tab's URL and title</li>
+        <li>visible text in the viewport (up to about 6,000 characters)</li>
+        <li>labels, roles and current values of the page's interactive elements</li>
+        <li>the run's last 10 actions</li>
+      </Ul>
+      <P>
+        Never sent: password, file and hidden inputs. The extension itself makes no remote requests.
+      </P>
+      <P>
+        <Code>reins do</Code> hands page state to TypeSafe's Jev model, which answers typed
+        multiple-choice questions: which operation, and which observed element. Jev can only choose
+        among elements reins actually read from the page; its output never becomes a selector,
+        coordinate or code. Page text can still try to steer it (prompt injection), so:
+      </P>
+      <Ul>
+        <li>
+          A click whose label contains a money, messaging or deletion word (buy, pay, send, delete,
+          …) stops the run unless the agent passed <Code>--confirm</Code> for that label or the goal
+          names it word for word. Unlabeled buttons stop too. This is a heuristic, not a guarantee:
+          other languages and odd labels can slip past.
+        </li>
+        <li>
+          A run that moves to another site stops (<Code>left_site</Code>), and site permissions
+          still apply on every step (<Code>full</Code> required).
+        </li>
+        <li>
+          Ctrl-C, a dead agent, <Code>--timeout</Code> or a daemon restart stop the run before its
+          next action.
+        </li>
+        <li>
+          The key file is <Code>~/.reins/credentials.json</Code> (0600). The key is never returned
+          by any command, never logged, and never sent to a page.
+        </li>
+      </Ul>
+
       <H2 id="data">Data handling</H2>
       <Ul>
         <li>
           Page content and tab metadata are read through the Chrome DevTools Protocol only when your
           local daemon asks, and are sent only to that daemon over localhost.
         </li>
-        <li>No analytics, no telemetry, no tracking, no remote servers, no remote code.</li>
+        <li>
+          No analytics, no telemetry, no tracking, no remote code. No remote servers unless you opt
+          in to <Code>reins do</Code> with a TypeSafe key (see <A href="#reins-do">above</A>).
+        </li>
         <li>
           The only stored state is the extension's own settings (auto-connect, cached daemon port,
           connection status) and your site-permission policy, kept in <Code>chrome.storage</Code> on

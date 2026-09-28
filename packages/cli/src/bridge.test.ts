@@ -1,5 +1,5 @@
 import { createServer as createHttpServer, type Server } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { BridgeHost } from "./bridge.js";
 
@@ -354,5 +354,62 @@ describe("BridgeHost (attach mode)", () => {
     host.attach(httpServer);
     await expect(connectClient(port, { origin: "https://evil.example" })).rejects.toThrow();
     expect(host.paired).toBe(false);
+  });
+});
+
+describe("call frames from the extension", () => {
+  async function startWith(onCall?: (m: string, p: unknown, b: string) => Promise<unknown>) {
+    host = new BridgeHost({
+      allowedOrigins: new Set([ALLOWED]),
+      log: () => {},
+      ...(onCall ? { onCall } : {}),
+    });
+    await host.listen(0);
+    return connectClient(host.port);
+  }
+
+  function callAndWait(ws: WebSocket, frame: Record<string, unknown>) {
+    return new Promise<Record<string, unknown>>((resolve) => {
+      ws.on("message", (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === "response" && msg.id === frame.id) resolve(msg);
+      });
+      ws.send(JSON.stringify(frame));
+    });
+  }
+
+  it("answers an allowed call with the handler's result", async () => {
+    const onCall = vi.fn(async () => ({ provider: "typesafe", set: false }));
+    const ws = await startWith(onCall);
+    const reply = await callAndWait(ws, {
+      type: "call",
+      id: "c1",
+      method: "key_status",
+      params: {},
+    });
+    expect(reply).toMatchObject({ ok: true, result: { set: false } });
+    expect(onCall).toHaveBeenCalledWith("key_status", {}, "b1");
+    ws.close();
+  });
+
+  it("refuses any method outside the key methods", async () => {
+    const onCall = vi.fn(async () => ({}));
+    const ws = await startWith(onCall);
+    const reply = await callAndWait(ws, { type: "call", id: "c2", method: "click", params: {} });
+    expect(reply).toMatchObject({ ok: false, error: { code: "METHOD_NOT_ALLOWED" } });
+    expect(onCall).not.toHaveBeenCalled();
+    ws.close();
+  });
+
+  it("returns a handler failure as an error response", async () => {
+    const ws = await startWith(async () => {
+      throw new Error("TypeSafe rejected the API key");
+    });
+    const reply = await callAndWait(ws, { type: "call", id: "c3", method: "key_set", params: {} });
+    expect(reply).toMatchObject({
+      ok: false,
+      error: { code: "CALL_FAILED", message: "TypeSafe rejected the API key" },
+    });
+    ws.close();
   });
 });

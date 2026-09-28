@@ -252,7 +252,8 @@ body {
   line-height: 1.4;
 }
 
-.reins__hint code {
+.reins__hint code,
+.reins__jev-pitch code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 11px;
   padding: 1px 5px;
@@ -633,4 +634,69 @@ body {
   font-size: 12px;
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.08);
+}
+
+/* Jev key */
+.reins__jev {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.reins__jev-pitch,
+.reins__jev-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.reins__jev-note a {
+  color: var(--violet-2);
+}
+
+.reins__jev-ready {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--ok);
+}
+
+.reins__jev-form,
+.reins__jev-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.reins__jev-form .reins__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.reins__jev-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--err);
+}
+
+.reins__btn:disabled,
+.reins__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reins__btn--primary:disabled:hover {
+  background: var(--violet-2);
+}
+
+.reins__btn--ghost:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.reins__input:disabled:hover {
+  border-color: var(--line);
 }

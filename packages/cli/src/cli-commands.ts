@@ -14,7 +14,9 @@ export interface DaemonHealth {
 
 /** Usage text for `reins help` / unknown commands. */
 export function helpText(version: string, tools: Record<string, ToolCommand>): string {
-  const width = Math.max(...Object.keys(tools).map((n) => n.length), "browsers".length) + 2;
+  // Floor: the longest management entry, so its summary never runs into the name.
+  const width =
+    Math.max(...Object.keys(tools).map((n) => n.length), "key set|status|clear".length) + 2;
   const line = (name: string, summary: string) => `  ${name.padEnd(width)}${summary}`;
   const tool = (name: string) => {
     const t = tools[name];
@@ -54,6 +56,7 @@ export function helpText(version: string, tools: Record<string, ToolCommand>): s
     "Management:",
     line("browsers", "list browsers connected to the daemon"),
     line("policy", "site permissions: show, deny/readonly <pattern> (grants: popup)"),
+    line("key set|status|clear", "the TypeSafe key that powers `reins do` (never echoed)"),
     line("audit", "per-action trail: what the agent did, what policy blocked"),
     line("status", "daemon state, port, connected browsers"),
     line("extension", "install the extension without the Chrome Web Store (load unpacked)"),

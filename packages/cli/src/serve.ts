@@ -4,7 +4,9 @@ import { BridgeHost } from "./bridge.js";
 import { candidatePorts, loadOrCreateConfig, recordPort } from "./config.js";
 import { type Daemon, startDaemon } from "./daemon.js";
 import { type FoundDaemon, probeHealth } from "./ensure.js";
+import { createKeyService } from "./jev/keys.js";
 import { createLogger, type Log, logsDir } from "./log.js";
+import { handleRpc } from "./rpc.js";
 
 /** First live daemon on a lower candidate port than ours, if any. Two racing
  *  CLI spawns can bind different candidates; the lower port deterministically
@@ -44,11 +46,17 @@ async function bindFirstFree<T>(
 /** `reins daemon` — the foreground daemon (the CLI spawns this detached). */
 export async function runDaemon(): Promise<void> {
   const log = createLogger();
+  const config = loadOrCreateConfig();
   const audit = createAuditor(logsDir(), { log });
   const pruned = pruneAuditLogs(logsDir(), new Date());
   if (pruned.length > 0) log(`reins: pruned ${pruned.length} audit file(s) older than 30 days`);
-  const config = loadOrCreateConfig();
-  const bridge = new BridgeHost({ allowedOrigins: loadAllowedOrigins(config.dir), log });
+  const keys = createKeyService({ dir: config.dir });
+  const bridge: BridgeHost = new BridgeHost({
+    allowedOrigins: loadAllowedOrigins(config.dir),
+    log,
+    // Popup key saves go through the same audited path as `reins key`.
+    onCall: (method, params) => handleRpc(bridge, { method, params }, audit, { keys }),
+  });
   const ports = candidatePorts(config);
 
   let shuttingDown = false;
@@ -68,6 +76,7 @@ export async function runDaemon(): Promise<void> {
         bridge,
         log,
         audit,
+        context: { keys },
         onShutdown: () => void shutdown("/shutdown", () => daemon.close()),
       }),
     );
