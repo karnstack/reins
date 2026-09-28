@@ -213,8 +213,73 @@ describe("interpret", () => {
     expect(d.fill).toBe("to");
   });
 
-  it("maps NONE to null", () => {
+  it("maps NONE to null when no other field's head names an unused fill", () => {
     expect(interpret(answersFor("TYPE_TEXT", "1", {}), plan).fill).toBeNull();
+  });
+
+  describe("retargets a NONE field to the other field whose head names a fill", () => {
+    // Three text fields: Jev picks 3 (the output), its head says NONE; 1 and 2
+    // each name a fill. Target probability × fill probability picks between them.
+    const obs3 = page([
+      ...field(3, "Where from?"),
+      ...field(5, "Where to?"),
+      ...field(7, "Result"),
+      button(4, "Search"),
+    ]);
+    const fills = { from: "Zurich", to: "London" };
+    const plan3 = (history: Parameters<typeof buildRequest>[2] = []) =>
+      buildRequest(obs3, "Zurich to London", history, fills);
+    const probs = (p: Record<string, number>) => {
+      const [choice] = Object.entries(p).sort((a, b) => b[1] - a[1])[0] as [string, number];
+      return { type: "choice", choice, confidence: 0.9, probabilities: p };
+    };
+    const answers = (over: Record<string, unknown> = {}) => ({
+      operation: answer("TYPE_TEXT", plan3().operations),
+      click_target: answer("4", ["1", "2", "3", "4", "5", "6", "7"]),
+      type_text_target: probs({ "1": 0.1, "2": 0.3, "3": 0.6 }),
+      fill_for_1: probs({ from: 0.9, to: 0.05, NONE: 0.05 }),
+      fill_for_2: probs({ from: 0.05, to: 0.5, NONE: 0.45 }),
+      fill_for_3: probs({ from: 0.05, to: 0.05, NONE: 0.9 }),
+      ...over,
+    });
+
+    it("by the highest target × fill probability", () => {
+      // 2: 0.3 × 0.5 = 0.15 beats 1: 0.1 × 0.9 = 0.09
+      const d = interpret(answers(), plan3());
+      expect(d).toMatchObject({ operation: "TYPE_TEXT", targetIndex: "2", fill: "to" });
+      expect(d.action?.node).toBe(5);
+      expect(d.confidence).toBeCloseTo(0.3);
+    });
+
+    it("never re-types a fill already typed this run", () => {
+      const entry = { op: "type" as const, label: "Where to?", fill: "to", pageChanged: true };
+      const d = interpret(answers(), plan3([entry]));
+      expect(d).toMatchObject({ targetIndex: "1", fill: "from" });
+      // A stale type never acted, so its fill is still unused.
+      const stale = [{ ...entry, stale: "covered" }];
+      expect(interpret(answers(), plan3(stale))).toMatchObject({ targetIndex: "2", fill: "to" });
+    });
+
+    it("stays NONE when every other head says NONE or names a used fill", () => {
+      const none = probs({ from: 0.05, to: 0.05, NONE: 0.9 });
+      expect(interpret(answers({ fill_for_1: none, fill_for_2: none }), plan3())).toMatchObject({
+        targetIndex: "3",
+        fill: null,
+      });
+      const both = [
+        { op: "type" as const, label: "a", fill: "from", pageChanged: true },
+        { op: "type" as const, label: "b", fill: "to", pageChanged: true },
+      ];
+      expect(interpret(answers(), plan3(both))).toMatchObject({ targetIndex: "3", fill: null });
+    });
+
+    it("skips an unusable speculative head instead of throwing", () => {
+      const bad = { choice: "99", confidence: 2, probabilities: { "99": 0.5 } };
+      expect(interpret(answers({ fill_for_2: bad }), plan3())).toMatchObject({
+        targetIndex: "1",
+        fill: "from",
+      });
+    });
   });
 
   it("ignores target questions for operations not chosen", () => {

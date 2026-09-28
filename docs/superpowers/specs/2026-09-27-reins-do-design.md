@@ -125,7 +125,7 @@ Exit code: `0` done, `2` handoff, `1` error.
 |---|---|---|
 | `done` | Jev chose DONE on a fresh page | `reins snapshot` (verify; DONE is not proof) |
 | `risky_action` | next click's label is risky and not confirmed | `reins do --continue --confirm "<label>"` |
-| `needs_text` | TYPE_TEXT chosen, fill head chose NONE or no fills | `reins do --continue --fill <name>="…"` (field label shown) |
+| `needs_text` | TYPE_TEXT chosen, fill head chose NONE (and no other offered text field's head names an unused fill — see Gate) or no fills | `reins do --continue --fill <name>="…"` (field label shown) |
 | `left_site` | host moved outside the start host (see Stop rules) | re-run from the new page, or take over |
 | `dialog` | a JS alert/confirm/prompt is open | `reins dialog …`, then `--continue` |
 | `interrupted` | the run's tab became hidden (user switched tabs) | `reins do --continue` |
@@ -219,6 +219,17 @@ the loop issues `jev_observe` / `jev_act` through the existing
    and only the heads the loop acts on are validated: the operation head,
    the chosen operation's target head, and a fill head only when its field
    is the one typed into. An unusable speculative head is ignored.
+   - **Retarget on NONE.** When the chosen text field's fill head answers
+     NONE (an output field, say, while the fills fit other fields), the loop
+     types into another offered TYPE_TEXT target instead, if one of the
+     first-8 fields' speculative heads names a fill not yet typed this run
+     (a stale type never acted, so its fill is still unused): the field with
+     the highest `type_text_target` probability × fill-head probability wins
+     and the step is recorded as usual (`fill` = that name; confidence =
+     min of the operation's, that target's probability and the fill head's).
+     An unusable speculative head is skipped there, never thrown on. Only
+     when no such field exists does the run stop `needs_text`. A field beyond
+     the first 8 (its head asked in a second request) keeps today's stop.
    - **Unsubmitted query.** A DONE or BLOCKED verdict whose immediately
      preceding action was TYPE_TEXT into a field the page marked `submit`
      (search-like), while that field still holds the typed value, is
@@ -311,9 +322,11 @@ calendar opens on it).
   banner still stops, and "Accept invitation" outside one still stops. The skill states that this is a heuristic
   with holes (other languages, odd labels), not a guarantee.
 - **left_site.** Before each act, the current host must equal the run's start
-  host or be a subdomain of it, or vice versa (`a === b || a.endsWith("." + b)
-  || b.endsWith("." + a)`). No public-suffix list. Login redirects to another
-  host stop the run, which is fine.
+  host or be a subdomain of it, or vice versa, with a leading `www.` stripped
+  from both first (`www.x.org` is `x.org`, so `packages.x.org` is under it):
+  `a === b || a.endsWith("." + b) || b.endsWith("." + a)`. No public-suffix
+  list beyond that (`a.github.io` and `b.github.io` are two sites). Login
+  redirects to another host stop the run, which is fine.
 - **stuck.** 3 consecutive non-WAIT actions whose next observation has the
   same fingerprint. The fingerprint is `url + text + elements` and **excludes
   scroll position**, because `actionPoint` scrolls targets into view

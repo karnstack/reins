@@ -356,6 +356,35 @@ describe("runLoop", () => {
     });
   });
 
+  it("types into the other field whose head names an unused fill when Jev's field says NONE", async () => {
+    const run = newRun("convert 250", "x.com", { amount: "250" }, [], 0);
+    const d = deps(
+      [page([...field(3, "Amount"), ...field(5, "Result")]), page([], { text: "2" })],
+      [{ op: "TYPE_TEXT", target: "2", fill: { "1": "amount" } }, { op: "DONE" }],
+    );
+    const { result } = await runLoop(d, input({ run }));
+    expect(d.act).toHaveBeenCalledWith({ op: "type", node: 3, text: "250", label: "Amount" });
+    expect(result.status).toBe("done");
+    expect(result.steps[0]).toMatchObject({ op: "type", label: "Amount", fill: "amount" });
+  });
+
+  it("still stops needs_text when the only other head's fill was already typed", async () => {
+    const run = newRun("convert 250", "x.com", { amount: "250" }, [], 0);
+    const d = deps(
+      [page([...field(3, "Amount"), ...field(5, "Result")])],
+      [
+        { op: "TYPE_TEXT", target: "1", fill: { "1": "amount" } },
+        { op: "TYPE_TEXT", target: "2", fill: { "1": "amount" } },
+      ],
+    );
+    const { result } = await runLoop(d, input({ run }));
+    expect(d.act).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      status: "needs_text",
+      reason: 'field "Result" matched none of your --fill values',
+    });
+  });
+
   it("says when none of the fills matched the field", async () => {
     const run = newRun("book it", "x.com", { from: "Zurich" }, [], 0);
     const d = deps([page(field(3, "Passenger name"))], [{ op: "TYPE_TEXT", target: "1" }]);

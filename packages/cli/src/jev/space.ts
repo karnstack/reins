@@ -2,7 +2,7 @@
 // one fill question per text field instead of a text model.
 import type { JevAction, JevObservation } from "@reins/protocol";
 import type { ChoiceQuestion, Questions } from "@typesafe-ai/sdk";
-import { type JevBody, validateChoice, validateNoul } from "./client.js";
+import { type ChoiceAnswer, type JevBody, validateChoice, validateNoul } from "./client.js";
 import { DONE_CHECK, FILL, NEXT_ACTION, TARGET } from "./prompts.js";
 import type { HistoryEntry } from "./types.js";
 
@@ -37,6 +37,8 @@ export interface RequestPlan {
   operations: string[];
   fillHeads: string[];
   fillNames: string[];
+  /** Fills already typed this run (a stale type never acted, so it doesn't count). */
+  usedFills: Set<string>;
 }
 
 export interface Decision {
@@ -215,12 +217,15 @@ export function buildRequest(
       : Object.keys(space.targets.TYPE_TEXT ?? {}).slice(0, MAX_FILL_HEADS);
   for (const index of fillHeads)
     questions[`fill_for_${index}`] = fillQuestion(goal, index, space, fills);
+  const usedFills = new Set<string>();
+  for (const h of history) if (h.fill !== undefined && h.stale === undefined) usedFills.add(h.fill);
   return {
     body: { state: stateOf(obs, space, history, fills), questions },
     space,
     operations: Object.keys(operations),
     fillHeads,
     fillNames,
+    usedFills,
   };
 }
 
@@ -278,6 +283,48 @@ export function interpretFill(
   return a.choice === "NONE" ? null : a.choice;
 }
 
+/** Jev chose a text field whose own fill head says NONE (an output field,
+ *  say, while the fills fit other fields). Rather than stop for text, type
+ *  into the other offered field whose speculative fill head names a fill not
+ *  yet typed this run — the one with the highest target probability × fill
+ *  probability. An unusable speculative head is skipped, never thrown on.
+ *  Undefined when no such field exists (then the run stops `needs_text`). */
+function retargetFill(
+  answers: Record<string, unknown>,
+  plan: RequestPlan,
+  target: ChoiceAnswer,
+  chosen: Decision,
+): Decision | undefined {
+  const candidates = plan.space.targets.TYPE_TEXT ?? {};
+  let best: { decision: Decision; score: number } | undefined;
+  for (const index of plan.fillHeads) {
+    if (index === chosen.targetIndex || !(index in candidates)) continue;
+    let fillAnswer: ChoiceAnswer;
+    try {
+      fillAnswer = validateChoice(answers[`fill_for_${index}`], [...plan.fillNames, "NONE"]);
+    } catch {
+      continue;
+    }
+    const fill = fillAnswer.choice;
+    if (fill === "NONE" || plan.usedFills.has(fill)) continue;
+    const pTarget = target.probabilities[index] ?? 0;
+    const pFill = fillAnswer.probabilities[fill] ?? 0;
+    const score = pTarget * pFill;
+    if (best && score <= best.score) continue;
+    best = {
+      score,
+      decision: {
+        operation: "TYPE_TEXT",
+        action: candidates[index],
+        targetIndex: index,
+        fill,
+        confidence: Math.min(chosen.confidence, pTarget, fillAnswer.confidence),
+      },
+    };
+  }
+  return best?.decision;
+}
+
 export function interpret(answers: Record<string, unknown>, plan: RequestPlan): Decision {
   const op = validateChoice(answers.operation, plan.operations);
   const operation = op.choice as Operation;
@@ -293,6 +340,7 @@ export function interpret(answers: Record<string, unknown>, plan: RequestPlan): 
     };
     if (operation === "TYPE_TEXT" && plan.fillHeads.includes(t.choice)) {
       decision.fill = interpretFill(answers, plan.fillNames, t.choice);
+      if (decision.fill === null) return retargetFill(answers, plan, t, decision) ?? decision;
     }
     return decision;
   }
