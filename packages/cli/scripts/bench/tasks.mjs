@@ -3,7 +3,7 @@
 // Each task:
 //   id         short name (used in --tasks and in trace dir names)
 //   tier       "fixture" (served by the runner from ./fixtures) | "live" (the public web)
-//   set        "dev" (holdout2 was folded into dev; see below)
+//   set        "dev" | "holdout3" (holdout v1 and holdout2 were folded into dev; see below)
 //   url        start page; fixture tasks use `fixture:<file>` and the runner
 //              rewrites it to http://127.0.0.1:<port>/<file>
 //   goal       what `reins do` is told
@@ -24,12 +24,17 @@
 // have been seen (and their failures discussed), so they no longer measure
 // generalisation. They are `set: "dev"` now.
 //
-// holdout2 (8 tasks, the last section below) was frozen on 2026-09-27 before
+// holdout2 (8 tasks, the "former holdout2" section below) was frozen on 2026-09-27 before
 // round 3 of fixing began, its checkers validated WITHOUT `reins do` (evidence:
 // .superpowers/sdd/2026-09-27-reins-do/holdout2-report.md). holdout2 folded
 // into dev after its first run on 3c8a364 (16/40): those tasks have been seen
-// and their failures discussed, so they are `set: "dev"` now. A new holdout3
-// will be built separately; there is no holdout set in this file at present.
+// and their failures discussed, so they are `set: "dev"` now.
+//
+// holdout3 (8 tasks, the last section below) was frozen on 2026-09-28 before
+// any `reins do` run on it, built while HEAD was f1af855. Its checkers were
+// validated WITHOUT `reins do` (evidence:
+// .superpowers/sdd/2026-09-27-reins-do/holdout3-report.md). Never look at it
+// while fixing reins; fold it into dev after its first run, as with the others.
 //
 // The fixture pages are excluded from biome on purpose: they copy real sites'
 // markup (ul[role=listbox] > li[role=option], li[role=menuitemradio] menus,
@@ -461,6 +466,132 @@ export const TASKS = [
       "/^\\/(node|way|relation)\\/\\d+$/.test(location.pathname) && /Matterhorn/.test(document.title) && /45\\.97\\d*,\\s*7\\.65\\d*/.test(document.body.innerText)",
     checkNote:
       "a /node|way|relation/<id> page titled Matterhorn whose sidebar shows coordinates 45.97…, 7.65… (the Swiss peak, node 26863664 today); the search results page and the Czech/Antarctic Matterhorn nodes stay false",
+  },
+
+  // ── holdout3 (frozen 2026-09-28 at f1af855, before any `reins do` run on it) ──
+  {
+    id: "fx-faq",
+    tier: "fixture",
+    set: "holdout3",
+    url: "fixture:faq.html",
+    goal: "In the help center FAQ, find the question about whether a subscription can be cancelled at any time, expand its answer and mark the answer as helpful (Yes).",
+    fills: {},
+    // Ten disclosure buttons (aria-expanded/aria-controls) in three accordion
+    // groups; the "Was this answer helpful? Yes/No" buttons sit inside the
+    // answer region, which is hidden until its question is expanded. Votes
+    // are recorded in #feedback-state as {"<question id>": "yes"|"no"}.
+    check:
+      "(() => { const b = document.querySelector('button[data-id=\"cancel\"]'); const s = JSON.parse(document.querySelector('#feedback-state').value || '{}'); return b.getAttribute('aria-expanded') === 'true' && !document.querySelector('#a-cancel').hidden && s.cancel === 'yes' && Object.keys(s).length === 1; })()",
+    checkNote:
+      "the 'Can I cancel my subscription at any time?' disclosure is expanded with its answer visible, and the only recorded vote is cancel: yes; expanded without voting, a 'No' vote, or a vote on another question (e.g. 'Do you offer refunds?') stays false",
+  },
+  {
+    id: "fx-wizard",
+    tier: "fixture",
+    set: "holdout3",
+    url: "fixture:wizard.html",
+    goal: "Create a new project named 'Atlas Migration' that is visible to the team (Team visibility).",
+    fills: { name: "Atlas Migration" },
+    // "New project" opens a modal (role=dialog) wizard: step 1 name, step 2 a
+    // custom radio group (role=radio buttons, aria-checked) defaulting to
+    // Private, step 3 review + "Create project". Only that last button adds
+    // the row and records it in #projects-state; Cancel/Close/Escape discard.
+    check:
+      "(() => { const list = JSON.parse(document.querySelector('#projects-state').value || '[]'); return document.querySelector('#backdrop').hidden && list.length === 1 && list[0].name === 'Atlas Migration' && list[0].visibility === 'team'; })()",
+    checkNote:
+      "the dialog is closed and exactly one project was created, named Atlas Migration with visibility team; the default Private, the wizard left open on the review step, or a second project stays false",
+  },
+  {
+    id: "gutenberg",
+    tier: "live",
+    set: "holdout3",
+    url: "https://www.gutenberg.org/",
+    goal: "Search Project Gutenberg for 'Pride and Prejudice' and open the ebook page of the most downloaded edition (the first result).",
+    fills: { query: "Pride and Prejudice" },
+    // The header's "Quick search" (GET /ebooks/search/?query=) lists several
+    // editions of the novel plus the play and collected works; ebook #1342
+    // (185k downloads vs 23k for the runner-up) is the first result.
+    check:
+      "/^\\/ebooks\\/1342\\/?$/.test(location.pathname) && /Pride and Prejudice/.test(document.querySelector('h1')?.textContent || '')",
+    checkNote:
+      "pathname is /ebooks/1342 (the most downloaded 'Pride and Prejudice by Jane Austen') with that h1; the search results page and another edition (/ebooks/42671) stay false",
+  },
+  {
+    id: "hnsearch",
+    tier: "live",
+    set: "holdout3",
+    url: "https://hn.algolia.com/",
+    goal: "On Hacker News Search, search for 'webassembly', limit the results to 'Ask HN' posts and sort them by date.",
+    fills: { query: "webassembly" },
+    // A React SPA: the search box updates the URL as you type; the "Search
+    // Stories / by Popularity / for All time" filters are downshift
+    // role=combobox dropdowns whose role=listbox of li[role=option]s renders
+    // only while open. The URL mirrors every filter.
+    check:
+      "(() => { const p = new URLSearchParams(location.search); return location.hostname === 'hn.algolia.com' && (p.get('query') || '').trim().toLowerCase() === 'webassembly' && p.get('type') === 'ask_hn' && p.get('sort') === 'byDate' && /\\d+ results/.test(document.body.innerText); })()",
+    checkNote:
+      "URL has query=webassembly, type=ask_hn and sort=byDate with a 'N results' line on the page; the default (type=story, sort=byPopularity) and either filter alone stay false",
+  },
+  {
+    id: "debian",
+    tier: "live",
+    set: "holdout3",
+    url: "https://www.debian.org/distrib/packages",
+    goal: "Search the Debian package directory for 'nginx' by package name only, limited to the 'testing' distribution and the 'main' section.",
+    fills: { keyword: "nginx" },
+    // The "Search package directories" form: keyword text, searchon radios
+    // (names default), two native selects — Distribution (default stable) and
+    // Section (default any) — submitted as GET packages.debian.org/search.
+    check:
+      "(() => { const p = new URLSearchParams(location.search); return location.hostname === 'packages.debian.org' && location.pathname === '/search' && (p.get('keywords') || '').trim().toLowerCase() === 'nginx' && p.get('searchon') === 'names' && p.get('suite') === 'testing' && p.get('section') === 'main' && [...document.querySelectorAll('h3')].some((h) => /^Package nginx$/.test(h.textContent.trim())); })()",
+    checkNote:
+      "packages.debian.org/search with keywords=nginx, searchon=names, suite=testing, section=main and a 'Package nginx' heading; the defaults (suite=stable, section=all) and the results page's [trixie] suite link stay false",
+  },
+  {
+    id: "rustdocs",
+    tier: "live",
+    set: "holdout3",
+    url: "https://doc.rust-lang.org/std/",
+    goal: "In the Rust standard library docs, find the HashMap struct and open the documentation of its 'entry' method.",
+    fills: { query: "HashMap" },
+    // rustdoc's search is client-side JS (results render on /std/index.html?search=);
+    // the struct page is long (the entry method is ~17000px down) with a
+    // sidebar of method links that set the hash.
+    check:
+      "(() => { if (!/\\/std\\/collections\\/(hash_map\\/)?struct\\.HashMap\\.html$/.test(location.pathname)) return false; if (location.hash === '#method.entry') return true; const e = document.getElementById('method.entry'); if (!e) return false; const top = e.getBoundingClientRect().top; return top >= -4 && top < innerHeight / 2; })()",
+    checkNote:
+      "the HashMap struct page with #method.entry as the hash, or with the entry method's heading scrolled to the top half of the viewport; the search results page, the hash_map module page and the struct page at its top stay false",
+  },
+  {
+    id: "gopkg",
+    tier: "live",
+    set: "holdout3",
+    url: "https://pkg.go.dev/",
+    goal: "On pkg.go.dev, open the standard library package net/http and show the list of packages that import it (Imported By).",
+    fills: { query: "net/http" },
+    // Site search (GET /search?q=), the package page, then the header's
+    // "Imported by: N" link, which is the same path with ?tab=importedby.
+    check:
+      "(() => { const p = new URLSearchParams(location.search); return location.hostname === 'pkg.go.dev' && location.pathname === '/net/http' && p.get('tab') === 'importedby' && /Known importers/.test(document.body.innerText); })()",
+    checkNote:
+      "/net/http?tab=importedby showing 'Known importers'; the search results, the package's documentation tab and its imports tab stay false",
+  },
+  {
+    id: "xe",
+    tier: "live",
+    set: "holdout3",
+    url: "https://www.xe.com/currencyconverter/",
+    goal: "Convert 250 Swiss francs (CHF) to Japanese yen (JPY) with the Xe currency converter. Stop when the converted amount is shown.",
+    fills: { amount: "250" },
+    // Amount is a decimal text input; From/To are searchable comboboxes (a
+    // button opens a dialog with a 'Search currencies...' input and a
+    // listbox). There is no Convert button: the URL becomes
+    // /currencyconverter/convert/?Amount=…&From=…&To=… as the form changes.
+    check:
+      "(() => { const p = new URLSearchParams(location.search); return location.hostname === 'www.xe.com' && /^\\/currencyconverter\\/convert\\/?$/.test(location.pathname) && Number(p.get('Amount')) === 250 && p.get('From') === 'CHF' && p.get('To') === 'JPY' && /JPY/.test(document.body.innerText); })()",
+    checkNote:
+      "/currencyconverter/convert/ with Amount=250, From=CHF, To=JPY and JPY in the page text; the default USD→EUR form, the right currencies at the default amount (1), and 250 USD→JPY stay false",
+    timeoutSec: 90,
   },
 ];
 
