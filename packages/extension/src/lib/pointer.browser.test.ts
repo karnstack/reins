@@ -374,16 +374,21 @@ describe.skipIf(!CHROME)("pointer + key input in a real browser", () => {
       throw new Error(`${err.message}\nchrome stderr so far:\n${stderr || "(nothing)"}`);
     });
     devtoolsPort = port;
-    const targets = await step("GET /json/list", 5_000, async () => {
-      const res = await fetch(`http://127.0.0.1:${port}/json/list`);
-      return (await res.json()) as Array<{
-        type: string;
-        id: string;
-        webSocketDebuggerUrl: string;
-      }>;
+    // Chrome prints its port before it registers the startup tab, so on a
+    // slow runner /json/list can briefly come back empty: poll for the page.
+    type Target = { type: string; id: string; webSocketDebuggerUrl: string };
+    let targets: Target[] = [];
+    const target = await step("GET /json/list has a page", 5_000, async () => {
+      for (;;) {
+        const res = await fetch(`http://127.0.0.1:${port}/json/list`);
+        targets = (await res.json()) as Target[];
+        const page = targets.find((t) => t.type === "page");
+        if (page) return page;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }).catch((err: Error) => {
+      throw new Error(`${err.message}\nlast /json/list: ${JSON.stringify(targets)}`);
     });
-    const target = targets.find((t) => t.type === "page");
-    if (!target) throw new Error(`no page target in ${JSON.stringify(targets)}`);
     pageTargetId = target.id;
     const sock = new WebSocket(target.webSocketDebuggerUrl);
     ws = sock;
