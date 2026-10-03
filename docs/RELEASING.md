@@ -65,9 +65,14 @@ That's it — no tagging by hand.
 
 | Secret | For | Needed by |
 |---|---|---|
-| `NPM_TOKEN` | npm automation token, publish rights for `@karnstack` | first release |
 | `CWS_EXTENSION_ID` | the store-assigned extension ID | store auto-upload |
 | `CWS_CLIENT_ID` / `CWS_CLIENT_SECRET` / `CWS_REFRESH_TOKEN` | Chrome Web Store API OAuth | store auto-upload |
+
+npm needs no secret: `release.yml` publishes through npm trusted publishing
+(OIDC). The package's trusted publisher on npmjs.com (package → Settings →
+Trusted Publisher) must be GitHub Actions, `karnstack/reins`, workflow
+`release.yml`, no environment. If that entry is missing or renamed, publish
+fails with `E404`.
 
 Until the four `CWS_*` secrets exist, the store step is skipped and everything
 else still runs. See [CHROME_WEB_STORE.md](CHROME_WEB_STORE.md) for how to get
@@ -81,7 +86,8 @@ The packages are seeded at **0.1.0** with no changesets. On the first push to
 path runs immediately and `changeset publish` pushes `0.1.0` to npm (it only
 publishes versions not already on the registry). Steps for the first ship:
 
-1. Make the repo public and add `NPM_TOKEN`.
+1. Make the repo public and add an `NPM_TOKEN` (a trusted publisher can only
+   be attached to a package that already exists; drop the token after).
 2. Land this workflow on `main` → `@karnstack/reins@0.1.0` publishes; the tag +
    GitHub release appear automatically.
 3. Manually upload `packages/extension/release/reins-extension-v0.1.0.zip` to
@@ -95,10 +101,11 @@ publishes versions not already on the registry). Steps for the first ship:
 
 - `@reins/protocol` is bundled (`noExternal` in `packages/cli/tsdown.config.ts`),
   so the published package has no workspace dependencies.
-- npm auth in CI is handled by the changesets action: given the `NPM_TOKEN`
-  env var, it writes a user `~/.npmrc` before publishing. (A token line in the
-  committed `.npmrc` would be ignored — pnpm won't expand env vars in
-  project-file credentials.)
+- npm auth in CI is trusted publishing: with no `NPM_TOKEN` set, the changesets
+  action writes no `~/.npmrc`, and `pnpm publish` exchanges the job's OIDC
+  token (`id-token: write`) for a short-lived npm token. Don't add a token
+  back: npm caps write tokens at 90 days, which is how the 0.6.1 publish
+  failed with `E404`.
 - Smoke-test the tarball once before the first publish:
 
   ```bash
