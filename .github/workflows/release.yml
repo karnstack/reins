@@ -14,7 +14,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: write # create tags + GitHub releases
   pull-requests: write # open the Version Packages PR
-  id-token: write # npm provenance
+  id-token: write # npm trusted publishing (OIDC) + provenance
 
 jobs:
   release:
@@ -44,9 +44,11 @@ jobs:
         with:
           version: pnpm version-packages
           publish: pnpm release
+        # No NPM_TOKEN: with it unset the action leaves ~/.npmrc alone and
+        # pnpm publish trades the job's OIDC token for a short-lived npm one
+        # (trusted publishing). Long-lived write tokens expire within 90 days.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
 
       - name: Package the extension
